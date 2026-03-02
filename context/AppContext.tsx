@@ -162,7 +162,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-        if (!fbUser) {
+        if (fbUser) {
+            // Immediately restore user profile via REST API (don't wait for SDK onSnapshot)
+            try {
+                const profile = await restGetDoc('users', fbUser.uid);
+                if (profile) setUser({ ...profile, id: fbUser.uid } as User);
+            } catch (e) {
+                console.warn('[Auth] REST profile fetch failed, will rely on SDK:', e);
+            }
+        } else {
             setUser(currentUser => {
                 if (currentUser && currentUser.role === UserRole.ADMIN && currentUser.id === 'admin1') {
                     return currentUser;
