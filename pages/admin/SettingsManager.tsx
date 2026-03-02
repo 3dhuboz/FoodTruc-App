@@ -504,6 +504,8 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
       if (base64) {
           const compressed = await compressImage(base64, 700, 0.5);
           setFormData(prev => ({ ...prev, [field]: compressed }));
+      } else {
+          toast('Could not generate image. Please check API key or try again.', 'error');
       }
       setIsGeneratingImage(null);
   };

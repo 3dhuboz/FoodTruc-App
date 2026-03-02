@@ -25,7 +25,7 @@ export const generateSocialPost = async (topic: string, platform: 'Facebook' | '
 
   try {
     const prompt = `
-      You are an expert social media manager for "Your Business", a mobile BBQ catering business.
+      You are an expert social media manager for "Street Meatz BBQ", a mobile BBQ catering business.
       Write a catchy, engaging ${platform} post about: "${topic}".
       Include emojis appropriate for BBQ.
       Return JSON format with "content" (the post text) and "hashtags" (array of strings).
@@ -62,31 +62,49 @@ export const generateSocialPost = async (topic: string, platform: 'Facebook' | '
 
 export const generateMarketingImage = async (prompt: string): Promise<string | null> => {
   const ai = getAI();
-  if (!ai) return null;
+  if (!ai) {
+    console.error("Gemini Image: No API key configured");
+    return null;
+  }
 
   try {
+    // Use Gemini native image generation (works with standard API keys)
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [
-          { text: `A delicious, professional food photography style image of BBQ food: ${prompt}. High quality, appetizing, cinematic lighting.` }
-        ]
-      },
+      model: 'gemini-2.0-flash-exp',
+      contents: `Generate a single high-quality, professional food photography image: ${prompt}. Appetizing, cinematic lighting, no text or watermarks.`,
       config: {
-        imageConfig: {
-          aspectRatio: "1:1",
-        }
-      }
+        responseModalities: ['IMAGE', 'TEXT'],
+      } as any,
     });
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
+    // Extract inline image from response parts
+    const parts = (response as any)?.candidates?.[0]?.content?.parts;
+    if (parts) {
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          const mimeType = part.inlineData.mimeType || 'image/png';
+          return `data:${mimeType};base64,${part.inlineData.data}`;
+        }
       }
     }
+
+    // Fallback: try Imagen API
+    try {
+      const imgResponse = await ai.models.generateImages({
+        model: 'imagen-3.0-generate-002',
+        prompt: `A delicious, professional food photography style image of BBQ food: ${prompt}. High quality, appetizing, cinematic lighting.`,
+        config: { numberOfImages: 1 },
+      });
+      const imageBytes = imgResponse?.generatedImages?.[0]?.image?.imageBytes;
+      if (imageBytes) return `data:image/png;base64,${imageBytes}`;
+    } catch (imgErr: any) {
+      console.warn("Imagen fallback failed:", imgErr?.message);
+    }
+
+    console.warn("Gemini Image: No image data in response");
     return null;
-  } catch (error) {
-    console.error("Gemini Image Error:", error);
+  } catch (error: any) {
+    console.error("Gemini Image Error:", error?.message || error);
     return null;
   }
 };
@@ -150,7 +168,7 @@ export const generateSocialRecommendations = async (stats: any) => {
 
   try {
     const prompt = `
-      You are a social media strategist for "Your Business".
+      You are a social media strategist for "Street Meatz BBQ".
       Analyze these monthly performance stats:
       - Total Followers: ${stats.followers}
       - Monthly Reach: ${stats.reach}
@@ -248,7 +266,7 @@ export const askPitmasterAI = async (history: {role: 'user' | 'model', text: str
         const chat = ai.chats.create({
             model: 'gemini-2.5-flash',
             config: {
-                systemInstruction: `You are 'Pitmaster Jay', the owner and head pitmaster of "Your Business". 
+                systemInstruction: `You are 'Pitmaster Jay', the owner and head pitmaster of "Street Meatz BBQ". 
                 Your expertise is Low & Slow American BBQ smoked over Australian Ironbark wood.
                 
                 Persona Guidelines:
@@ -257,7 +275,7 @@ export const askPitmasterAI = async (history: {role: 'user' | 'model', text: str
                 3. You prefer temperatures in Fahrenheit (as per BBQ tradition) but convert if asked.
                 4. Key Temps: Brisket pulls at ~203F. Pork at ~205F. Chicken at 165F.
                 5. Wood: You SWEAR by seasoned Ironbark for the best heat and flavor.
-                6. If asked something unrelated to BBQ, meat, or Your Business, politely steer the conversation back to food or say you're busy checking the fire.
+                6. If asked something unrelated to BBQ, meat, or Street Meatz, politely steer the conversation back to food or say you're busy checking the fire.
                 7. Keep answers concise and practical.
                 `
             },
