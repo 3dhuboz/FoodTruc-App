@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { User, MenuItem, Order, CookDay, UserRole, CartItem, SocialPost, AppSettings, CalendarEvent, GalleryPost } from '../types';
 import { INITIAL_MENU, INITIAL_COOK_DAYS, INITIAL_ADMIN_USER, INITIAL_DEV_USER, INITIAL_POSTS, INITIAL_SETTINGS, INITIAL_EVENTS } from '../constants';
 import { db, auth, isFirebaseConfigured } from '../services/firebase';
+import { setGeminiApiKey } from '../services/gemini';
+import { restSetDoc, restGetDoc, restListDocs } from '../services/firestoreRest';
 import { 
   collection, 
   onSnapshot, 
@@ -98,7 +100,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // --- KEY BUCKETS FOR SPLIT STORAGE ---
-const HOME_KEYS = ['heroCateringImage', 'heroCookImage', 'homePromoterImage'];
+const HOME_KEYS = ['heroCateringImage', 'heroCookImage', 'homePromoterImage', 'homeScheduleCardImage', 'homeMenuCardImage'];
 const CATERING_KEYS = ['diyHeroImage', 'diyCardPackageImage', 'diyCardCustomImage', 'cateringPackageImages', 'cateringPackages'];
 const PAGE_KEYS = ['eventsHeroImage', 'promotersHeroImage', 'promotersSocialImage', 'maintenanceImage', 'logoUrl', 'menuHeroImage', 'galleryHeroImage'];
 const TICKER_KEYS = ['manualTickerImages'];
@@ -110,31 +112,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   // Data States
   const [users, setUsers] = useState<User[]>([]);
-  const [user, setUser] = useState<User | null>(() => {
-      const saved = localStorage.getItem('sm_user');
-      return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
 
-  const [menu, setMenu] = useState<MenuItem[]>(() => {
-      const saved = localStorage.getItem('sm_menu');
-      return saved ? JSON.parse(saved) : [];
-  });
+  const [menu, setMenu] = useState<MenuItem[]>([]);
 
   const [cookDays, setCookDays] = useState<CookDay[]>([]);
   
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => {
-      const saved = localStorage.getItem('sm_events');
-      return saved ? JSON.parse(saved) : [];
-  });
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
   const [galleryPosts, setGalleryPosts] = useState<GalleryPost[]>([]);
   
-  const [settings, setSettings] = useState<AppSettings>(() => {
-      const saved = localStorage.getItem('sm_settings');
-      return saved ? { ...INITIAL_SETTINGS, ...JSON.parse(saved) } : INITIAL_SETTINGS;
-  });
+  const [settings, setSettings] = useState<AppSettings>(INITIAL_SETTINGS);
   
   // Local States
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -162,12 +152,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } catch (e) { console.error("LS Error", e); }
   }, [selectedOrderDate]);
 
-  useEffect(() => {
-      try {
-        if (user) localStorage.setItem('sm_user', JSON.stringify(user));
-        else localStorage.removeItem('sm_user');
-      } catch (e) { console.error("LS Error", e); }
-  }, [user]);
 
   // --- FIREBASE LISTENERS ---
   useEffect(() => {
@@ -233,13 +217,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
         } else if (data.length > 0) { 
             setMenu(data); 
-            try { 
-                // Strip images from local storage to prevent quota exceeded errors
-                const minimalMenu = data.map(item => ({ ...item, image: '' }));
-                localStorage.setItem('sm_menu', JSON.stringify(minimalMenu)); 
-            } catch (e) { 
-                console.warn("LS Error: Menu too large for local storage", e); 
-            }
         }
         setConnectionError(null);
         markLoaded('Menu');
@@ -257,7 +234,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (data.length === 0 && calendarEvents.length === 0) setCalendarEvents(INITIAL_EVENTS);
         else if (data.length > 0) { 
             setCalendarEvents(data); 
-            try { localStorage.setItem('sm_events', JSON.stringify(data)); } catch (e) { console.error("LS Error", e); }
         }
         setConnectionError(null);
     }, handleError('Events'));
@@ -273,23 +249,58 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setSocialPosts(data);
     }, handleError('SocialPosts'));
 
-    // Settings Listeners
+    // Settings merge helper
     const mergeSettings = (docData: any) => {
         if (!docData) return;
-        setSettings(prev => {
-            const updated = { ...prev, ...docData } as AppSettings;
-            try {
-                localStorage.setItem('sm_settings', JSON.stringify(updated));
-            } catch (e: any) {
-                if (e.name === 'QuotaExceededError' || e.code === 22) {
-                    console.warn("Local Storage Quota Exceeded for Settings. Caching disabled for this item.");
-                } else {
-                    console.error("Local Storage Error (Settings)", e);
-                }
-            }
-            return updated;
-        });
+        // Set Gemini key immediately (not deferred inside React state batch)
+        if (docData.geminiApiKey) {
+            setGeminiApiKey(docData.geminiApiKey);
+        }
+        setSettings(prev => ({ ...prev, ...docData } as AppSettings));
     };
+
+    // REST API bootstrap: load ALL core data immediately (SDK onSnapshot may be slow to connect)
+    const settingsDocs = ['general', 'ticker', 'img_home', 'img_catering', 'img_pages', 'rewards'];
+    Promise.all(settingsDocs.map(id => restGetDoc('settings', id).catch(() => null)))
+      .then(results => {
+        results.forEach(docData => {
+          if (docData && Object.keys(docData).length > 0) {
+            mergeSettings(docData);
+          }
+        });
+        console.log('[REST Bootstrap] Settings loaded');
+        markLoaded('Settings');
+      })
+      .catch(e => console.warn('[REST Bootstrap] Settings failed:', e));
+
+    restListDocs('menu').then(docs => {
+      if (docs.length > 0) {
+        setMenu(docs as MenuItem[]);
+        markLoaded('Menu');
+        console.log(`[REST Bootstrap] Menu loaded (${docs.length} items)`);
+      }
+    }).catch(e => console.warn('[REST Bootstrap] Menu failed:', e));
+
+    restListDocs('orders').then(docs => {
+      if (docs.length > 0) {
+        const sorted = (docs as Order[]).sort((a, b) => {
+          const aTime = (a.createdAt as any)?.seconds || 0;
+          const bTime = (b.createdAt as any)?.seconds || 0;
+          return bTime - aTime;
+        });
+        setOrders(sorted);
+        markLoaded('Orders');
+        console.log(`[REST Bootstrap] Orders loaded (${docs.length})`);
+      } else {
+        markLoaded('Orders');
+      }
+    }).catch(e => { console.warn('[REST Bootstrap] Orders failed:', e); markLoaded('Orders'); });
+
+    restListDocs('events').then(docs => {
+      if (docs.length > 0) setCalendarEvents(docs as CalendarEvent[]);
+      else if (calendarEvents.length === 0) setCalendarEvents(INITIAL_EVENTS);
+      console.log(`[REST Bootstrap] Events loaded (${docs.length})`);
+    }).catch(e => console.warn('[REST Bootstrap] Events failed:', e));
     const unsubGeneral = onSnapshot(doc(db, 'settings', 'general'), snap => { mergeSettings(snap.data()); markLoaded('Settings'); }, handleError('Settings'));
     const unsubTicker = onSnapshot(doc(db, 'settings', 'ticker'), snap => mergeSettings(snap.data()), handleError('Ticker'));
     const unsubImgHome = onSnapshot(doc(db, 'settings', 'img_home'), snap => mergeSettings(snap.data()), handleError('Img Home'));
@@ -353,7 +364,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = async () => {
     await signOut(auth);
     setUser(null);
-    localStorage.removeItem('sm_user');
   };
 
   const addUser = async (newUser: User) => {
@@ -542,47 +552,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const merged = { ...settings, ...newSettings };
       setSettings(merged);
       
-      const generalPayload: Partial<AppSettings> = {};
-      const homePayload: Partial<AppSettings> = {};
-      const cateringPayload: Partial<AppSettings> = {};
-      const pagePayload: Partial<AppSettings> = {};
-      const tickerPayload: Partial<AppSettings> = {};
-      const rewardsPayload: Partial<AppSettings> = {};
+      // Only route the keys that were actually passed, not the entire settings blob
+      const keysToSave = Object.keys(newSettings);
+      const generalPayload: Record<string, any> = {};
+      const homePayload: Record<string, any> = {};
+      const cateringPayload: Record<string, any> = {};
+      const pagePayload: Record<string, any> = {};
+      const tickerPayload: Record<string, any> = {};
+      const rewardsPayload: Record<string, any> = {};
 
-      Object.keys(merged).forEach(key => {
-          if (TICKER_KEYS.includes(key)) { // @ts-ignore
-              tickerPayload[key] = merged[key]; // @ts-ignore
-              generalPayload[key] = deleteField();
-          } else if (HOME_KEYS.includes(key)) { // @ts-ignore
-              homePayload[key] = merged[key]; // @ts-ignore
-              generalPayload[key] = deleteField();
-          } else if (CATERING_KEYS.includes(key)) { // @ts-ignore
-              cateringPayload[key] = merged[key]; // @ts-ignore
-              generalPayload[key] = deleteField();
-          } else if (PAGE_KEYS.includes(key)) { // @ts-ignore
-              pagePayload[key] = merged[key]; // @ts-ignore
-              generalPayload[key] = deleteField();
-          } else if (REWARDS_KEYS.includes(key)) { // @ts-ignore
-              rewardsPayload[key] = merged[key]; // @ts-ignore
-              generalPayload[key] = deleteField();
-          } else { // @ts-ignore
-              generalPayload[key] = merged[key];
-          }
+      keysToSave.forEach(key => {
+          const val = (newSettings as any)[key];
+          if (TICKER_KEYS.includes(key)) tickerPayload[key] = val;
+          else if (HOME_KEYS.includes(key)) homePayload[key] = val;
+          else if (CATERING_KEYS.includes(key)) cateringPayload[key] = val;
+          else if (PAGE_KEYS.includes(key)) pagePayload[key] = val;
+          else if (REWARDS_KEYS.includes(key)) rewardsPayload[key] = val;
+          else generalPayload[key] = val;
       });
 
+      // Use REST API for writes (bypasses unreliable SDK WebChannel)
+      const promises = [];
+      if (Object.keys(generalPayload).length > 0) promises.push(restSetDoc('settings', 'general', generalPayload));
+      if (Object.keys(tickerPayload).length > 0) promises.push(restSetDoc('settings', 'ticker', tickerPayload));
+      if (Object.keys(rewardsPayload).length > 0) promises.push(restSetDoc('settings', 'rewards', rewardsPayload));
+      if (Object.keys(homePayload).length > 0) promises.push(restSetDoc('settings', 'img_home', homePayload));
+      if (Object.keys(cateringPayload).length > 0) promises.push(restSetDoc('settings', 'img_catering', cateringPayload));
+      if (Object.keys(pagePayload).length > 0) promises.push(restSetDoc('settings', 'img_pages', pagePayload));
       try {
-          const promises = [];
-          if (Object.keys(generalPayload).length > 0) promises.push(setDoc(doc(db, 'settings', 'general'), generalPayload, { merge: true }));
-          if (Object.keys(tickerPayload).length > 0) promises.push(setDoc(doc(db, 'settings', 'ticker'), tickerPayload, { merge: true }));
-          if (Object.keys(rewardsPayload).length > 0) promises.push(setDoc(doc(db, 'settings', 'rewards'), rewardsPayload, { merge: true }));
-          if (Object.keys(homePayload).length > 0) promises.push(setDoc(doc(db, 'settings', 'img_home'), homePayload, { merge: true }));
-          if (Object.keys(cateringPayload).length > 0) promises.push(setDoc(doc(db, 'settings', 'img_catering'), cateringPayload, { merge: true }));
-          if (Object.keys(pagePayload).length > 0) promises.push(setDoc(doc(db, 'settings', 'img_pages'), pagePayload, { merge: true }));
           await Promise.all(promises);
+          console.log('[Settings] Saved via REST API');
           return true;
-      } catch (error: any) {
-          console.error("Save settings error:", error);
-          console.error("Failed to save settings. Please check your internet connection.");
+      } catch (err: any) {
+          console.error('[Settings] REST write failed:', err.message);
           return false;
       }
   };
@@ -594,7 +596,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (reminders.includes(eventId)) newReminders = reminders.filter(id => id !== eventId);
       else newReminders = [...reminders, eventId];
       setReminders(newReminders);
-      localStorage.setItem('sm_reminders', JSON.stringify(newReminders));
   };
 
   const verifyStaffPin = (pin: string, action: 'ADD' | 'REDEEM'): boolean => {

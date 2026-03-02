@@ -1,6 +1,6 @@
 import { initializeApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
-import { getFirestore, Firestore, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
+import { initializeFirestore, Firestore, memoryLocalCache } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
 // Access environment variables safely for Vite (import.meta.env) or legacy (process.env)
@@ -54,18 +54,12 @@ try {
   if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("YOUR_API_KEY")) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    db = initializeFirestore(app, {
+      localCache: memoryLocalCache(),
+      experimentalAutoDetectLongPolling: true,
+    });
     storage = getStorage(app);
     configured = true;
-
-    // Enable Offline Persistence (multi-tab support)
-    enableMultiTabIndexedDbPersistence(db).catch((err) => {
-      if (err.code == 'failed-precondition') {
-          console.warn('Persistence failed: another instance may be running.');
-      } else if (err.code == 'unimplemented') {
-          console.warn('The current browser does not support persistence.');
-      }
-    });
   }
 } catch (e) {
   console.error("Firebase Initialization Failed:", e);

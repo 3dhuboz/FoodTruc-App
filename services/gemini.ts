@@ -1,13 +1,14 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
+// Module-level key that AppContext sets from Firestore — works in incognito/new devices
+let _runtimeKey = '';
+export const setGeminiApiKey = (key: string) => { _runtimeKey = key; };
+
 const getApiKey = () => {
-  // Check localStorage for runtime override (Admin settings)
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('sm_gemini_key');
-    if (stored) return stored;
-  }
-  // Fallback to build-time env var (Vite uses import.meta.env)
+  // 1. Runtime key set by AppContext from Firestore (works on any device)
+  if (_runtimeKey) return _runtimeKey;
+  // 2. Build-time env var fallback
   return (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || '';
 };
 

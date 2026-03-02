@@ -6,7 +6,8 @@ import { CreditCard, Save, CheckCircle, ExternalLink, Loader2, X, AlertCircle, M
 import { generateMarketingImage } from '../../services/gemini';
 import { db, auth, firebaseConfig } from '../../services/firebase';
 import { seedDatabase } from '../../services/dataSeeder';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { restSetDoc, restDeleteDoc } from '../../services/firestoreRest';
 import { RewardPrize, AppSettings } from '../../types';
 
 declare global {
@@ -115,7 +116,11 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
   });
   const [smartPayKeys, setSmartPayKeys] = useState({ public: '', secret: '' });
   const [smsKeys, setSmsKeys] = useState({ sid: '', token: '' });
-  const [geminiKey, setGeminiKey] = useState(localStorage.getItem('sm_gemini_key') || '');
+  const [geminiKey, setGeminiKey] = useState(settings.geminiApiKey || '');
+  const [geminiStatus, setGeminiStatus] = useState<'idle' | 'saving' | 'testing' | 'connected' | 'error'>( 
+      settings.geminiApiKey ? 'connected' : 'idle'
+  );
+  const [geminiEditing, setGeminiEditing] = useState(false);
   
   // Connection Wizard
   const [connectorType, setConnectorType] = useState<'stripe' | 'square' | 'smartpay' | 'twilio' | null>(null);
@@ -141,29 +146,24 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
 
   const checkSystemHealth = async () => {
       setHealthStatus(prev => ({ ...prev, database: 'checking' }));
-      
-      if (!db) {
-          setHealthStatus(prev => ({ ...prev, database: 'error', auth: 'offline', storage: 'error' }));
-          setDbLatency(null);
-          return;
-      }
 
       const start = Date.now();
       try {
           if (!navigator.onLine) throw new Error("Client is offline");
+          const readUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/settings/general`;
           const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
-          await Promise.race([getDoc(doc(db, 'settings', 'general')), timeout]);
+          const res = await Promise.race([fetch(readUrl), timeout]) as Response;
+          if (!res.ok) throw new Error(`Status ${res.status}`);
           const end = Date.now();
           setDbLatency(end - start);
           setHealthStatus(prev => ({ ...prev, database: 'online' }));
       } catch (e: any) {
-          const isOffline = e.message?.includes('offline') || e.message === 'Timeout' || e.code === 'unavailable' || e.code === 'failed-precondition';
+          const isOffline = e.message?.includes('offline') || e.message === 'Timeout' || e.message?.includes('Failed to fetch');
           if (isOffline) setHealthStatus(prev => ({ ...prev, database: 'offline' }));
           else setHealthStatus(prev => ({ ...prev, database: 'error' }));
           setDbLatency(null);
       }
-      const localUserStr = localStorage.getItem('sm_user');
-      const isLocalAdmin = localUserStr && JSON.parse(localUserStr)?.role === 'ADMIN';
+      const isLocalAdmin = !!user;
       
       if (auth && auth.currentUser) setHealthStatus(prev => ({ ...prev, auth: 'online' }));
       else if (isLocalAdmin) setHealthStatus(prev => ({ ...prev, auth: 'local' }));
@@ -192,7 +192,7 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
       else if (apiKey.includes("YOUR_API_KEY")) addLog("API Key Validity", "error", "Using Placeholder", "Set VITE_FIREBASE_API_KEY.");
       else if (!apiKey.startsWith("AIza")) addLog("API Key Format", "warning", "Does not start with 'AIza'", "Check for typos.");
       else addLog("API Key Format", "success", "Valid format (AIza...)");
-      if (!firebaseConfig.projectId || firebaseConfig.projectId.includes("foodtruck-app")) addLog("Project ID", "success", `Targeting: ${firebaseConfig.projectId}`);
+      if (!firebaseConfig.projectId || firebaseConfig.projectId.includes("street-meatz-bbq")) addLog("Project ID", "success", `Targeting: ${firebaseConfig.projectId}`);
       else addLog("Project ID", "warning", `Value: ${firebaseConfig.projectId}`, "Ensure this matches your Firebase Console Project ID.");
       
       if (!db) {
@@ -203,15 +203,58 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
 
       try {
           const start = Date.now();
-          await getDoc(doc(db, 'settings', 'general'));
-          const ping = Date.now() - start;
-          addLog("Database Connection", "success", `Ping: ${ping}ms`);
+          const readUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/settings/general`;
+          const readRes = await fetch(readUrl);
+          const readPing = Date.now() - start;
+          if (readRes.ok) {
+              addLog("Database Read (REST)", "success", `Read confirmed in ${readPing}ms`);
+          } else {
+              addLog("Database Read (REST)", "error", `Status ${readRes.status}`, "Check Firestore rules or project configuration.");
+          }
       } catch (e: any) {
-          let fix = "Check internet connection.";
-          if (e.code === 'permission-denied') { fix = "See 'Recommended Rules' below."; setShowRulesHelp(true); }
-          addLog("Database Connection", "error", `Code: ${e.code} | Msg: ${e.message}`, fix);
+          addLog("Database Read (REST)", "error", e.message, "Cannot reach Firebase servers.");
+      }
+
+      // WRITE TEST via REST API
+      try {
+          const writeStart = Date.now();
+          await restSetDoc('settings', '_write_test', { test: true, ts: Date.now() });
+          const writePing = Date.now() - writeStart;
+          addLog("Database Write (REST)", "success", `Write confirmed in ${writePing}ms — saves are working`);
+          // Clean up test doc
+          try { await restDeleteDoc('settings', '_write_test'); } catch (_) {}
+      } catch (e: any) {
+          let fix = "Check Firestore security rules.";
+          if (e.message?.includes('403')) { 
+              fix = "Security rules are blocking writes. See 'Recommended Rules' below."; 
+              setShowRulesHelp(true); 
+          }
+          addLog("Database Write (REST)", "error", e.message, fix);
       }
       setIsRunningDiag(false);
+  };
+
+  const clearFirestoreCache = async () => {
+      toast('Clearing Firestore cache...');
+      try {
+          // Delete all Firestore IndexedDB databases
+          const dbs = await indexedDB.databases();
+          const firestoreDbs = dbs.filter(d => d.name?.includes('firestore'));
+          for (const d of firestoreDbs) {
+              if (d.name) indexedDB.deleteDatabase(d.name);
+          }
+          toast('Cache cleared! Reloading...', 'success');
+          setTimeout(() => window.location.reload(), 1000);
+      } catch (e: any) {
+          // Fallback: try known database name patterns
+          try {
+              indexedDB.deleteDatabase(`firestore/[DEFAULT]/${firebaseConfig.projectId}/main`);
+              toast('Cache cleared! Reloading...', 'success');
+              setTimeout(() => window.location.reload(), 1000);
+          } catch (_) {
+              toast('Could not clear cache: ' + (e?.message || e), 'error');
+          }
+      }
   };
 
   const copyRulesToClipboard = () => {
@@ -326,12 +369,32 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
   const handleSaveMainSettings = async () => {
     setIsSaving(true);
     try {
-        await updateSettings(formData);
-        setShowSaveSuccess(true);
-        setTimeout(() => setShowSaveSuccess(false), 4000);
-        toast('Settings saved successfully!', 'success');
-    } catch (e) {
-        toast('Failed to save settings.', 'error');
+        // Only save fields that actually changed (avoids writing entire settings blob)
+        const changedFields: Record<string, any> = {};
+        for (const key of Object.keys(formData)) {
+            const formVal = (formData as any)[key];
+            const settingsVal = (settings as any)[key];
+            if (JSON.stringify(formVal) !== JSON.stringify(settingsVal)) {
+                changedFields[key] = formVal;
+            }
+        }
+        if (Object.keys(changedFields).length === 0) {
+            toast('No changes to save.', 'info');
+            setIsSaving(false);
+            return;
+        }
+        console.log('[Settings] Saving changed fields:', Object.keys(changedFields));
+        const result = await updateSettings(changedFields);
+        if (result === false) {
+            toast('Failed to save — check console for details.', 'error');
+        } else {
+            setShowSaveSuccess(true);
+            setTimeout(() => setShowSaveSuccess(false), 4000);
+            toast('Settings saved!', 'success');
+        }
+    } catch (e: any) {
+        console.error('Save settings error:', e);
+        toast(`Failed to save: ${e.message || 'Unknown error'}`, 'error');
     } finally {
         setIsSaving(false);
     }
@@ -751,34 +814,120 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
           <h4 className="text-xl font-bold mb-4 flex items-center gap-2"><Wand2 size={20} className="text-bbq-gold"/> AI Configuration (Gemini)</h4>
           <p className="text-sm text-gray-400 mb-4">Powers Pitmaster Jay chat, social content generation, AI image generation, and strategic recommendations.</p>
-          <div className="flex gap-2 max-w-xl">
-              <input 
-                  type="password"
-                  autoComplete="off"
-                  value={geminiKey}
-                  onChange={e => setGeminiKey(e.target.value)}
-                  placeholder="Paste your Google Gemini API Key here..."
-                  className="flex-1 bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
-              />
-              <button 
-                  onClick={() => {
-                      localStorage.setItem('sm_gemini_key', geminiKey);
-                      toast('Gemini API Key saved! All AI features are now active.');
-                  }}
-                  className="bg-bbq-gold text-black font-bold px-4 py-2 rounded text-sm hover:bg-yellow-500 transition"
-              >
-                  Save Key
-              </button>
-          </div>
-          <div className="mt-3 text-xs text-gray-500 flex items-start gap-2">
-              <Info size={14} className="shrink-0 mt-0.5"/>
-              <span>Get your free API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-bbq-gold hover:underline">Google AI Studio</a>. The key is stored locally in your browser and never sent to our servers.</span>
-          </div>
-          {geminiKey && localStorage.getItem('sm_gemini_key') && (
-              <div className="mt-3 flex items-center gap-2 text-green-400 text-xs">
-                  <CheckCircle size={14}/> API Key configured
+
+          {/* Status Card */}
+          <div className={`border rounded-xl p-5 mb-4 ${geminiStatus === 'connected' ? 'border-green-600/40 bg-green-950/20' : geminiStatus === 'error' ? 'border-red-600/40 bg-red-950/20' : 'border-gray-700 bg-black/20'}`}>
+              <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${geminiStatus === 'connected' ? 'bg-green-600/20' : geminiStatus === 'error' ? 'bg-red-600/20' : 'bg-gray-800'}`}>
+                          <Wand2 size={20} className={geminiStatus === 'connected' ? 'text-green-400' : geminiStatus === 'error' ? 'text-red-400' : 'text-gray-500'}/>
+                      </div>
+                      <div>
+                          <h5 className="font-bold text-white">Google Gemini AI</h5>
+                          <p className="text-xs text-gray-400">
+                              {geminiStatus === 'connected' && 'Connected — AI features active for all admins'}
+                              {geminiStatus === 'idle' && 'Not connected'}
+                              {geminiStatus === 'saving' && 'Saving key...'}
+                              {geminiStatus === 'testing' && 'Testing connection...'}
+                              {geminiStatus === 'error' && 'Connection failed — check key'}
+                          </p>
+                      </div>
+                  </div>
+                  {geminiStatus === 'connected' && <span className="flex items-center gap-1 text-green-400 text-xs font-bold"><CheckCircle size={14}/> Active</span>}
+                  {(geminiStatus === 'saving' || geminiStatus === 'testing') && <Loader2 size={16} className="text-bbq-gold animate-spin"/>}
+                  {geminiStatus === 'error' && <span className="flex items-center gap-1 text-red-400 text-xs font-bold"><AlertCircle size={14}/> Error</span>}
               </div>
-          )}
+
+              {/* Connected State */}
+              {geminiStatus === 'connected' && !geminiEditing && (
+                  <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={async () => {
+                          setGeminiStatus('testing');
+                          try {
+                              const { GoogleGenAI } = await import('@google/genai');
+                              const ai = new GoogleGenAI({ apiKey: geminiKey });
+                              const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: 'Say OK' });
+                              if (res.text) { setGeminiStatus('connected'); toast('AI connection verified!', 'success'); }
+                              else { setGeminiStatus('error'); toast('No response from Gemini.', 'error'); }
+                          } catch (e: any) {
+                              console.error('Gemini test error:', e);
+                              setGeminiStatus('error');
+                              toast('Test failed: ' + (e?.message || e), 'error');
+                          }
+                      }} className="bg-blue-600/20 text-blue-400 border border-blue-600/40 px-4 py-2 rounded text-sm font-bold hover:bg-blue-600/30 transition">
+                          Test Connection
+                      </button>
+                      <button type="button" onClick={() => { setGeminiEditing(true); setGeminiKey(''); }}
+                          className="bg-bbq-gold/20 text-bbq-gold border border-bbq-gold/40 px-4 py-2 rounded text-sm font-bold hover:bg-bbq-gold/30 transition">
+                          Reconnect with New Key
+                      </button>
+                      <button type="button" onClick={async () => {
+                          setGeminiStatus('saving');
+                          try {
+                              await restSetDoc('settings', 'general', { geminiApiKey: '' });
+                          } catch (_) {}
+                          setGeminiKey('');
+                          setGeminiStatus('idle');
+                          setGeminiEditing(false);
+                          toast('Gemini AI disconnected.');
+                      }} className="bg-red-600/20 text-red-400 border border-red-600/40 px-4 py-2 rounded text-sm font-bold hover:bg-red-600/30 transition">
+                          Disconnect
+                      </button>
+                  </div>
+              )}
+
+              {/* Error State */}
+              {geminiStatus === 'error' && !geminiEditing && (
+                  <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => { setGeminiEditing(true); setGeminiKey(''); }}
+                          className="bg-bbq-gold text-black font-bold px-4 py-2 rounded text-sm hover:bg-yellow-500 transition">
+                          Enter New Key
+                      </button>
+                  </div>
+              )}
+
+              {/* Input State */}
+              {(geminiStatus === 'idle' || geminiEditing || geminiStatus === 'error') && (geminiEditing || geminiStatus !== 'error') && (
+                  <div className="space-y-3">
+                      <div className="flex gap-2">
+                          <input type="text" autoComplete="off" value={geminiKey} onChange={e => setGeminiKey(e.target.value)}
+                              placeholder="Paste your Google Gemini API Key here..."
+                              className="flex-1 bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
+                          />
+                          <button type="button" disabled={geminiStatus === 'saving'}
+                              className="bg-bbq-gold text-black font-bold px-4 py-2 rounded text-sm hover:bg-yellow-500 transition whitespace-nowrap disabled:opacity-50"
+                              onClick={() => {
+                                  const key = geminiKey.trim();
+                                  if (!key) { toast('Enter a key first.', 'warning'); return; }
+                                  // Set runtime key immediately, persist to Firestore
+                                  import('../../services/gemini').then(m => m.setGeminiApiKey(key));
+                                  setGeminiStatus('connected');
+                                  setGeminiEditing(false);
+                                  toast('Gemini key active! Syncing to cloud...', 'success');
+                                  // Use REST API for reliable cloud sync
+                                  restSetDoc('settings', 'general', { geminiApiKey: key })
+                                      .then(() => toast('Synced to cloud — all admins will now have AI access.', 'success'))
+                                      .catch(err => { console.error('Cloud sync failed:', err); toast('Cloud sync failed — key saved locally only.', 'warning'); });
+                              }}
+                          >
+                              {geminiStatus === 'saving' ? 'Saving...' : 'Save Key'}
+                          </button>
+                          {geminiEditing && (
+                              <button type="button" onClick={() => {
+                                  setGeminiKey(settings.geminiApiKey || '');
+                                  setGeminiEditing(false);
+                              }} className="text-gray-400 hover:text-white px-3 py-2 rounded text-sm border border-gray-700 hover:border-gray-500 transition">
+                                  Cancel
+                              </button>
+                          )}
+                      </div>
+                      <div className="text-xs text-gray-500 flex items-start gap-2">
+                          <Info size={14} className="shrink-0 mt-0.5"/>
+                          <span>Get your free API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-bbq-gold hover:underline">Google AI Studio</a>. Shared across all admin devices.</span>
+                      </div>
+                  </div>
+              )}
+          </div>
       </section>
 
       {/* --- PAYMENT GATEWAY --- */}
@@ -855,9 +1004,22 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
                           <div>
                               <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Environment</label>
                               <div className="flex items-center gap-2">
-                                  <span className={`text-xs font-bold px-2 py-1 rounded ${settings.squareEnvironment === 'production' ? 'bg-green-600/20 text-green-400 border border-green-600/30' : 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/30'}`}>
+                                  <button
+                                      onClick={async () => {
+                                          const newEnv = settings.squareEnvironment === 'production' ? 'sandbox' : 'production';
+                                          try {
+                                              await setDoc(doc(db, 'settings', 'general'), { squareEnvironment: newEnv }, { merge: true });
+                                              toast(`Square environment switched to ${newEnv.toUpperCase()}`, 'success');
+                                          } catch (e: any) {
+                                              toast(`Failed to save environment: ${e.message}`, 'error');
+                                          }
+                                      }}
+                                      className={`text-xs font-bold px-3 py-1.5 rounded cursor-pointer transition hover:opacity-80 ${settings.squareEnvironment === 'production' ? 'bg-green-600/20 text-green-400 border border-green-600/30' : 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/30'}`}
+                                      title="Click to toggle between Sandbox and Production"
+                                  >
                                       {settings.squareEnvironment === 'production' ? '● LIVE' : '● SANDBOX'}
-                                  </span>
+                                  </button>
+                                  <span className="text-xs text-gray-500">Click to toggle</span>
                               </div>
                           </div>
                       </div>
@@ -1068,6 +1230,8 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
                   <ImageSettingRow label="Catering Hero" settingKey="heroCateringImage" prompt="Delicious BBQ catering spread, professional, appetizing" />
                   <ImageSettingRow label="Cook/Menu Hero" settingKey="heroCookImage" prompt="Pitmaster smoking meat, BBQ smoke, authentic" />
                   <ImageSettingRow label="Promoter Section" settingKey="homePromoterImage" prompt="Happy people eating BBQ, social gathering, party" />
+                  <ImageSettingRow label="Schedule Card" settingKey="homeScheduleCardImage" prompt="Food truck at outdoor event, street food, night market" />
+                  <ImageSettingRow label="Menu Card" settingKey="homeMenuCardImage" prompt="Juicy burger with fries, BBQ food close up, appetizing" />
               </div>
 
               <div className="space-y-4">
@@ -1786,88 +1950,6 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
       </section>
       </>)}
 
-      {/* --- LANDING PAGE PRICING --- */}
-      {isDev && (
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><Banknote size={20} className="text-green-400"/> Landing Page Pricing</h4>
-          <p className="text-sm text-gray-400 mb-6">Configure the pricing and contact details shown on the <strong>/landing</strong> sales page. These values are stored in Firestore and can be changed at any time.</p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">One-Time Setup Fee ($)</label>
-                      <input
-                          type="number"
-                          title="Setup fee"
-                          placeholder="999"
-                          value={formData.landingPricing?.setupFee ?? 999}
-                          onChange={e => setFormData({ ...formData, landingPricing: { ...formData.landingPricing!, setupFee: Number(e.target.value), monthlyFee: formData.landingPricing?.monthlyFee ?? 99, brandName: formData.landingPricing?.brandName || '', contactEmail: formData.landingPricing?.contactEmail || '', contactPhone: formData.landingPricing?.contactPhone || '' } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                      />
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Monthly Recurring Fee ($)</label>
-                      <input
-                          type="number"
-                          title="Monthly fee"
-                          placeholder="99"
-                          value={formData.landingPricing?.monthlyFee ?? 99}
-                          onChange={e => setFormData({ ...formData, landingPricing: { ...formData.landingPricing!, monthlyFee: Number(e.target.value), setupFee: formData.landingPricing?.setupFee ?? 999, brandName: formData.landingPricing?.brandName || '', contactEmail: formData.landingPricing?.contactEmail || '', contactPhone: formData.landingPricing?.contactPhone || '' } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                      />
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Brand / Product Name</label>
-                      <input
-                          title="Landing brand name"
-                          placeholder="FoodTruck App"
-                          value={formData.landingPricing?.brandName || ''}
-                          onChange={e => setFormData({ ...formData, landingPricing: { ...formData.landingPricing!, brandName: e.target.value, setupFee: formData.landingPricing?.setupFee ?? 999, monthlyFee: formData.landingPricing?.monthlyFee ?? 99, contactEmail: formData.landingPricing?.contactEmail || '', contactPhone: formData.landingPricing?.contactPhone || '' } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Shown in headers, CTAs, and comparison sections on the landing page.</p>
-                  </div>
-              </div>
-
-              <div className="space-y-4">
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Contact Email</label>
-                      <input
-                          title="Contact email"
-                          placeholder="hello@foodtruckapp.com.au"
-                          value={formData.landingPricing?.contactEmail || ''}
-                          onChange={e => setFormData({ ...formData, landingPricing: { ...formData.landingPricing!, contactEmail: e.target.value, setupFee: formData.landingPricing?.setupFee ?? 999, monthlyFee: formData.landingPricing?.monthlyFee ?? 99, brandName: formData.landingPricing?.brandName || '', contactPhone: formData.landingPricing?.contactPhone || '' } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Used in the "Get Started" mailto links on the landing page.</p>
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Contact Phone (optional)</label>
-                      <input
-                          title="Contact phone"
-                          placeholder="+61400000000"
-                          value={formData.landingPricing?.contactPhone || ''}
-                          onChange={e => setFormData({ ...formData, landingPricing: { ...formData.landingPricing!, contactPhone: e.target.value, setupFee: formData.landingPricing?.setupFee ?? 999, monthlyFee: formData.landingPricing?.monthlyFee ?? 99, brandName: formData.landingPricing?.brandName || '', contactEmail: formData.landingPricing?.contactEmail || '' } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">If set, a "Call us" link appears at the bottom of the landing page.</p>
-                  </div>
-
-                  <div className="p-3 bg-green-900/20 rounded-lg border border-green-700 text-xs text-green-300 flex gap-2">
-                      <Info size={16} className="shrink-0 mt-0.5"/>
-                      <div>
-                          <strong className="block">Landing Page URL</strong>
-                          Your sales page is live at <span className="text-white font-mono">/#/landing</span>. Share this link with potential customers.
-                      </div>
-                  </div>
-              </div>
-          </div>
-      </section>
-      )}
-
       {/* --- DIAGNOSTICS MODAL --- */}
       {isDev && showDiagnostics && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
@@ -1931,7 +2013,10 @@ service cloud.firestore {
                       )}
                   </div>
                   
-                  <div className="p-4 border-t border-gray-700 bg-gray-800/50 flex justify-end">
+                  <div className="p-4 border-t border-gray-700 bg-gray-800/50 flex justify-between items-center">
+                      <button onClick={clearFirestoreCache} className="bg-red-600 text-white font-bold px-6 py-2 rounded hover:bg-red-500 text-sm">
+                          🔧 Fix Connection (Clear Cache & Reload)
+                      </button>
                       <button onClick={() => setShowDiagnostics(false)} className="bg-white text-black font-bold px-6 py-2 rounded hover:bg-gray-200">Close</button>
                   </div>
               </div>
