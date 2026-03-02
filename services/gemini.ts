@@ -70,7 +70,7 @@ export const generateMarketingImage = async (prompt: string): Promise<string | n
   try {
     // Use Gemini native image generation (works with standard API keys)
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-2.0-flash-exp-image-generation',
       contents: `Generate a single high-quality, professional food photography image: ${prompt}. Appetizing, cinematic lighting, no text or watermarks.`,
       config: {
         responseModalities: ['IMAGE', 'TEXT'],
