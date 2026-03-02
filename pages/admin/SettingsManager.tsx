@@ -1786,6 +1786,88 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
       </section>
       </>)}
 
+      {/* --- LANDING PAGE PRICING --- */}
+      {isDev && (
+      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
+          <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><Banknote size={20} className="text-green-400"/> Landing Page Pricing</h4>
+          <p className="text-sm text-gray-400 mb-6">Configure the pricing and contact details shown on the <strong>/landing</strong> sales page. These values are stored in Firestore and can be changed at any time.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">One-Time Setup Fee ($)</label>
+                      <input
+                          type="number"
+                          title="Setup fee"
+                          placeholder="999"
+                          value={formData.landingPricing?.setupFee ?? 999}
+                          onChange={e => setFormData({ ...formData, landingPricing: { ...formData.landingPricing!, setupFee: Number(e.target.value), monthlyFee: formData.landingPricing?.monthlyFee ?? 99, brandName: formData.landingPricing?.brandName || '', contactEmail: formData.landingPricing?.contactEmail || '', contactPhone: formData.landingPricing?.contactPhone || '' } })}
+                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
+                      />
+                  </div>
+
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Monthly Recurring Fee ($)</label>
+                      <input
+                          type="number"
+                          title="Monthly fee"
+                          placeholder="99"
+                          value={formData.landingPricing?.monthlyFee ?? 99}
+                          onChange={e => setFormData({ ...formData, landingPricing: { ...formData.landingPricing!, monthlyFee: Number(e.target.value), setupFee: formData.landingPricing?.setupFee ?? 999, brandName: formData.landingPricing?.brandName || '', contactEmail: formData.landingPricing?.contactEmail || '', contactPhone: formData.landingPricing?.contactPhone || '' } })}
+                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
+                      />
+                  </div>
+
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Brand / Product Name</label>
+                      <input
+                          title="Landing brand name"
+                          placeholder="FoodTruck App"
+                          value={formData.landingPricing?.brandName || ''}
+                          onChange={e => setFormData({ ...formData, landingPricing: { ...formData.landingPricing!, brandName: e.target.value, setupFee: formData.landingPricing?.setupFee ?? 999, monthlyFee: formData.landingPricing?.monthlyFee ?? 99, contactEmail: formData.landingPricing?.contactEmail || '', contactPhone: formData.landingPricing?.contactPhone || '' } })}
+                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Shown in headers, CTAs, and comparison sections on the landing page.</p>
+                  </div>
+              </div>
+
+              <div className="space-y-4">
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Contact Email</label>
+                      <input
+                          title="Contact email"
+                          placeholder="hello@foodtruckapp.com.au"
+                          value={formData.landingPricing?.contactEmail || ''}
+                          onChange={e => setFormData({ ...formData, landingPricing: { ...formData.landingPricing!, contactEmail: e.target.value, setupFee: formData.landingPricing?.setupFee ?? 999, monthlyFee: formData.landingPricing?.monthlyFee ?? 99, brandName: formData.landingPricing?.brandName || '', contactPhone: formData.landingPricing?.contactPhone || '' } })}
+                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Used in the "Get Started" mailto links on the landing page.</p>
+                  </div>
+
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Contact Phone (optional)</label>
+                      <input
+                          title="Contact phone"
+                          placeholder="+61400000000"
+                          value={formData.landingPricing?.contactPhone || ''}
+                          onChange={e => setFormData({ ...formData, landingPricing: { ...formData.landingPricing!, contactPhone: e.target.value, setupFee: formData.landingPricing?.setupFee ?? 999, monthlyFee: formData.landingPricing?.monthlyFee ?? 99, brandName: formData.landingPricing?.brandName || '', contactEmail: formData.landingPricing?.contactEmail || '' } })}
+                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">If set, a "Call us" link appears at the bottom of the landing page.</p>
+                  </div>
+
+                  <div className="p-3 bg-green-900/20 rounded-lg border border-green-700 text-xs text-green-300 flex gap-2">
+                      <Info size={16} className="shrink-0 mt-0.5"/>
+                      <div>
+                          <strong className="block">Landing Page URL</strong>
+                          Your sales page is live at <span className="text-white font-mono">/#/landing</span>. Share this link with potential customers.
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </section>
+      )}
+
       {/* --- DIAGNOSTICS MODAL --- */}
       {isDev && showDiagnostics && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">

@@ -236,6 +236,13 @@ export interface AppSettings {
     fromNumber: string;
     adminPhone: string;
   };
+  landingPricing?: {
+    setupFee: number;
+    monthlyFee: number;
+    brandName: string;
+    contactEmail: string;
+    contactPhone: string;
+  };
   invoiceSettings?: {
     paymentUrl: string;
     paymentLabel: string;
