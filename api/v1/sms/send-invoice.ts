@@ -41,15 +41,21 @@ export default async function handler(req: any, res: any) {
     const total = Number(order.total || 0).toFixed(2);
     const orderNum = order.id?.slice(-6) || order.id || '000000';
     const payLink = paymentUrl ? `\nPay here: ${paymentUrl}` : '';
+    const payLabel = inv.paymentLabel || 'Pay Now';
 
     const template = inv.smsTemplate || 'Hi {name}, you have an invoice for ${total} from {business}. Order #{orderNum}.{payLink}\n\nCheers!';
-    const msg = template
+    let msg = template
       .replace(/\{name\}/g, order.customerName || 'there')
       .replace(/\$\{total\}/g, `$${total}`)
       .replace(/\{total\}/g, total)
       .replace(/\{business\}/g, name)
       .replace(/\{orderNum\}/g, orderNum)
       .replace(/\{payLink\}/g, payLink);
+
+    // Safety net: always append payment link if it exists and wasn't included via template
+    if (paymentUrl && !msg.includes(paymentUrl)) {
+      msg = msg.trimEnd() + `\n\n${payLabel}: ${paymentUrl}`;
+    }
 
     await send(settings, order.customerPhone, msg);
 
