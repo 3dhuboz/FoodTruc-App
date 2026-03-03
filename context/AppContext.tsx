@@ -4,7 +4,7 @@ import { User, MenuItem, Order, CookDay, UserRole, CartItem, SocialPost, AppSett
 import { INITIAL_MENU, INITIAL_COOK_DAYS, INITIAL_ADMIN_USER, INITIAL_DEV_USER, INITIAL_POSTS, INITIAL_SETTINGS, INITIAL_EVENTS } from '../constants';
 import { db, auth, isFirebaseConfigured } from '../services/firebase';
 import { setGeminiApiKey } from '../services/gemini';
-import { restSetDoc, restGetDoc, restDeleteDoc } from '../services/firestoreRest';
+import { restSetDoc, restGetDoc, restListDocs, restDeleteDoc } from '../services/firestoreRest';
 import { 
   collection, 
   onSnapshot, 
@@ -255,6 +255,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         setSettings(prev => ({ ...prev, ...docData } as AppSettings));
     };
+
+    // REST bootstrap: load data immediately while onSnapshot connects (may be slow on some networks)
+    // Safe because all writes are now properly awaited — data is always committed before user can refresh
+    // onSnapshot will overwrite this with live data once connected
+    const settingsDocs = ['general', 'ticker', 'img_home', 'img_catering', 'img_pages', 'rewards'];
+    Promise.all(settingsDocs.map(id => restGetDoc('settings', id).catch(() => null)))
+      .then(results => {
+        results.forEach(docData => {
+          if (docData && Object.keys(docData).length > 0) mergeSettings(docData);
+        });
+        markLoaded('Settings');
+        console.log('[REST Bootstrap] Settings loaded');
+      })
+      .catch(e => { console.warn('[REST Bootstrap] Settings failed:', e); markLoaded('Settings'); });
+
+    restListDocs('menu').then(docs => {
+      if (docs.length > 0) {
+        setMenu(docs as MenuItem[]);
+        markLoaded('Menu');
+        console.log(`[REST Bootstrap] Menu loaded (${docs.length} items)`);
+      }
+    }).catch(e => { console.warn('[REST Bootstrap] Menu failed:', e); });
+
+    restListDocs('orders').then(docs => {
+      if (docs.length > 0) {
+        const sorted = (docs as Order[]).sort((a, b) => {
+          const aTime = (a.createdAt as any)?.seconds || 0;
+          const bTime = (b.createdAt as any)?.seconds || 0;
+          return bTime - aTime;
+        });
+        setOrders(sorted);
+        console.log(`[REST Bootstrap] Orders loaded (${docs.length})`);
+      }
+      markLoaded('Orders');
+    }).catch(e => { console.warn('[REST Bootstrap] Orders failed:', e); markLoaded('Orders'); });
+
+    restListDocs('events').then(docs => {
+      if (docs.length > 0) setCalendarEvents(docs as CalendarEvent[]);
+      else if (calendarEvents.length === 0) setCalendarEvents(INITIAL_EVENTS);
+      console.log(`[REST Bootstrap] Events loaded (${docs.length})`);
+    }).catch(e => console.warn('[REST Bootstrap] Events failed:', e));
 
     const unsubGeneral = onSnapshot(doc(db, 'settings', 'general'), snap => { mergeSettings(snap.data()); markLoaded('Settings'); }, handleError('Settings'));
     const unsubTicker = onSnapshot(doc(db, 'settings', 'ticker'), snap => mergeSettings(snap.data()), handleError('Ticker'));
