@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../components/Toast';
-import { MessageCircle, Check, Clock, XCircle, CheckCircle, AlertTriangle, Edit2, Plus, Trash2, X, Save, DollarSign, Mail, Smartphone, CreditCard, Flame, Snowflake, Truck, ShoppingBag, Package, Loader2 } from 'lucide-react';
+import { MessageCircle, Check, Clock, XCircle, CheckCircle, AlertTriangle, Edit2, Plus, Trash2, X, Save, DollarSign, Mail, Smartphone, CreditCard, Flame, Snowflake, Truck, ShoppingBag, Package, Loader2, MapPin } from 'lucide-react';
 import { Order, MenuItem } from '../../types';
 
 const normalizePhone = (raw: string): string => {
@@ -84,7 +84,7 @@ const normalizePhone = (raw: string): string => {
             ]);
 
             // 3. Update Status
-            updateOrderStatus(order.id, 'Confirmed');
+            await updateOrderStatus(order.id, 'Confirmed');
             toast('Order approved! Deposit captured and confirmation sent (email + SMS).');
 
         } catch (error: any) {
@@ -123,7 +123,7 @@ const normalizePhone = (raw: string): string => {
               ]);
 
               // 3. Update Status
-              updateOrderStatus(order.id, 'Rejected');
+              await updateOrderStatus(order.id, 'Rejected');
               toast(`Order rejected. Notification sent to ${order.customerName} (email + SMS).`);
 
           } catch (error: any) {
@@ -173,38 +173,84 @@ const normalizePhone = (raw: string): string => {
   const [isSendingInvoice, setIsSendingInvoice] = useState(false);
 
   const generateSquarePaymentLink = async (order: Order): Promise<{ url: string; squareOrderId?: string } | null> => {
-    if (!settings.squareConnected || !settings.squareLocationId || !settings.squareAccessToken) return null;
+    console.log('[Square] generateSquarePaymentLink called', { connected: settings.squareConnected, locationId: settings.squareLocationId, hasToken: !!settings.squareAccessToken, env: settings.squareEnvironment });
+    if (!settings.squareConnected || !settings.squareLocationId || !settings.squareAccessToken) {
+      const missing = [];
+      if (!settings.squareConnected) missing.push('not connected');
+      if (!settings.squareLocationId) missing.push('no location ID');
+      if (!settings.squareAccessToken) missing.push('no access token');
+      toast(`⚠️ Square payment link skipped: ${missing.join(', ')}`, 'warning');
+      console.warn('[Square] Skipped — missing:', missing);
+      return null;
+    }
     try {
-      // Build redirect URL for after payment - points to our payment-success page
+      const env = settings.squareEnvironment || 'production';
+
+      toast(`Generating Square payment link (${env})...`, 'info');
       const origin = window.location.origin;
-      const hashBase = window.location.hash?.split('?')[0]?.replace(/\/[^/]*$/, '') || '';
       const redirectUrl = `${origin}${window.location.pathname}#/payment-success?orderId=${encodeURIComponent(order.id)}`;
 
-      const res = await fetch('/api/v1/payment/square-checkout', {
+      const baseBody = {
+        amount: order.total,
+        currency: 'AUD',
+        locationId: settings.squareLocationId,
+        accessToken: settings.squareAccessToken,
+        environment: env,
+        orderId: order.id,
+        description: `Order #${order.id?.slice(-6) || order.id}`,
+        redirectUrl,
+      };
+      const bodyWithItems = {
+        ...baseBody,
+        items: order.items.map(li => ({
+          name: li.item.name,
+          price: li.item.price,
+          quantity: li.quantity,
+          selectedOption: li.selectedOption || '',
+        })),
+      };
+      console.log('[Square] Calling checkout API with items:', { ...bodyWithItems, accessToken: '***' });
+
+      let res = await fetch('/api/v1/payment/square-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: order.total,
-          currency: 'AUD',
-          locationId: settings.squareLocationId,
-          accessToken: settings.squareAccessToken,
-          environment: settings.squareEnvironment || 'sandbox',
-          orderId: order.id,
-          description: `Order #${order.id?.slice(-6) || order.id}`,
-          redirectUrl,
-        }),
+        body: JSON.stringify(bodyWithItems),
       });
+      console.log('[Square] Checkout API response status:', res.status);
+
+      // If first attempt with items fails, retry with simple quick_pay (no items)
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Unknown' }));
-        console.warn('Square checkout link failed:', err.error);
+        console.warn('[Square] Items-based checkout failed, retrying with quick_pay:', err);
+        res = await fetch('/api/v1/payment/square-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(baseBody),
+        });
+        console.log('[Square] Quick_pay retry response status:', res.status);
+      }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown' }));
+        console.error('[Square] Checkout API error (both attempts failed):', err);
+        toast(`❌ Square link failed (${env}): ${err.error || err.detail || res.status}`, 'error');
         return null;
       }
       const data = await res.json();
+      console.log('[Square] Checkout API success:', data);
+      if (data.usedQuickPay) {
+        console.warn('[Square] ⚠️ Fell back to quick_pay (no itemized checkout). Order creation error:', data.orderCreateError || 'unknown');
+      }
       const url = data.url || data.longUrl || null;
-      if (!url) return null;
+      if (!url) {
+        toast('❌ Square returned no payment URL — check API credentials', 'error');
+        return null;
+      }
+      toast('✅ Square payment link generated!', 'success');
       return { url, squareOrderId: data.squareOrderId };
-    } catch (e) {
-      console.warn('Square checkout link error:', e);
+    } catch (e: any) {
+      console.error('[Square] Error:', e);
+      toast(`❌ Square payment link error: ${e.message || e}`, 'error');
       return null;
     }
   };
@@ -224,7 +270,7 @@ const normalizePhone = (raw: string): string => {
       invoiceSettingsWithPayLink = { ...invoiceSettingsWithPayLink, paymentUrl: squareResult.url, paymentLabel: invoiceSettingsWithPayLink?.paymentLabel || 'Pay Now' };
       // Store Square checkout ID on the order for webhook payment matching
       if (squareResult.squareOrderId) {
-        updateOrder({ ...order, squareCheckoutId: squareResult.squareOrderId });
+        await updateOrder({ ...order, squareCheckoutId: squareResult.squareOrderId });
       }
     }
 
@@ -266,7 +312,7 @@ const normalizePhone = (raw: string): string => {
       // Check if it's an existing order or new
       const exists = orders.find(o => o.id === editingOrder.id);
       if (exists) {
-          updateOrder(editingOrder);
+          await updateOrder(editingOrder);
           toast('Order updated!');
       } else {
           // It's a new manual order
@@ -277,7 +323,7 @@ const normalizePhone = (raw: string): string => {
 
           // Create the order
           const orderWithStatus = { ...editingOrder, status: 'Awaiting Payment' as const };
-          createOrder(orderWithStatus);
+          await createOrder(orderWithStatus);
           toast('Order created! Sending invoice...');
 
           // Auto-send invoice
@@ -396,8 +442,11 @@ const normalizePhone = (raw: string): string => {
               items: editingOrder.items.map(li => ({
                   item: li.item,
                   name: li.item.name,
+                  description: li.item.description || '',
                   price: li.item.price,
-                  quantity: li.quantity
+                  quantity: li.quantity,
+                  selectedOption: li.selectedOption || '',
+                  packSelections: li.packSelections || {}
               }))
           };
 
@@ -407,7 +456,7 @@ const normalizePhone = (raw: string): string => {
           if (squareResult) {
               invoiceSettingsWithPayLink = { ...invoiceSettingsWithPayLink, paymentUrl: squareResult.url, paymentLabel: invoiceSettingsWithPayLink?.paymentLabel || 'Pay Now' };
               if (squareResult.squareOrderId) {
-                  updateOrder({ ...editingOrder, squareCheckoutId: squareResult.squareOrderId });
+                  await updateOrder({ ...editingOrder, squareCheckoutId: squareResult.squareOrderId });
               }
           }
 
@@ -452,7 +501,7 @@ const normalizePhone = (raw: string): string => {
               customerEmail: invoiceContact.email,
               customerPhone: invoiceContact.phone
           };
-          updateOrder(updated);
+          await updateOrder(updated);
           setEditingOrder(null);
           setShowInvoiceModal(false);
 
@@ -481,29 +530,58 @@ const normalizePhone = (raw: string): string => {
       }
   };
 
+  const handleStartCooking = async (order: Order) => {
+      updateOrderStatus(order.id, 'Cooking');
+      
+      const businessName = settings.businessName || 'Street Meatz BBQ';
+      const orderPayload = { customerName: order.customerName, customerEmail: order.customerEmail, customerPhone: order.customerPhone };
+      
+      try {
+          await Promise.allSettled([
+              // SMS: cooking started
+              order.customerPhone && settings.smsSettings?.enabled
+                  ? fetch('/api/v1/sms/cooking-started', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ settings: settings.smsSettings, order: orderPayload, businessName })
+                  }) : Promise.resolve(),
+              // Email: cooking started
+              order.customerEmail && settings.emailSettings?.enabled
+                  ? fetch('/api/v1/email/cooking-started', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ settings: settings.emailSettings, order: orderPayload, businessName })
+                  }) : Promise.resolve()
+          ]);
+      } catch (e) { console.error("Cooking notification failed:", e); }
+      
+      toast(`Cooking started! ${order.customerName} has been notified.`);
+  };
+
   const handleMarkReady = async (order: Order) => {
-      if(window.confirm(`Mark order for ${order.customerName} as Ready? This will notify them with pickup location.`)) {
-          const event = calendarEvents.find(e => e.date === order.cookDay.split('T')[0] && e.type === 'ORDER_PICKUP');
-          const location = event?.location || settings.businessAddress || "Ipswich, QLD";
-          
-          // Send "food is ready" email + SMS with map pin
+      // Resolve pickup location: order override → calendar event → business address → fallback
+      const event = calendarEvents.find(e => e.date === order.cookDay.split('T')[0] && e.type === 'ORDER_PICKUP');
+      const location = order.pickupLocation || event?.location || settings.businessAddress || "Ipswich, QLD";
+      
+      if(window.confirm(`Mark order for ${order.customerName} as Ready?\n\nPickup location: ${location}\nThis will send an SMS + email with a map link.`)) {
           const readyOrder = {
               customerName: order.customerName,
               customerEmail: order.customerEmail,
               customerPhone: order.customerPhone,
               collectionPin: order.collectionPin
           };
+          const businessName = settings.businessName || 'Street Meatz BBQ';
           try {
               await Promise.allSettled([
                   fetch('/api/v1/email/order-ready', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ settings: settings.emailSettings, order: readyOrder, location })
+                      body: JSON.stringify({ settings: settings.emailSettings, order: readyOrder, location, businessName })
                   }),
                   fetch('/api/v1/sms/order-ready', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ settings: settings.smsSettings, order: readyOrder, location })
+                      body: JSON.stringify({ settings: settings.smsSettings, order: readyOrder, location, businessName })
                   })
               ]);
           } catch (e) {
@@ -515,6 +593,34 @@ const normalizePhone = (raw: string): string => {
       }
   }
 
+  const handleMarkCollected = async (order: Order) => {
+      if(window.confirm(`Mark order for ${order.customerName} as Collected?\n\nThis will complete the order and send a thank-you email.`)) {
+          const businessName = settings.businessName || 'Street Meatz BBQ';
+          const appUrl = window.location.origin;
+          
+          // Send thank-you + app promo email
+          if (order.customerEmail && settings.emailSettings?.enabled) {
+              try {
+                  await fetch('/api/v1/email/order-thankyou', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                          settings: settings.emailSettings,
+                          order: { id: order.id, customerName: order.customerName, customerEmail: order.customerEmail },
+                          businessName,
+                          appUrl
+                      })
+                  });
+              } catch (e) {
+                  console.error("Failed to send thank-you email:", e);
+              }
+          }
+          
+          updateOrderStatus(order.id, 'Completed');
+          toast(`Order collected! Thank-you email sent to ${order.customerName}.`);
+      }
+  };
+
   const handleShipAndNotify = async () => {
       if (!editingOrder) return;
       if (!editingOrder.trackingNumber) {
@@ -524,29 +630,44 @@ const normalizePhone = (raw: string): string => {
       
       if(window.confirm(`Mark as Shipped and notify ${editingOrder.customerName}?`)) {
           const courier = editingOrder.courier || 'Australia Post';
-          const trackingUrl = courier.toLowerCase().includes('auspost') || courier.toLowerCase().includes('australia post')
-              ? `https://auspost.com.au/mypost/track/#/details/${editingOrder.trackingNumber}`
-              : `https://www.google.com/search?q=${encodeURIComponent(courier + ' tracking ' + editingOrder.trackingNumber)}`;
           
-          const shipOrder = {
-              customerName: editingOrder.customerName,
-              customerEmail: editingOrder.customerEmail,
-              customerPhone: editingOrder.customerPhone,
-              collectionPin: `Tracking: ${editingOrder.trackingNumber}`
+          const orderPayload = {
+              ...editingOrder,
+              items: editingOrder.items.map(li => ({
+                  item: li.item,
+                  name: li.item.name,
+                  description: li.item.description || '',
+                  price: li.item.price,
+                  quantity: li.quantity,
+                  selectedOption: li.selectedOption || '',
+                  packSelections: li.packSelections || {}
+              }))
           };
-          const location = `Shipped via ${courier}. Track: ${trackingUrl}`;
-          
+
           try {
               await Promise.allSettled([
-                  fetch('/api/v1/email/order-ready', {
+                  fetch('/api/v1/email/shipping-notification', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ settings: settings.emailSettings, order: shipOrder, location })
+                      body: JSON.stringify({
+                          settings: settings.emailSettings,
+                          order: orderPayload,
+                          businessName: settings.businessName || 'Street Meatz BBQ',
+                          invoiceSettings: settings.invoiceSettings || {},
+                          trackingNumber: editingOrder.trackingNumber,
+                          courier,
+                      })
                   }),
-                  fetch('/api/v1/sms/order-ready', {
+                  fetch('/api/v1/sms/shipping-notification', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ settings: settings.smsSettings, order: shipOrder, location })
+                      body: JSON.stringify({
+                          settings: settings.smsSettings,
+                          order: orderPayload,
+                          businessName: settings.businessName || 'Street Meatz BBQ',
+                          trackingNumber: editingOrder.trackingNumber,
+                          courier,
+                      })
                   })
               ]);
           } catch (e) {
@@ -556,7 +677,7 @@ const normalizePhone = (raw: string): string => {
           toast(`Shipped! Tracking notification sent to ${editingOrder.customerName} (email + SMS).`);
           
           const updated = { ...editingOrder, status: 'Shipped' as const };
-          updateOrder(updated);
+          await updateOrder(updated);
           setEditingOrder(null);
       }
   };
@@ -684,7 +805,7 @@ const normalizePhone = (raw: string): string => {
                             <div className="text-xs text-gray-400 truncate max-w-[220px]">{order.items.map(i => `${i.quantity}x ${i.item.name}`).join(', ')}</div>
                             <div className="text-xs text-gray-500 mt-1">{order.pickupTime}</div>
                           </div>
-                          <button onClick={() => updateOrderStatus(order.id, 'Cooking')} className="bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded font-bold text-xs flex items-center gap-1">
+                          <button onClick={() => handleStartCooking(order)} className="bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded font-bold text-xs flex items-center gap-1">
                             <Flame size={14}/> Start
                           </button>
                         </div>
@@ -703,7 +824,7 @@ const normalizePhone = (raw: string): string => {
                             <div className="font-bold text-green-200 text-sm">{order.customerName}</div>
                             <div className="text-xs text-gray-400">{order.pickupTime} · {order.customerPhone}</div>
                           </div>
-                          <button onClick={() => updateOrderStatus(order.id, 'Completed')} className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded font-bold text-xs">Complete</button>
+                          <button onClick={() => handleMarkCollected(order)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded font-bold text-xs flex items-center gap-1"><CheckCircle size={12}/> Collected</button>
                         </div>
                       ))}
                     </div>
@@ -858,6 +979,25 @@ const normalizePhone = (raw: string): string => {
                       </div>
                    </div>
                 </div>
+
+                {/* Pickup Location Override (for PICKUP orders) */}
+                {editingOrder.fulfillmentMethod === 'PICKUP' && (
+                    <div className="bg-green-900/20 border border-green-800 p-4 rounded-lg">
+                        <h4 className="text-sm font-bold text-green-200 mb-3 flex items-center gap-2">
+                            <MapPin size={16}/> Pickup Location
+                        </h4>
+                        <div className="space-y-1">
+                            <label className="text-xs text-gray-400 uppercase font-bold">Collection Address</label>
+                            <input 
+                                value={editingOrder.pickupLocation || ''}
+                                onChange={e => setEditingOrder({...editingOrder, pickupLocation: e.target.value})}
+                                placeholder={settings.businessAddress || 'Leave blank to use calendar event / default address'}
+                                className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm"
+                            />
+                            <p className="text-[10px] text-gray-500">Override the default pickup address for this order (e.g. roadside pop-up location). Leave blank to use the cook day event location or business address.</p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Tracking / Fulfillment Section */}
                 {editingOrder.fulfillmentMethod === 'DELIVERY' && (
@@ -1272,7 +1412,7 @@ const normalizePhone = (raw: string): string => {
 
                         {/* 3. Paid/Confirmed -> Start Cooking */}
                         {(order.status === 'Paid' || order.status === 'Confirmed') && (
-                           <button onClick={() => updateOrderStatus(order.id, 'Cooking')} className="p-2 bg-orange-600 rounded hover:bg-orange-500 text-white" title="Start Cooking">
+                           <button onClick={() => handleStartCooking(order)} className="p-2 bg-orange-600 rounded hover:bg-orange-500 text-white" title="Start Cooking & Notify">
                             <Clock size={16} />
                            </button>
                         )}
@@ -1291,10 +1431,10 @@ const normalizePhone = (raw: string): string => {
                             </>
                         )}
                         
-                        {/* 5. Ready -> Completed */}
+                        {/* 5. Ready -> Collected (sends thank-you email) */}
                         {(order.status === 'Ready' || order.status === 'Shipped') && (
-                        <button onClick={() => updateOrderStatus(order.id, 'Completed')} className="p-2 bg-gray-600 rounded hover:bg-gray-500" title="Complete">
-                            <Check size={16} />
+                        <button onClick={() => handleMarkCollected(order)} className="p-2 bg-blue-600 rounded hover:bg-blue-500" title="Mark Collected & Send Thank You">
+                            <CheckCircle size={16} />
                         </button>
                         )}
                     </td>

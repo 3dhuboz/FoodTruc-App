@@ -63,6 +63,7 @@ export async function restSetDoc(
 
   const body = JSON.stringify({ fields: toFirestoreFields(data) });
 
+  console.log(`[REST WRITE] PATCH ${collectionPath}/${docId}`, Object.keys(data));
   const res = await fetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -71,8 +72,10 @@ export async function restSetDoc(
 
   if (!res.ok) {
     const errText = await res.text();
+    console.error(`[REST WRITE] FAILED ${collectionPath}/${docId} (${res.status}):`, errText);
     throw new Error(`Firestore REST write failed (${res.status}): ${errText}`);
   }
+  console.log(`[REST WRITE] OK ${collectionPath}/${docId}`);
 }
 
 /**
@@ -162,10 +165,13 @@ export async function restDeleteDoc(
   collectionPath: string,
   docId: string
 ): Promise<void> {
+  console.log(`[REST DELETE] ${collectionPath}/${docId}`);
   const url = `${BASE_URL}/${collectionPath}/${docId}`;
   const res = await fetch(url, { method: 'DELETE' });
   if (!res.ok && res.status !== 404) {
     const errText = await res.text();
+    console.error(`[REST DELETE] FAILED ${collectionPath}/${docId} (${res.status}):`, errText);
     throw new Error(`Firestore REST delete failed (${res.status}): ${errText}`);
   }
+  console.log(`[REST DELETE] OK ${collectionPath}/${docId}`);
 }

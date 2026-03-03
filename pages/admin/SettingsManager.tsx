@@ -6,7 +6,6 @@ import { CreditCard, Save, CheckCircle, ExternalLink, Loader2, X, AlertCircle, M
 import { generateMarketingImage } from '../../services/gemini';
 import { db, auth, firebaseConfig } from '../../services/firebase';
 import { seedDatabase } from '../../services/dataSeeder';
-import { getDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
 import { restSetDoc, restDeleteDoc } from '../../services/firestoreRest';
 import { RewardPrize, AppSettings } from '../../types';
 
@@ -1010,7 +1009,7 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
                                       onClick={async () => {
                                           const newEnv = settings.squareEnvironment === 'production' ? 'sandbox' : 'production';
                                           try {
-                                              await setDoc(doc(db, 'settings', 'general'), { squareEnvironment: newEnv }, { merge: true });
+                                              await restSetDoc('settings', 'general', { squareEnvironment: newEnv });
                                               toast(`Square environment switched to ${newEnv.toUpperCase()}`, 'success');
                                           } catch (e: any) {
                                               toast(`Failed to save environment: ${e.message}`, 'error');

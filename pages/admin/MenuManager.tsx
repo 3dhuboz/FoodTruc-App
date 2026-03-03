@@ -64,19 +64,24 @@ const MenuManager: React.FC = () => {
       return acc;
   }, {} as Record<string, MenuItem[]>);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editItem.name && editItem.price) {
       const itemToSave = { ...editItem, category: editItem.category || 'Meats' };
-      if (editItem.id) {
-        updateMenuItem(itemToSave as MenuItem);
-        toast('Menu item updated!');
-      } else {
-        addMenuItem({ ...itemToSave, id: `m${Date.now()}`, available: true } as MenuItem);
-        toast('Menu item added!');
+      try {
+        if (editItem.id) {
+          await updateMenuItem(itemToSave as MenuItem);
+          toast('Menu item updated!');
+        } else {
+          await addMenuItem({ ...itemToSave, id: `m${Date.now()}`, available: true } as MenuItem);
+          toast('Menu item added!');
+        }
+        setIsEditing(false);
+        setEditItem({ availabilityType: 'everyday', isPack: false, packGroups: [] });
+      } catch (err: any) {
+        console.error('[MenuManager] Save failed:', err);
+        toast(`Save failed: ${err.message || 'Unknown error'}`, 'error');
       }
-      setIsEditing(false);
-      setEditItem({ availabilityType: 'everyday', isPack: false, packGroups: [] });
     }
   };
 

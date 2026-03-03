@@ -4,7 +4,7 @@ import { User, MenuItem, Order, CookDay, UserRole, CartItem, SocialPost, AppSett
 import { INITIAL_MENU, INITIAL_COOK_DAYS, INITIAL_ADMIN_USER, INITIAL_DEV_USER, INITIAL_POSTS, INITIAL_SETTINGS, INITIAL_EVENTS } from '../constants';
 import { db, auth, isFirebaseConfigured } from '../services/firebase';
 import { setGeminiApiKey } from '../services/gemini';
-import { restSetDoc, restGetDoc, restListDocs, restDeleteDoc } from '../services/firestoreRest';
+import { restSetDoc, restGetDoc, restDeleteDoc } from '../services/firestoreRest';
 import { 
   collection, 
   onSnapshot, 
@@ -194,13 +194,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     };
 
-    // Guard: once onSnapshot fires for a collection, REST bootstrap data is stale — skip it
-    const snapshotFired = new Set<string>();
     // Timeout fallback: show whatever we have after 5s even if Firestore is slow/offline
     const fallbackTimer = setTimeout(() => setIsLoading(false), 5000);
 
     const unsubMenu = onSnapshot(collection(db, 'menu'), async (snapshot) => {
-        snapshotFired.add('menu');
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MenuItem));
         const existingIds = new Set(data.map(d => d.id));
         const missingSeedItems = INITIAL_MENU.filter(item => !existingIds.has(item.id));
@@ -223,7 +220,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleError('Menu'));
 
     const unsubOrders = onSnapshot(query(collection(db, 'orders'), orderBy('createdAt', 'desc')), (snapshot) => {
-        snapshotFired.add('orders');
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Order));
         setOrders(data);
         setConnectionError(null);
@@ -231,7 +227,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleError('Orders'));
 
     const unsubEvents = onSnapshot(collection(db, 'events'), (snapshot) => {
-        snapshotFired.add('events');
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CalendarEvent));
         if (data.length === 0 && calendarEvents.length === 0) setCalendarEvents(INITIAL_EVENTS);
         else if (data.length > 0) { 
@@ -261,53 +256,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setSettings(prev => ({ ...prev, ...docData } as AppSettings));
     };
 
-    // REST API bootstrap: load ALL core data immediately (SDK onSnapshot may be slow to connect)
-    const settingsDocs = ['general', 'ticker', 'img_home', 'img_catering', 'img_pages', 'rewards'];
-    Promise.all(settingsDocs.map(id => restGetDoc('settings', id).catch(() => null)))
-      .then(results => {
-        if (!snapshotFired.has('settings')) {
-          results.forEach(docData => {
-            if (docData && Object.keys(docData).length > 0) {
-              mergeSettings(docData);
-            }
-          });
-          console.log('[REST Bootstrap] Settings loaded');
-        }
-        markLoaded('Settings');
-      })
-      .catch(e => console.warn('[REST Bootstrap] Settings failed:', e));
-
-    restListDocs('menu').then(docs => {
-      if (!snapshotFired.has('menu') && docs.length > 0) {
-        setMenu(docs as MenuItem[]);
-        markLoaded('Menu');
-        console.log(`[REST Bootstrap] Menu loaded (${docs.length} items)`);
-      }
-    }).catch(e => console.warn('[REST Bootstrap] Menu failed:', e));
-
-    restListDocs('orders').then(docs => {
-      if (!snapshotFired.has('orders') && docs.length > 0) {
-        const sorted = (docs as Order[]).sort((a, b) => {
-          const aTime = (a.createdAt as any)?.seconds || 0;
-          const bTime = (b.createdAt as any)?.seconds || 0;
-          return bTime - aTime;
-        });
-        setOrders(sorted);
-        markLoaded('Orders');
-        console.log(`[REST Bootstrap] Orders loaded (${docs.length})`);
-      } else {
-        markLoaded('Orders');
-      }
-    }).catch(e => { console.warn('[REST Bootstrap] Orders failed:', e); markLoaded('Orders'); });
-
-    restListDocs('events').then(docs => {
-      if (!snapshotFired.has('events')) {
-        if (docs.length > 0) setCalendarEvents(docs as CalendarEvent[]);
-        else if (calendarEvents.length === 0) setCalendarEvents(INITIAL_EVENTS);
-        console.log(`[REST Bootstrap] Events loaded (${docs.length})`);
-      }
-    }).catch(e => console.warn('[REST Bootstrap] Events failed:', e));
-    const unsubGeneral = onSnapshot(doc(db, 'settings', 'general'), snap => { snapshotFired.add('settings'); mergeSettings(snap.data()); markLoaded('Settings'); }, handleError('Settings'));
+    const unsubGeneral = onSnapshot(doc(db, 'settings', 'general'), snap => { mergeSettings(snap.data()); markLoaded('Settings'); }, handleError('Settings'));
     const unsubTicker = onSnapshot(doc(db, 'settings', 'ticker'), snap => mergeSettings(snap.data()), handleError('Ticker'));
     const unsubImgHome = onSnapshot(doc(db, 'settings', 'img_home'), snap => mergeSettings(snap.data()), handleError('Img Home'));
     const unsubImgCat = onSnapshot(doc(db, 'settings', 'img_catering'), snap => mergeSettings(snap.data()), handleError('Img Cat'));

@@ -4,8 +4,7 @@ import { useToast } from '../../components/Toast';
 import { Facebook, Instagram, Wand2, Send, Image as ImageIcon, Users, Eye, TrendingUp, BarChart, Lightbulb, RefreshCw, Calendar, Clock, X, Save, ExternalLink, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Plug, Trash2, CheckSquare, Download, Zap, Sparkles, Info, ThumbsUp, ThumbsDown, Bot, CreditCard, WifiOff, Wifi } from 'lucide-react';
 import SmsBlast from './SmsBlast';
 import { generateSocialPost, generateMarketingImage, generateSocialRecommendations, generateSmartSchedule, SmartScheduledPost } from '../../services/gemini';
-import { doc, updateDoc, deleteDoc } from 'firebase/firestore'; 
-import { db } from '../../services/firebase';
+import { restSetDoc, restDeleteDoc } from '../../services/firestoreRest';
 
 declare global {
   interface Window {
@@ -178,22 +177,27 @@ const SocialManager: React.FC = () => {
     setIsAnalyzing(false);
   };
 
-  const handlePost = () => {
-    addSocialPost({
-      id: `p${Date.now()}`,
-      platform,
-      content: generatedContent,
-      hashtags,
-      scheduledFor: scheduleDate || new Date().toISOString(),
-      status: scheduleDate && new Date(scheduleDate) > new Date() ? 'Scheduled' : 'Posted',
-      image: generatedImage || undefined
-    });
-    setGeneratedContent('');
-    setHashtags([]);
-    setTopic('');
-    setGeneratedImage(null);
-    setScheduleDate('');
-    toast('Content saved to schedule!');
+  const handlePost = async () => {
+    try {
+      await addSocialPost({
+        id: `p${Date.now()}`,
+        platform,
+        content: generatedContent,
+        hashtags,
+        scheduledFor: scheduleDate || new Date().toISOString(),
+        status: scheduleDate && new Date(scheduleDate) > new Date() ? 'Scheduled' : 'Posted',
+        image: generatedImage || undefined
+      });
+      setGeneratedContent('');
+      setHashtags([]);
+      setTopic('');
+      setGeneratedImage(null);
+      setScheduleDate('');
+      toast('Content saved to schedule!');
+    } catch (err: any) {
+      console.error('[Social] Post failed:', err);
+      toast(`Save failed: ${err.message || 'Unknown error'}`, 'error');
+    }
   };
 
   // Calendar helpers
@@ -302,42 +306,51 @@ const SocialManager: React.FC = () => {
     }
   };
 
-  const handleApprovePost = (idx: number) => {
+  const handleApprovePost = async (idx: number) => {
     const post = smartSchedule[idx];
     const dayStr = (post.scheduledFor || '').slice(0, 10);
     if (hasConflict(post.platform, dayStr)) {
       if (!window.confirm(`There's already a ${post.platform} post on ${dayStr}. Add anyway?`)) return;
     }
-    addSocialPost({
-      id: `smart_${Date.now()}_${idx}`,
-      platform: post.platform || 'Instagram',
-      content: post.content || '',
-      hashtags: post.hashtags || [],
-      scheduledFor: post.scheduledFor || new Date().toISOString(),
-      status: 'Scheduled',
-      image: postImages[idx] || undefined
-    });
-    setApprovedIndices(prev => new Set([...prev, idx]));
+    try {
+      await addSocialPost({
+        id: `smart_${Date.now()}_${idx}`,
+        platform: post.platform || 'Instagram',
+        content: post.content || '',
+        hashtags: post.hashtags || [],
+        scheduledFor: post.scheduledFor || new Date().toISOString(),
+        status: 'Scheduled',
+        image: postImages[idx] || undefined
+      });
+      setApprovedIndices(prev => new Set([...prev, idx]));
+    } catch (err: any) {
+      console.error('[Social] Approve failed:', err);
+      toast(`Save failed: ${err.message || 'Unknown error'}`, 'error');
+    }
   };
 
-  const handleApproveAll = () => {
-    smartSchedule.forEach((post, idx) => {
-      if (!approvedIndices.has(idx) && !removedIndices.has(idx)) {
-        const dayStr = (post.scheduledFor || '').slice(0, 10);
-        if (!hasConflict(post.platform, dayStr)) {
-          addSocialPost({
-            id: `smart_${Date.now()}_${idx}`,
-            platform: post.platform || 'Instagram',
-            content: post.content || '',
-            hashtags: post.hashtags || [],
-            scheduledFor: post.scheduledFor || new Date().toISOString(),
-            status: 'Scheduled',
-            image: postImages[idx] || undefined
-          });
-        }
-      }
-    });
-    setApprovedIndices(new Set(smartSchedule.map((_, i) => i)));
+  const handleApproveAll = async () => {
+    const toApprove = smartSchedule
+      .map((post, idx) => ({ post, idx }))
+      .filter(({ idx }) => !approvedIndices.has(idx) && !removedIndices.has(idx))
+      .filter(({ post }) => !hasConflict(post.platform, (post.scheduledFor || '').slice(0, 10)));
+    try {
+      await Promise.all(toApprove.map(({ post, idx }) =>
+        addSocialPost({
+          id: `smart_${Date.now()}_${idx}`,
+          platform: post.platform || 'Instagram',
+          content: post.content || '',
+          hashtags: post.hashtags || [],
+          scheduledFor: post.scheduledFor || new Date().toISOString(),
+          status: 'Scheduled',
+          image: postImages[idx] || undefined
+        })
+      ));
+      setApprovedIndices(new Set(smartSchedule.map((_, i) => i)));
+    } catch (err: any) {
+      console.error('[Social] Approve all failed:', err);
+      toast(`Some saves failed: ${err.message || 'Unknown error'}`, 'error');
+    }
   };
 
   const handleRemovePost = (idx: number) => {
@@ -497,22 +510,14 @@ const SocialManager: React.FC = () => {
   };
 
   const approvePost = async (id: string) => {
-      if (!db) {
-          toast('Database not connected.', 'error');
-          return;
-      }
       if (window.confirm("Approve this photo for the public gallery?")) {
-          await updateDoc(doc(db, 'gallery_posts', id), { approved: true });
+          await restSetDoc('gallery_posts', id, { approved: true });
       }
   };
 
   const deletePost = async (id: string) => {
-      if (!db) {
-          toast('Database not connected.', 'error');
-          return;
-      }
       if (window.confirm("Delete this photo?")) {
-          await deleteDoc(doc(db, 'gallery_posts', id));
+          await restDeleteDoc('gallery_posts', id);
       }
   };
 

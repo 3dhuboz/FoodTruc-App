@@ -76,27 +76,36 @@ const Planner: React.FC = () => {
       setIsModalOpen(true);
   };
 
-  const handleSaveEvent = () => {
+  const handleSaveEvent = async () => {
       if (!editingEvent.title || !editingEvent.date) return;
-
-      if (editingEvent.id) {
-          updateCalendarEvent(editingEvent as CalendarEvent);
-          toast('Event updated!');
-      } else {
-          addCalendarEvent({
-              ...editingEvent,
-              id: `evt_${Date.now()}`
-          } as CalendarEvent);
-          toast('Event created!');
+      try {
+          if (editingEvent.id) {
+              await updateCalendarEvent(editingEvent as CalendarEvent);
+              toast('Event updated!');
+          } else {
+              await addCalendarEvent({
+                  ...editingEvent,
+                  id: `evt_${Date.now()}`
+              } as CalendarEvent);
+              toast('Event created!');
+          }
+          setIsModalOpen(false);
+      } catch (err: any) {
+          console.error('[Planner] Save failed:', err);
+          toast(`Save failed: ${err.message || 'Unknown error'}`, 'error');
       }
-      setIsModalOpen(false);
   };
 
-  const handleDeleteEvent = () => {
+  const handleDeleteEvent = async () => {
       if (editingEvent.id && window.confirm("Delete this event?")) {
-          removeCalendarEvent(editingEvent.id);
-          toast('Event deleted.');
-          setIsModalOpen(false);
+          try {
+              await removeCalendarEvent(editingEvent.id);
+              toast('Event deleted.');
+              setIsModalOpen(false);
+          } catch (err: any) {
+              console.error('[Planner] Delete failed:', err);
+              toast(`Delete failed: ${err.message || 'Unknown error'}`, 'error');
+          }
       }
   };
 
@@ -303,13 +312,14 @@ const Planner: React.FC = () => {
                               </div>
                               
                               <div>
-                                  <label className="block text-xs text-gray-400 font-bold mb-1">Location</label>
+                                  <label className="block text-xs text-gray-400 font-bold mb-1">Pickup Address <span className="text-yellow-500">(sent to customers via SMS)</span></label>
                                   <input 
                                       value={editingEvent.location || ''}
                                       onChange={e => setEditingEvent({...editingEvent, location: e.target.value})}
-                                      placeholder="e.g. West End HQ"
+                                      placeholder="e.g. 123 Main St, Ipswich QLD 4305"
                                       className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white"
                                   />
+                                  <p className="text-[10px] text-yellow-600 mt-1">This exact address is sent to customers with a Google Maps link when their order is marked Ready.</p>
                               </div>
                           </div>
                       )}
