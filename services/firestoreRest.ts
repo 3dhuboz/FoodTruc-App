@@ -14,10 +14,22 @@ function toFirestoreValue(value: any): any {
     return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
   }
   if (typeof value === 'string') return { stringValue: value };
+  if (value instanceof Date) {
+    return { timestampValue: value.toISOString() };
+  }
   if (Array.isArray(value)) {
     return { arrayValue: { values: value.map(toFirestoreValue) } };
   }
   if (typeof value === 'object') {
+    // Handle Firestore SDK Timestamp objects
+    if (typeof value.toDate === 'function') {
+      return { timestampValue: value.toDate().toISOString() };
+    }
+    // Handle plain timestamp-like objects {seconds, nanoseconds}
+    if ('seconds' in value && 'nanoseconds' in value && Object.keys(value).length === 2) {
+      const ms = value.seconds * 1000 + Math.floor(value.nanoseconds / 1000000);
+      return { timestampValue: new Date(ms).toISOString() };
+    }
     const fields: Record<string, any> = {};
     for (const [k, v] of Object.entries(value)) {
       fields[k] = toFirestoreValue(v);

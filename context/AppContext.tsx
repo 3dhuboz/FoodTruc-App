@@ -4,23 +4,13 @@ import { User, MenuItem, Order, CookDay, UserRole, CartItem, SocialPost, AppSett
 import { INITIAL_MENU, INITIAL_COOK_DAYS, INITIAL_ADMIN_USER, INITIAL_DEV_USER, INITIAL_POSTS, INITIAL_SETTINGS, INITIAL_EVENTS } from '../constants';
 import { db, auth, isFirebaseConfigured } from '../services/firebase';
 import { setGeminiApiKey } from '../services/gemini';
-import { restSetDoc, restGetDoc, restListDocs } from '../services/firestoreRest';
+import { restSetDoc, restGetDoc, restListDocs, restDeleteDoc } from '../services/firestoreRest';
 import { 
   collection, 
   onSnapshot, 
   doc, 
-  setDoc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
   query, 
-  orderBy,
-  where,
-  deleteField,
-  arrayUnion,
-  arrayRemove,
-  increment,
-  writeBatch
+  orderBy
 } from 'firebase/firestore';
 import { 
   signInWithEmailAndPassword, 
@@ -216,11 +206,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const missingSeedItems = INITIAL_MENU.filter(item => !existingIds.has(item.id));
 
         if (missingSeedItems.length > 0) {
-            // Add any missing seed items to Firestore (handles fresh DB and partial loss)
+            // Add any missing seed items to Firestore via REST (handles fresh DB and partial loss)
             try {
-                const batch = writeBatch(db);
-                missingSeedItems.forEach(item => batch.set(doc(db, 'menu', item.id), item));
-                await batch.commit();
+                await Promise.all(missingSeedItems.map(item => restSetDoc('menu', item.id, item)));
                 // onSnapshot will fire again with the full set — skip setState here
             } catch (e) {
                 console.warn("Failed to restore seed menu items:", e);
@@ -368,7 +356,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
                     const res = await createUserWithEmailAndPassword(auth, email, password);
                     const newUser: User = { id: res.user.uid, name: name || 'New User', email: email, role: UserRole.CUSTOMER, isVerified: true, stamps: 0 };
-                    await setDoc(doc(db, 'users', res.user.uid), newUser);
+                    await restSetDoc('users', res.user.uid, newUser);
                 } else { throw e; }
             }
         }
@@ -385,43 +373,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addUser = async (newUser: User) => {
-      await setDoc(doc(db, 'users', newUser.id), newUser);
+      await restSetDoc('users', newUser.id, newUser as any);
   };
 
   const updateUserProfile = async (updatedUser: User) => {
-      await setDoc(doc(db, 'users', updatedUser.id), updatedUser, { merge: true });
+      await restSetDoc('users', updatedUser.id, updatedUser as any);
   };
 
   const adminUpdateUser = async (updatedUser: User) => {
-      await setDoc(doc(db, 'users', updatedUser.id), updatedUser, { merge: true });
+      await restSetDoc('users', updatedUser.id, updatedUser as any);
   };
 
   const deleteUser = async (userId: string) => {
-      await deleteDoc(doc(db, 'users', userId));
+      await restDeleteDoc('users', userId);
   };
 
   const addMenuItem = async (item: MenuItem) => {
-      await setDoc(doc(db, 'menu', item.id), item);
+      await restSetDoc('menu', item.id, item as any);
   };
 
   const updateMenuItem = async (item: MenuItem) => {
-      await updateDoc(doc(db, 'menu', item.id), { ...item });
+      await restSetDoc('menu', item.id, item as any);
   };
 
   const deleteMenuItem = async (itemId: string) => {
-      await deleteDoc(doc(db, 'menu', itemId));
+      await restDeleteDoc('menu', itemId);
   };
 
   const addCalendarEvent = async (event: CalendarEvent) => {
-      await setDoc(doc(db, 'events', event.id), event);
+      await restSetDoc('events', event.id, event as any);
   };
 
   const updateCalendarEvent = async (event: CalendarEvent) => {
-      await updateDoc(doc(db, 'events', event.id), { ...event });
+      await restSetDoc('events', event.id, event as any);
   };
 
   const removeCalendarEvent = async (eventId: string) => {
-      await deleteDoc(doc(db, 'events', eventId));
+      await restDeleteDoc('events', eventId);
   };
 
   // STRICT CUTOFF LOGIC: 9AM Morning PRIOR to cook date
@@ -452,7 +440,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const createOrder = async (order: Order) => {
-      await setDoc(doc(db, 'orders', order.id), order);
+      await restSetDoc('orders', order.id, order as any);
       
       // If the user had a discount and used it, remove it from their profile
       if (order.discountApplied && user && user.hasCateringDiscount) {
@@ -465,8 +453,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, { status });
+      await restSetDoc('orders', orderId, { status });
       
       if (status === 'Confirmed') {
           const order = orders.find(o => o.id === orderId);
@@ -479,13 +466,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 title: `Pickup: ${order.customerName}`,
                 orderId: order.id
               };
-              await setDoc(doc(db, 'events', newEvent.id), newEvent);
+              await restSetDoc('events', newEvent.id, newEvent as any);
           }
       }
   };
 
   const updateOrder = async (updatedOrder: Order) => {
-      await setDoc(doc(db, 'orders', updatedOrder.id), updatedOrder);
+      await restSetDoc('orders', updatedOrder.id, updatedOrder as any);
   };
 
   const addToCart = (item: MenuItem, quantity: number = 1, specificDate?: string) => {
@@ -525,22 +512,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const clearCart = () => setCart([]);
 
   const addSocialPost = async (post: SocialPost) => {
-      await setDoc(doc(db, 'social_posts', post.id), post);
+      await restSetDoc('social_posts', post.id, post as any);
       setSocialPosts(prev => [post, ...prev]);
   };
 
   const updateSocialPost = async (post: SocialPost) => {
-      await setDoc(doc(db, 'social_posts', post.id), post);
+      await restSetDoc('social_posts', post.id, post as any);
       setSocialPosts(prev => prev.map(p => p.id === post.id ? post : p));
   };
 
   const deleteSocialPost = async (postId: string) => {
-      await deleteDoc(doc(db, 'social_posts', postId));
+      await restDeleteDoc('social_posts', postId);
       setSocialPosts(prev => prev.filter(p => p.id !== postId));
   };
   
   const addGalleryPost = async (post: GalleryPost) => {
-      await setDoc(doc(db, 'gallery_posts', post.id), post);
+      await restSetDoc('gallery_posts', post.id, post as any);
   };
 
   const toggleGalleryLike = async (postId: string) => {
@@ -549,21 +536,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!post) return;
 
       const isLiked = post.likedBy?.includes(user.id);
-      const postRef = doc(db, 'gallery_posts', postId);
+      const newLikedBy = isLiked
+          ? (post.likedBy || []).filter(id => id !== user.id)
+          : [...(post.likedBy || []), user.id];
+      const newLikes = Math.max(0, (post.likes || 0) + (isLiked ? -1 : 1));
 
-      if (isLiked) {
-          // Unlike
-          await updateDoc(postRef, {
-              likes: increment(-1),
-              likedBy: arrayRemove(user.id)
-          });
-      } else {
-          // Like
-          await updateDoc(postRef, {
-              likes: increment(1),
-              likedBy: arrayUnion(user.id)
-          });
-      }
+      await restSetDoc('gallery_posts', postId, { likes: newLikes, likedBy: newLikedBy });
   };
 
   const updateSettings = async (newSettings: Partial<AppSettings>) => {
