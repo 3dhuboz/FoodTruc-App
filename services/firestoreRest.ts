@@ -2,7 +2,22 @@
  * Firestore REST API helper — bypasses the SDK's WebChannel transport
  * which can be unreliable on some networks. Uses standard fetch() instead.
  */
-import { firebaseConfig } from './firebase';
+import { firebaseConfig, auth } from './firebase';
+
+/** Get the current user's Firebase Auth ID token for authenticated requests */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const user = auth?.currentUser;
+    if (user) {
+      const token = await user.getIdToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  } catch (e) {
+    console.warn('[REST] Failed to get auth token, proceeding without auth:', e);
+  }
+  return headers;
+}
 
 const BASE_URL = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
 
@@ -57,16 +72,23 @@ export async function restSetDoc(
   docId: string,
   data: Record<string, any>
 ): Promise<void> {
-  const fieldPaths = Object.keys(data);
+  // Strip 'id' from payload — it's document metadata, not a field
+  const { id: _id, ...cleanData } = data;
+  const fieldPaths = Object.keys(cleanData);
+  if (fieldPaths.length === 0) {
+    console.warn(`[REST WRITE] No fields to write for ${collectionPath}/${docId}`);
+    return;
+  }
   const updateMask = fieldPaths.map(f => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join('&');
   const url = `${BASE_URL}/${collectionPath}/${docId}?${updateMask}`;
 
-  const body = JSON.stringify({ fields: toFirestoreFields(data) });
+  const body = JSON.stringify({ fields: toFirestoreFields(cleanData) });
+  const headers = await getAuthHeaders();
 
-  console.log(`[REST WRITE] PATCH ${collectionPath}/${docId}`, Object.keys(data));
+  console.log(`[REST WRITE] PATCH ${collectionPath}/${docId}`, fieldPaths, headers.Authorization ? '(authenticated)' : '(NO AUTH)');
   const res = await fetch(url, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body,
   });
 
@@ -86,7 +108,8 @@ export async function restGetDoc(
   docId: string
 ): Promise<Record<string, any> | null> {
   const url = `${BASE_URL}/${collectionPath}/${docId}`;
-  const res = await fetch(url);
+  const headers = await getAuthHeaders();
+  const res = await fetch(url, { headers });
   if (res.status === 404) return null;
   if (!res.ok) {
     const errText = await res.text();
@@ -104,6 +127,10 @@ function fromFirestoreValue(field: any): any {
   if ('integerValue' in field) return Number(field.integerValue);
   if ('doubleValue' in field) return field.doubleValue;
   if ('stringValue' in field) return field.stringValue;
+  if ('timestampValue' in field) return field.timestampValue;
+  if ('geoPointValue' in field) return field.geoPointValue;
+  if ('referenceValue' in field) return field.referenceValue;
+  if ('bytesValue' in field) return field.bytesValue;
   if ('arrayValue' in field) {
     return (field.arrayValue.values || []).map(fromFirestoreValue);
   }
@@ -132,13 +159,14 @@ export async function restListDocs(
 ): Promise<Record<string, any>[]> {
   let allDocs: Record<string, any>[] = [];
   let pageToken = '';
+  const headers = await getAuthHeaders();
   
   do {
     let url = `${BASE_URL}/${collectionPath}?pageSize=300`;
     if (pageToken) url += `&pageToken=${pageToken}`;
     if (orderByField) url += `&orderBy=${encodeURIComponent(orderByField)}${direction === 'DESCENDING' ? ' desc' : ''}`;
     
-    const res = await fetch(url);
+    const res = await fetch(url, { headers });
     if (!res.ok) {
       const errText = await res.text();
       throw new Error(`Firestore REST list failed (${res.status}): ${errText}`);
@@ -167,7 +195,8 @@ export async function restDeleteDoc(
 ): Promise<void> {
   console.log(`[REST DELETE] ${collectionPath}/${docId}`);
   const url = `${BASE_URL}/${collectionPath}/${docId}`;
-  const res = await fetch(url, { method: 'DELETE' });
+  const headers = await getAuthHeaders();
+  const res = await fetch(url, { method: 'DELETE', headers });
   if (!res.ok && res.status !== 404) {
     const errText = await res.text();
     console.error(`[REST DELETE] FAILED ${collectionPath}/${docId} (${res.status}):`, errText);

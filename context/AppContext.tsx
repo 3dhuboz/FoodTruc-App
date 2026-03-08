@@ -97,6 +97,9 @@ const TICKER_KEYS = ['manualTickerImages'];
 const REWARDS_KEYS = ['rewards'];
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const BUILD_VERSION = '2026.03.08a';
+  console.log(`[Street Meatz] Build ${BUILD_VERSION} — All writes use authenticated REST API`);
+
   const [isLoading, setIsLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   
