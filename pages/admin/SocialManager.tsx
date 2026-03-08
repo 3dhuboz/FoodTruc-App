@@ -12,6 +12,29 @@ declare global {
   }
 }
 
+// Helper to compress base64 images to avoid Firestore 1MB field limit
+const compressImage = (base64Str: string, maxWidth = 700, quality = 0.5) => {
+    return new Promise<string>((resolve) => {
+        const img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            if (width > maxWidth) {
+                height *= maxWidth / width;
+                width = maxWidth;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(base64Str);
+    });
+};
+
 const SocialManager: React.FC = () => {
   const { socialPosts, addSocialPost, updateSocialPost, deleteSocialPost, settings, updateSettings, galleryPosts, calendarEvents, menu } = useApp();
   const { toast } = useToast();
@@ -166,7 +189,10 @@ const SocialManager: React.FC = () => {
     if (!topic) return;
     setIsGenerating(true);
     const imgBase64 = await generateMarketingImage(topic);
-    setGeneratedImage(imgBase64);
+    if (imgBase64) {
+      const compressed = await compressImage(imgBase64, 700, 0.5);
+      setGeneratedImage(compressed);
+    }
     setIsGenerating(false);
   }
 
@@ -298,7 +324,8 @@ const SocialManager: React.FC = () => {
         setAutoImageProgress({ current: i + 1, total: result.posts.length });
         const img = await generateMarketingImage(result.posts[i].imagePrompt);
         if (img) {
-          setPostImages(prev => ({ ...prev, [i]: img }));
+          const compressed = await compressImage(img, 700, 0.5);
+          setPostImages(prev => ({ ...prev, [i]: compressed }));
         }
       }
       setGeneratingImageFor(new Set());
@@ -360,7 +387,10 @@ const SocialManager: React.FC = () => {
   const handleGeneratePostImage = async (idx: number) => {
     setGeneratingImageFor(prev => new Set([...prev, idx]));
     const img = await generateMarketingImage(smartSchedule[idx].imagePrompt);
-    if (img) setPostImages(prev => ({ ...prev, [idx]: img }));
+    if (img) {
+      const compressed = await compressImage(img, 700, 0.5);
+      setPostImages(prev => ({ ...prev, [idx]: compressed }));
+    }
     setGeneratingImageFor(prev => { const s = new Set(prev); s.delete(idx); return s; });
   };
 
