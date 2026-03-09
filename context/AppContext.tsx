@@ -383,26 +383,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addMenuItem = async (item: MenuItem) => {
       await restSetDoc('menu', item.id, item as any);
+      setMenu(prev => [...prev.filter(m => m.id !== item.id), item]);
   };
 
   const updateMenuItem = async (item: MenuItem) => {
       await restSetDoc('menu', item.id, item as any);
+      setMenu(prev => prev.map(m => m.id === item.id ? item : m));
   };
 
   const deleteMenuItem = async (itemId: string) => {
       await restDeleteDoc('menu', itemId);
+      setMenu(prev => prev.filter(m => m.id !== itemId));
   };
 
   const addCalendarEvent = async (event: CalendarEvent) => {
       await restSetDoc('events', event.id, event as any);
+      setCalendarEvents(prev => [...prev.filter(e => e.id !== event.id), event]);
   };
 
   const updateCalendarEvent = async (event: CalendarEvent) => {
       await restSetDoc('events', event.id, event as any);
+      setCalendarEvents(prev => prev.map(e => e.id === event.id ? event : e));
   };
 
   const removeCalendarEvent = async (eventId: string) => {
       await restDeleteDoc('events', eventId);
+      setCalendarEvents(prev => prev.filter(e => e.id !== eventId));
   };
 
   // STRICT CUTOFF LOGIC: 9AM Morning PRIOR to cook date
@@ -434,11 +440,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const createOrder = async (order: Order) => {
       await restSetDoc('orders', order.id, order as any);
+      setOrders(prev => [order, ...prev]);
       
       // If the user had a discount and used it, remove it from their profile
       if (order.discountApplied && user && user.hasCateringDiscount) {
           const updatedUser = { ...user, hasCateringDiscount: false };
-          setUser(updatedUser); // Optimistic UI update
+          setUser(updatedUser);
           await updateUserProfile(updatedUser);
       }
 
@@ -447,6 +454,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
       await restSetDoc('orders', orderId, { status });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
       
       if (status === 'Confirmed') {
           const order = orders.find(o => o.id === orderId);
@@ -460,12 +468,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 orderId: order.id
               };
               await restSetDoc('events', newEvent.id, newEvent as any);
+              setCalendarEvents(prev => [...prev.filter(e => e.id !== newEvent.id), newEvent]);
           }
       }
   };
 
   const updateOrder = async (updatedOrder: Order) => {
       await restSetDoc('orders', updatedOrder.id, updatedOrder as any);
+      setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
   };
 
   const addToCart = (item: MenuItem, quantity: number = 1, specificDate?: string) => {
