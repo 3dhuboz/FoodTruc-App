@@ -272,6 +272,50 @@ const SocialManager: React.FC = () => {
     }
   };
 
+  const handlePostNow = async (post: import('../../types').SocialPost) => {
+    if (!settings.facebookConnected || !settings.facebookPageAccessToken || !settings.facebookPageId) {
+      toast('Facebook not connected. Configure Facebook in Settings first.', 'error');
+      return;
+    }
+    if (!window.confirm(`Publish this ${post.platform} post now?`)) return;
+    const tags = (post.hashtags || []).map((t: string) => t.startsWith('#') ? t : `#${t}`).join(' ');
+    const caption = tags ? `${post.content}\n\n${tags}` : post.content;
+    const imageUrl = post.image && post.image.startsWith('https://') ? post.image : undefined;
+    try {
+      if (post.platform === 'Facebook') {
+        const endpoint = imageUrl
+          ? `https://graph.facebook.com/v18.0/${settings.facebookPageId}/photos`
+          : `https://graph.facebook.com/v18.0/${settings.facebookPageId}/feed`;
+        const body = imageUrl
+          ? { url: imageUrl, caption, access_token: settings.facebookPageAccessToken }
+          : { message: caption, access_token: settings.facebookPageAccessToken };
+        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message);
+      } else if (post.platform === 'Instagram') {
+        const igId = settings.instagramBusinessAccountId;
+        if (!igId) throw new Error('Instagram Business Account ID not set in Settings');
+        if (!imageUrl) throw new Error('Instagram requires a public image URL');
+        const cRes = await fetch(`https://graph.facebook.com/v18.0/${igId}/media`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_url: imageUrl, caption, access_token: settings.facebookPageAccessToken }),
+        });
+        const container = await cRes.json();
+        if (container.error) throw new Error(container.error.message);
+        const pRes = await fetch(`https://graph.facebook.com/v18.0/${igId}/media_publish`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ creation_id: container.id, access_token: settings.facebookPageAccessToken }),
+        });
+        const pub = await pRes.json();
+        if (pub.error) throw new Error(pub.error.message);
+      }
+      await updateSocialPost({ ...post, status: 'Posted' });
+      toast(`${post.platform} post published!`);
+    } catch (e: any) {
+      toast(`Publish failed: ${e.message}`, 'error');
+    }
+  };
+
   const PILLAR_COLORS: Record<string, string> = {
     'Behind The Fire': 'bg-orange-900/60 text-orange-300 border-orange-700',
     'Food Cinema': 'bg-red-900/60 text-red-300 border-red-700',
@@ -837,7 +881,7 @@ const SocialManager: React.FC = () => {
                         <div className="space-y-2">
                             {getPostsForDay(selectedCalDay).map(post => (
                                 <div key={post.id} className="flex items-start gap-3 p-3 bg-gray-800/60 rounded-lg border border-gray-700 hover:border-gray-500 transition-all group">
-                                    {post.image && <img src={post.image} alt="post" className="w-10 h-10 rounded object-cover shrink-0"/>}
+                                    {post.image && <img src={post.image} alt="post" className="w-10 h-10 rounded-lg object-cover shrink-0"/>}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${post.platform === 'Instagram' ? 'bg-pink-900/50 text-pink-300' : 'bg-blue-900/50 text-blue-300'}`}>
@@ -852,7 +896,12 @@ const SocialManager: React.FC = () => {
                                         </div>
                                         <p className="text-gray-300 text-xs leading-relaxed truncate">{post.content}</p>
                                     </div>
-                                    <div className="flex gap-1 shrink-0">
+                                    <div className="flex flex-col gap-1 shrink-0">
+                                        {post.status === 'Scheduled' && (
+                                          <button onClick={() => handlePostNow(post)} className="flex items-center gap-1 bg-green-700/40 hover:bg-green-600/60 text-green-300 text-xs font-bold px-2 py-1 rounded transition-all" title="Publish now">
+                                              <Zap size={11}/> Now
+                                          </button>
+                                        )}
                                         <button onClick={() => openEdit(post)} className="opacity-0 group-hover:opacity-100 bg-gray-700 hover:bg-gray-600 text-white p-1.5 rounded transition-all" title="Edit post">
                                             <Wand2 size={13}/>
                                         </button>
@@ -867,6 +916,70 @@ const SocialManager: React.FC = () => {
                 </div>
             )}
         </div>
+
+        {/* ===== UPCOMING POSTS LIST ===== */}
+        {(() => {
+          const upcoming = socialPosts
+            .filter(p => p.status === 'Scheduled')
+            .sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime());
+          if (upcoming.length === 0) return null;
+          return (
+            <div className="bg-gray-900/50 rounded-2xl border border-gray-700 overflow-hidden">
+              <div className="bg-gray-800 px-5 py-3 border-b border-gray-700 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Clock className="text-bbq-gold" size={18}/>
+                  <h4 className="font-bold text-white">Upcoming Scheduled Posts</h4>
+                  <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">{upcoming.length}</span>
+                </div>
+              </div>
+              <div className="divide-y divide-gray-800">
+                {upcoming.map(post => (
+                  <div key={post.id} className="flex items-start gap-3 p-4 hover:bg-gray-800/40 transition-all group">
+                    {post.image
+                      ? <img src={post.image} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0 border border-gray-700"/>
+                      : <div className={`w-12 h-12 rounded-lg shrink-0 flex items-center justify-center text-lg font-bold ${post.platform === 'Instagram' ? 'bg-pink-900/40' : 'bg-blue-900/40'}`}>
+                          {post.platform === 'Instagram' ? <Instagram size={20} className="text-pink-400"/> : <Facebook size={20} className="text-blue-400"/>}
+                        </div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${post.platform === 'Instagram' ? 'bg-pink-900/50 text-pink-300' : 'bg-blue-900/50 text-blue-300'}`}>
+                          {post.platform}
+                        </span>
+                        <span className="text-xs text-bbq-gold font-medium">
+                          {new Date(post.scheduledFor).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: '2-digit' })}
+                          {' · '}
+                          {new Date(post.scheduledFor).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {new Date(post.scheduledFor) < new Date() && (
+                          <span className="text-xs bg-red-900/40 text-red-400 px-1.5 py-0.5 rounded-full">Overdue</span>
+                        )}
+                      </div>
+                      <p className="text-gray-300 text-sm leading-relaxed line-clamp-2">{post.content}</p>
+                      {post.hashtags?.length > 0 && (
+                        <p className="text-gray-600 text-xs mt-1 truncate">{post.hashtags.slice(0,5).map((t: string) => `#${t.replace(/^#/,'')}`).join(' ')}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      <button
+                        onClick={() => handlePostNow(post)}
+                        className="flex items-center gap-1.5 bg-green-700/50 hover:bg-green-600 text-green-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+                      >
+                        <Zap size={12}/> Post Now
+                      </button>
+                      <button
+                        onClick={() => handleDeletePost(post.id)}
+                        className="flex items-center gap-1.5 bg-red-900/30 hover:bg-red-800/60 text-red-400 text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+                      >
+                        <Trash2 size={12}/> Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ===== SMART SCHEDULER ===== */}
         <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl border border-yellow-600/40 overflow-hidden shadow-2xl">
