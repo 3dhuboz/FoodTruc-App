@@ -239,7 +239,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const unsubSocialPosts = onSnapshot(query(collection(db, 'social_posts'), orderBy('scheduledFor', 'desc')), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as SocialPost));
-        setSocialPosts(data);
+        if (data.length > 0) {
+            setSocialPosts(data);
+        }
+        // Do NOT update on empty snapshot — the SDK fires empty initial snapshots on WebSocket
+        // reconnect before server data arrives. This caused all scheduled posts to vanish
+        // on next page load. REST bootstrap below handles the true initial load.
     }, handleError('SocialPosts'));
 
     // Settings merge helper
@@ -305,6 +310,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       else if (calendarEvents.length === 0) setCalendarEvents(INITIAL_EVENTS);
       console.log(`[REST Bootstrap] Events loaded (${docs.length})`);
     }).catch(e => console.warn('[REST Bootstrap] Events failed:', e));
+
+    restListDocs('social_posts').then(docs => {
+      if (docs.length > 0) {
+        const sorted = (docs as SocialPost[]).sort((a, b) =>
+          new Date(b.scheduledFor).getTime() - new Date(a.scheduledFor).getTime()
+        );
+        setSocialPosts(sorted);
+        console.log(`[REST Bootstrap] Social posts loaded (${docs.length})`);
+      }
+    }).catch(e => console.warn('[REST Bootstrap] Social posts failed:', e));
 
     const unsubGeneral = onSnapshot(doc(db, 'settings', 'general'), snap => { mergeSettings(snap.data()); markLoaded('Settings'); }, handleError('Settings'));
     const unsubTicker = onSnapshot(doc(db, 'settings', 'ticker'), snap => mergeSettings(snap.data()), handleError('Ticker'));
