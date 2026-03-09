@@ -1,7 +1,47 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+// Extracts complete post objects from a truncated Claude JSON response.
+// Claude hits max_tokens mid-array when generating many posts; this salvages what's complete.
+function repairTruncatedSchedule(raw: string): { strategy: string; posts: any[] } {
+  const strategyMatch = raw.match(/"strategy"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  const strategy = strategyMatch ? strategyMatch[1].replace(/\\"/g, '"') : '';
+
+  const postsArrayStart = raw.indexOf('"posts"');
+  if (postsArrayStart === -1) return { strategy, posts: [] };
+
+  const bracketStart = raw.indexOf('[', postsArrayStart);
+  if (bracketStart === -1) return { strategy, posts: [] };
+
+  const posts: any[] = [];
+  let pos = bracketStart + 1;
+  let depth = 0;
+  let postStart = -1;
+
+  while (pos < raw.length) {
+    const ch = raw[pos];
+    // Skip over JSON strings to avoid counting braces inside string values
+    if (ch === '"') {
+      pos++;
+      while (pos < raw.length && !(raw[pos] === '"' && raw[pos - 1] !== '\\')) pos++;
+    } else if (ch === '{') {
+      if (depth === 0) postStart = pos;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && postStart !== -1) {
+        try {
+          posts.push(JSON.parse(raw.slice(postStart, pos + 1)));
+        } catch { /* skip malformed post */ }
+        postStart = -1;
+      }
+    }
+    pos++;
+  }
+
+  return { strategy, posts };
+}
+
+export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -24,10 +64,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? existingPosts.map((p: any) => `${(p.scheduledFor || '').slice(0, 10)} — ${p.platform} (${p.status})`).join('\n')
       : 'None yet.';
 
-    const prompt = `You are a world-class social media strategist for "Your Business", a mobile low-and-slow BBQ business in Ipswich/Brisbane, QLD Australia. You specialise in authentic food brand storytelling that drives real sales.
+    const prompt = `You are a world-class social media strategist for "Street Meatz BBQ", a mobile low-and-slow BBQ business in Ipswich/Brisbane, QLD Australia. You specialise in authentic food brand storytelling that drives real sales.
 
 === BUSINESS CONTEXT ===
-Your Business operates a pre-order model: customers pre-order from a fixed menu, the pitmaster smokes everything fresh on cook days, and customers pick up. It's limited, high-quality, community-driven.
+Street Meatz BBQ operates a pre-order model: customers pre-order from a fixed menu, the pitmaster smokes everything fresh on cook days, and customers pick up. It's limited, high-quality, community-driven.
 
 Current performance: ${stats?.followers || 0} followers | ${stats?.engagement || 0}% engagement | ${stats?.reach || 0} monthly reach | ${stats?.postsLast30Days || 0} posts/30d
 
@@ -100,12 +140,21 @@ Return ONLY a valid JSON object with this exact structure:
     }
 
     const raw = textContent.text.trim();
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const jsonMatch = raw.match(/\{[\s\S]*/);
     if (!jsonMatch) {
       return res.status(500).json({ error: `Could not parse JSON from Claude response. Raw: ${raw.slice(0, 200)}` });
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    // Attempt full parse first; if JSON is truncated (hit max_tokens), extract all complete post objects
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch {
+      parsed = repairTruncatedSchedule(raw);
+      if (parsed.posts.length === 0) {
+        return res.status(500).json({ error: `Claude response was truncated and no complete posts could be salvaged. Try fewer posts or shorter content.` });
+      }
+    }
     const safePosts = (parsed.posts || []).map((p: any) => ({
       platform: p.platform || 'Instagram',
       scheduledFor: p.scheduledFor || p.scheduled_for || new Date().toISOString(),
