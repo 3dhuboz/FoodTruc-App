@@ -200,24 +200,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Timeout fallback: show whatever we have after 5s even if Firestore is slow/offline
     const fallbackTimer = setTimeout(() => setIsLoading(false), 5000);
 
-    const unsubMenu = onSnapshot(collection(db, 'menu'), async (snapshot) => {
+    const unsubMenu = onSnapshot(collection(db, 'menu'), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MenuItem));
-        const existingIds = new Set(data.map(d => d.id));
-        const missingSeedItems = INITIAL_MENU.filter(item => !existingIds.has(item.id));
-
-        if (missingSeedItems.length > 0) {
-            // Add any missing seed items to Firestore via REST (handles fresh DB and partial loss)
-            try {
-                await Promise.all(missingSeedItems.map(item => restSetDoc('menu', item.id, item)));
-                // onSnapshot will fire again with the full set — skip setState here
-            } catch (e) {
-                console.warn("Failed to restore seed menu items:", e);
-                // Fallback: merge locally
-                setMenu([...data, ...missingSeedItems]);
-            }
-        } else if (data.length > 0) { 
-            setMenu(data); 
+        if (data.length > 0) {
+            setMenu(data);
         }
+        // If snapshot is empty: do NOT seed here — the SDK fires empty initial snapshots
+        // before the server data arrives (~2 mins on slow networks). Running seed logic on
+        // an empty snapshot would write ALL of INITIAL_MENU back to Firestore, overwriting
+        // every admin change. Seeding is handled reliably in the REST bootstrap below.
         setConnectionError(null);
         markLoaded('Menu');
     }, handleError('Menu'));
@@ -275,11 +266,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
       .catch(e => { console.warn('[REST Bootstrap] Settings failed:', e); markLoaded('Settings'); });
 
-    restListDocs('menu').then(docs => {
+    restListDocs('menu').then(async docs => {
       if (docs.length > 0) {
         setMenu(docs as MenuItem[]);
         markLoaded('Menu');
         console.log(`[REST Bootstrap] Menu loaded (${docs.length} items)`);
+        // Seed any missing INITIAL_MENU items — safe here because we have the real server state
+        const existingIds = new Set(docs.map(d => d.id));
+        const missing = INITIAL_MENU.filter(item => !existingIds.has(item.id));
+        if (missing.length > 0) {
+          console.log(`[REST Bootstrap] Seeding ${missing.length} missing menu items`);
+          await Promise.all(missing.map(item => restSetDoc('menu', item.id, item))).catch(e => console.warn('[REST Bootstrap] Seed failed:', e));
+        }
+      } else {
+        // Truly empty collection — seed the whole menu
+        console.log('[REST Bootstrap] Menu empty, seeding initial menu');
+        await Promise.all(INITIAL_MENU.map(item => restSetDoc('menu', item.id, item))).catch(e => console.warn('[REST Bootstrap] Full seed failed:', e));
+        setMenu(INITIAL_MENU);
+        markLoaded('Menu');
       }
     }).catch(e => { console.warn('[REST Bootstrap] Menu failed:', e); });
 
