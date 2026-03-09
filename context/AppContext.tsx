@@ -231,10 +231,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const unsubEvents = onSnapshot(collection(db, 'events'), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CalendarEvent));
-        if (data.length === 0 && calendarEvents.length === 0) setCalendarEvents(INITIAL_EVENTS);
-        else if (data.length > 0) { 
-            setCalendarEvents(data); 
+        if (data.length > 0) {
+            setCalendarEvents(data);
         }
+        // If snapshot is empty: do NOT fall back to INITIAL_EVENTS here — stale closure on
+        // calendarEvents would incorrectly trigger the fallback even after REST bootstrap has
+        // populated state. The REST bootstrap handles the empty-collection fallback correctly.
         setConnectionError(null);
     }, handleError('Events'));
 
