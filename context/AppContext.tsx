@@ -215,7 +215,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const unsubOrders = onSnapshot(query(collection(db, 'orders'), orderBy('createdAt', 'desc')), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Order));
-        setOrders(data);
+        if (data.length > 0) {
+            setOrders(data);
+        }
+        // Do NOT update on empty snapshot — SDK fires empty reconnect snapshots before real data arrives
         setConnectionError(null);
         markLoaded('Orders');
     }, handleError('Orders'));
@@ -234,7 +237,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Gallery Listener
     const unsubGallery = onSnapshot(query(collection(db, 'gallery_posts'), orderBy('createdAt', 'desc')), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as GalleryPost));
-        setGalleryPosts(data);
+        if (data.length > 0) {
+            setGalleryPosts(data);
+        }
+        // Do NOT update on empty snapshot — SDK fires empty reconnect snapshots before real data arrives
     }, handleError('Gallery'));
 
     const unsubSocialPosts = onSnapshot(query(collection(db, 'social_posts'), orderBy('scheduledFor', 'desc')), (snapshot) => {
@@ -321,6 +327,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     }).catch(e => console.warn('[REST Bootstrap] Social posts failed:', e));
 
+    restListDocs('gallery_posts').then(docs => {
+      if (docs.length > 0) {
+        const sorted = (docs as GalleryPost[]).sort((a, b) =>
+          new Date((b as any).createdAt || 0).getTime() - new Date((a as any).createdAt || 0).getTime()
+        );
+        setGalleryPosts(sorted);
+        console.log(`[REST Bootstrap] Gallery posts loaded (${docs.length})`);
+      }
+    }).catch(e => console.warn('[REST Bootstrap] Gallery posts failed:', e));
+
+    restListDocs('users').then(docs => {
+      if (docs.length > 0) {
+        setUsers(docs as User[]);
+        if (auth.currentUser) {
+          const me = (docs as User[]).find(u => u.id === auth.currentUser?.uid);
+          if (me) setUser(me);
+        }
+        console.log(`[REST Bootstrap] Users loaded (${docs.length})`);
+      }
+    }).catch(e => console.warn('[REST Bootstrap] Users failed:', e));
+
     const unsubGeneral = onSnapshot(doc(db, 'settings', 'general'), snap => { mergeSettings(snap.data()); markLoaded('Settings'); }, handleError('Settings'));
     const unsubTicker = onSnapshot(doc(db, 'settings', 'ticker'), snap => mergeSettings(snap.data()), handleError('Ticker'));
     const unsubImgHome = onSnapshot(doc(db, 'settings', 'img_home'), snap => mergeSettings(snap.data()), handleError('Img Home'));
@@ -330,11 +357,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-        setUsers(data);
-        if (auth.currentUser) {
-            const me = data.find(u => u.id === auth.currentUser?.uid);
-            if (me) setUser(me);
+        if (data.length > 0) {
+            setUsers(data);
+            if (auth.currentUser) {
+                const me = data.find(u => u.id === auth.currentUser?.uid);
+                if (me) setUser(me);
+            }
         }
+        // Do NOT update on empty snapshot — SDK fires empty reconnect snapshots before real data arrives
         setConnectionError(null);
     }, handleError('Users'));
 
