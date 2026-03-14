@@ -5,7 +5,7 @@ import { useApp } from '../../context/AppContext';
 import OrderManager from './OrderManager';
 import MenuManager from './MenuManager';
 import CateringManager from './CateringManager';
-import SocialManager from './SocialManager';
+import SocialAIBridge from './SocialAIBridge';
 import SettingsManager from './SettingsManager';
 import CustomerManager from './CustomerManager';
 import Planner from './Planner';
@@ -113,7 +113,7 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'menu'      && <MenuManager />}
           {activeTab === 'catering'  && <CateringManager />}
           {activeTab === 'customers' && <CustomerManager />}
-          {activeTab === 'social'    && <SocialManager />}
+          {activeTab === 'social'    && <SocialAIBridge />}
           {activeTab === 'settings'  && <SettingsManager mode="admin" />}
           {activeTab === 'devtools'  && <SettingsManager mode="dev" />}
         </div>

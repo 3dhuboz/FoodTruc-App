@@ -203,6 +203,7 @@ export interface AppSettings {
   smartPayPublicKey?: string; 
   smartPaySecretKey?: string; 
   smsConnected: boolean;
+  socialAiStudioUrl?: string;
   facebookConnected: boolean; 
   facebookAppId?: string; 
   facebookPageId?: string; 
