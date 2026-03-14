@@ -320,7 +320,7 @@ export const INITIAL_SETTINGS: AppSettings = {
   smartPayPublicKey: "",
   smartPaySecretKey: "",
   smsConnected: false,
-  socialAiStudioUrl: 'https://social.streetmeatsbarbeque.com.au',
+  socialAiStudioUrl: 'https://social.streetmeatzbbq.com.au',
   facebookConnected: false,
   facebookAppId: "",
   facebookPageId: "", 
