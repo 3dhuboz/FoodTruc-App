@@ -1,71 +1,12 @@
-import { initializeApp, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
-import { initializeFirestore, Firestore, memoryLocalCache } from "firebase/firestore";
-import { getStorage, FirebaseStorage } from "firebase/storage";
+/**
+ * Firebase stub — legacy compatibility.
+ * Firebase has been replaced by Cloudflare D1.
+ * This file exists so any remaining imports don't break the build.
+ */
 
-// Access environment variables safely for Vite (import.meta.env) or legacy (process.env)
-const getEnv = (key: string) => {
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
-    // @ts-ignore
-    return import.meta.env[key];
-  }
-  // @ts-ignore
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    // @ts-ignore
-    return process.env[key];
-  }
-  return "";
-};
-
-// Helper to check for override in LocalStorage (Allows admin to change config at runtime without rebuild)
-const getStoredConfig = () => {
-  try {
-    const stored = localStorage.getItem('sm_firebase_override');
-    if (stored) return JSON.parse(stored);
-  } catch (e) {
-    console.warn("Failed to parse stored firebase config", e);
-  }
-  return null;
-};
-
-const storedConfig = getStoredConfig();
-
-const defaultConfig = {
-  apiKey: getEnv("VITE_FIREBASE_API_KEY"),
-  authDomain: getEnv("VITE_FIREBASE_AUTH_DOMAIN") || "your-project.firebaseapp.com",
-  projectId: getEnv("VITE_FIREBASE_PROJECT_ID") || "your-project-id",
-  storageBucket: getEnv("VITE_FIREBASE_STORAGE_BUCKET") || "your-project.firebasestorage.app",
-  messagingSenderId: getEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
-  appId: getEnv("VITE_FIREBASE_APP_ID")
-};
-
-// Active Configuration (Override takes precedence)
-export const firebaseConfig = storedConfig || defaultConfig;
-
-// Initialize Firebase services lazily
-let app: FirebaseApp;
-let auth: Auth;
-let db: Firestore;
-let storage: FirebaseStorage;
-let configured = false;
-
-try {
-  if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("YOUR_API_KEY")) {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = initializeFirestore(app, {
-      localCache: memoryLocalCache(),
-      experimentalAutoDetectLongPolling: true,
-    });
-    storage = getStorage(app);
-    configured = true;
-  }
-} catch (e) {
-  console.error("Firebase Initialization Failed:", e);
-}
-
-export const isFirebaseConfigured = configured;
-
-// Export the potentially uninitialized services
-export { app, auth, db, storage };
+export const firebaseConfig = { projectId: 'migrated-to-d1', apiKey: '' };
+export const isFirebaseConfigured = false;
+export const app = null as any;
+export const auth = { currentUser: null } as any;
+export const db = null as any;
+export const storage = null as any;

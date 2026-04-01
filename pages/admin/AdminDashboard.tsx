@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Utensils, CalendarCheck, Share2, Settings, Users, CalendarDays, Flame, Cloud, WifiOff, Package, Code2 } from 'lucide-react';
+import { Utensils, CalendarCheck, Share2, Settings, Users, CalendarDays, Flame, Cloud, WifiOff, Package, Code2, ChefHat } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import OrderManager from './OrderManager';
 import MenuManager from './MenuManager';
@@ -10,13 +10,15 @@ import SettingsManager from './SettingsManager';
 import CustomerManager from './CustomerManager';
 import Planner from './Planner';
 import Pitmaster from './Pitmaster';
+import TruckPanel from './TruckPanel';
 
-type TabId = 'orders' | 'planner' | 'pitmaster' | 'menu' | 'catering' | 'customers' | 'social' | 'settings' | 'devtools';
+type TabId = 'orders' | 'truck' | 'planner' | 'pitmaster' | 'menu' | 'catering' | 'customers' | 'social' | 'settings' | 'devtools';
 
 interface TabDef { id: TabId; icon: React.ElementType; label: string; devOnly?: boolean }
 
 const ALL_TABS: TabDef[] = [
   { id: 'orders',    icon: CalendarCheck, label: 'Orders' },
+  { id: 'truck',     icon: ChefHat,       label: 'Truck Mode' },
   { id: 'planner',   icon: CalendarDays,  label: 'Planner' },
   { id: 'pitmaster', icon: Flame,         label: 'Pitmaster' },
   { id: 'menu',      icon: Utensils,      label: 'Menu' },
@@ -108,6 +110,7 @@ const AdminDashboard: React.FC = () => {
         {/* Page content */}
         <div className="flex-1 p-5 md:p-6 overflow-auto">
           {activeTab === 'orders'    && <OrderManager />}
+          {activeTab === 'truck'     && <TruckPanel />}
           {activeTab === 'planner'   && <Planner />}
           {activeTab === 'pitmaster' && <Pitmaster />}
           {activeTab === 'menu'      && <MenuManager />}

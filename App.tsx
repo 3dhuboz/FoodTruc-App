@@ -25,6 +25,10 @@ const PitmasterAI = React.lazy(() => import('./pages/PitmasterAI'));
 const Gallery = React.lazy(() => import('./pages/Gallery'));
 const PaymentSuccess = React.lazy(() => import('./pages/PaymentSuccess'));
 const Landing = React.lazy(() => import('./pages/Landing'));
+const BOH = React.lazy(() => import('./pages/BOH'));
+const FOH = React.lazy(() => import('./pages/FOH'));
+const QROrder = React.lazy(() => import('./pages/QROrder'));
+const OrderStatus = React.lazy(() => import('./pages/OrderStatus'));
 
 const PageLoader = () => (
   <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>
@@ -79,16 +83,16 @@ const AppRoutes = () => {
       <Routes>
         {/* Setup Route - Outside Layout for Focus */}
         <Route path="/setup" element={<DataSetup />} />
-        {/* Landing Page - Standalone sales page outside Layout */}
-        <Route path="/landing" element={
-          <Landing 
-            setupFee={settings?.landingPricing?.setupFee ?? 999}
-            monthlyFee={settings?.landingPricing?.monthlyFee ?? 99}
-            businessName={settings?.landingPricing?.brandName || 'FoodTruck App'}
-            contactEmail={settings?.landingPricing?.contactEmail || 'hello@foodtruckapp.com.au'}
-            contactPhone={settings?.landingPricing?.contactPhone || ''}
-          />
-        } />
+
+        {/* Staff Views - Full-screen, no nav */}
+        <Route path="/boh" element={<Suspense fallback={<PageLoader />}><BOH /></Suspense>} />
+        <Route path="/foh" element={<Suspense fallback={<PageLoader />}><FOH /></Suspense>} />
+
+        {/* Customer QR Ordering - No auth required */}
+        <Route path="/qr-order" element={<Suspense fallback={<PageLoader />}><QROrder /></Suspense>} />
+        <Route path="/order-status/:orderId" element={<Suspense fallback={<PageLoader />}><OrderStatus /></Suspense>} />
+        {/* Landing Page - Street Eats SaaS product page */}
+        <Route path="/landing" element={<Suspense fallback={<PageLoader />}><Landing /></Suspense>} />
         
         {/* Main App Routes */}
         <Route path="*" element={

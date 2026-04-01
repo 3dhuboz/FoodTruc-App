@@ -1,0 +1,9 @@
+name = "foodtruck-app"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "foodtruck-db"
+database_id = "e26b6e14-5100-450a-b16a-9f0cf904f14b"

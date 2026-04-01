@@ -1,217 +1,132 @@
+/**
+ * AI service — routes through OpenRouter API.
+ * Replaces direct Google GenAI SDK calls.
+ * All functions maintain the same interface for backward compatibility.
+ */
 
-import { GoogleGenAI, Type } from "@google/genai";
-
-// Module-level key that AppContext sets from Firestore — works in incognito/new devices
 let _runtimeKey = '';
 export const setGeminiApiKey = (key: string) => { _runtimeKey = key; };
 
 const getApiKey = () => {
-  // 1. Runtime key set by AppContext from Firestore (works on any device)
   if (_runtimeKey) return _runtimeKey;
-  // 2. Build-time env var fallback
-  return (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || '';
+  return (typeof import.meta !== 'undefined' && import.meta.env?.VITE_OPENROUTER_API_KEY) || '';
 };
 
-// Lazy initialization to allow runtime key updates
-const getAI = () => {
-  const key = getApiKey();
-  if (!key) return null;
-  return new GoogleGenAI({ apiKey: key });
-};
+const MODEL = 'google/gemini-2.5-flash-preview';
+
+async function openRouterChat(
+  systemPrompt: string,
+  userPrompt: string,
+  options?: { json?: boolean; history?: { role: string; content: string }[] }
+): Promise<string> {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('API Key missing. Please configure in Admin > Settings.');
+
+  const messages: any[] = [];
+  if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+  if (options?.history) messages.push(...options.history);
+  messages.push({ role: 'user', content: userPrompt });
+
+  const body: any = { model: MODEL, messages };
+  if (options?.json) {
+    body.response_format = { type: 'json_object' };
+  }
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': window.location.origin,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    if (res.status === 401) throw new Error('Invalid API Key. Please check your OpenRouter key in Admin > Settings.');
+    throw new Error(`AI Error (${res.status}): ${errText.substring(0, 120)}`);
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+function parseJsonSafe(text: string, fallback: any): any {
+  try {
+    // Strip markdown fences if present
+    const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch {
+    return fallback;
+  }
+}
+
+// ─── Public API (same interface as before) ───────────────────
 
 export const generateSocialPost = async (topic: string, platform: 'Facebook' | 'Instagram') => {
-  const ai = getAI();
-  if (!ai) return { content: "API Key missing. Please configure in Admin > Settings.", hashtags: [] };
-
   try {
-    const prompt = `
-      You are an expert social media manager for "Street Meatz BBQ", a mobile BBQ catering business.
-      Write a catchy, engaging ${platform} post about: "${topic}".
-      Include emojis appropriate for BBQ.
-      Return JSON format with "content" (the post text) and "hashtags" (array of strings).
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            content: { type: Type.STRING },
-            hashtags: { 
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            }
-          }
-        }
-      }
-    });
-
-    return response.text ? JSON.parse(response.text) : { content: "Error generating content.", hashtags: [] };
+    const text = await openRouterChat(
+      'You are an expert social media manager for a mobile food truck business. Return valid JSON only.',
+      `Write a catchy, engaging ${platform} post about: "${topic}". Include emojis. Return JSON with "content" (the post text) and "hashtags" (array of strings).`,
+      { json: true }
+    );
+    return parseJsonSafe(text, { content: 'Error generating content.', hashtags: [] });
   } catch (error: any) {
-    console.error("Gemini Text Error:", error);
-    const msg = error?.message || error?.statusText || String(error);
-    if (msg.includes('API_KEY_INVALID') || msg.includes('401')) {
-      return { content: "Invalid API Key. Please check your Gemini key in Admin > Settings.", hashtags: [] };
-    }
-    return { content: `AI Error: ${msg.substring(0, 120)}`, hashtags: [] };
+    return { content: error.message || 'AI Error', hashtags: [] };
   }
 };
 
 export const generateMarketingImage = async (prompt: string): Promise<string | null> => {
-  const ai = getAI();
-  if (!ai) {
-    console.error("Gemini Image: No API key configured");
-    return null;
-  }
-
-  try {
-    // Use Gemini native image generation (works with standard API keys)
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp-image-generation',
-      contents: `Generate a single high-quality, professional food photography image: ${prompt}. Appetizing, cinematic lighting, no text or watermarks.`,
-      config: {
-        responseModalities: ['IMAGE', 'TEXT'],
-      } as any,
-    });
-
-    // Extract inline image from response parts
-    const parts = (response as any)?.candidates?.[0]?.content?.parts;
-    if (parts) {
-      for (const part of parts) {
-        if (part.inlineData?.data) {
-          const mimeType = part.inlineData.mimeType || 'image/png';
-          return `data:${mimeType};base64,${part.inlineData.data}`;
-        }
-      }
-    }
-
-    // Fallback: try Imagen API
-    try {
-      const imgResponse = await ai.models.generateImages({
-        model: 'imagen-3.0-generate-002',
-        prompt: `A delicious, professional food photography style image of BBQ food: ${prompt}. High quality, appetizing, cinematic lighting.`,
-        config: { numberOfImages: 1 },
-      });
-      const imageBytes = imgResponse?.generatedImages?.[0]?.image?.imageBytes;
-      if (imageBytes) return `data:image/png;base64,${imageBytes}`;
-    } catch (imgErr: any) {
-      console.warn("Imagen fallback failed:", imgErr?.message);
-    }
-
-    console.warn("Gemini Image: No image data in response");
-    return null;
-  } catch (error: any) {
-    console.error("Gemini Image Error:", error?.message || error);
-    return null;
-  }
+  // OpenRouter doesn't do image generation directly.
+  // Return null — image generation should go through a dedicated service (FAL.ai, etc.)
+  console.warn('[AI] Image generation requires a dedicated image API (FAL.ai, etc.)');
+  return null;
 };
 
 export const analyzePostTimes = async () => {
-  const ai = getAI();
-  if (!ai) return "API Key missing.";
-
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: "What are the best times to post on Instagram and Facebook for a food business in Australia? Give a concise bulleted list of 3 best slots for the upcoming week."
-    });
-    return response.text;
-  } catch (error) {
-    return "Could not analyze times.";
+    return await openRouterChat(
+      '',
+      'What are the best times to post on Instagram and Facebook for a food business in Australia? Give a concise bulleted list of 3 best slots for the upcoming week.'
+    );
+  } catch {
+    return 'Could not analyze times.';
   }
 };
 
 export const generateEventPromotion = async (title: string, location: string, time: string) => {
-  const ai = getAI();
-  if (!ai) return { description: "API Key missing.", tags: [] };
-
   try {
-    const prompt = `
-      Write a short, exciting promotional description for a BBQ pop-up event.
-      Event: ${title}
-      Location: ${location}
-      Time: ${time}
-      
-      Return JSON with:
-      - description: (max 2 sentences, engaging)
-      - tags: (array of 5 trending hashtags for food/events)
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            description: { type: Type.STRING },
-            tags: { type: Type.ARRAY, items: { type: Type.STRING } }
-          }
-        }
-      }
-    });
-
-    return response.text ? JSON.parse(response.text) : { description: "", tags: [] };
-  } catch (error) {
-    console.error("Gemini Event Error:", error);
-    return { description: "Error generating content.", tags: [] };
+    const text = await openRouterChat(
+      'You promote food truck events. Return valid JSON only.',
+      `Write a short, exciting promotional description for a food truck pop-up event.\nEvent: ${title}\nLocation: ${location}\nTime: ${time}\n\nReturn JSON with:\n- description: (max 2 sentences, engaging)\n- tags: (array of 5 trending hashtags for food/events)`,
+      { json: true }
+    );
+    return parseJsonSafe(text, { description: '', tags: [] });
+  } catch {
+    return { description: 'Error generating content.', tags: [] };
   }
 };
 
 export const generateSocialRecommendations = async (stats: any) => {
-  const ai = getAI();
-  if (!ai) return "API Key missing.";
-
   try {
-    const prompt = `
-      You are a social media strategist for "Street Meatz BBQ".
-      Analyze these monthly performance stats:
-      - Total Followers: ${stats.followers}
-      - Monthly Reach: ${stats.reach}
-      - Engagement Rate: ${stats.engagement}%
-      - Posts Count: ${stats.postsLast30Days}
-
-      Provide 3 specific, high-impact recommendations to improve brand awareness and food truck sales.
-      Focus on content types, timing, or community interaction.
-      Format as a concise bulleted list.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    return response.text || "No recommendations generated.";
-  } catch (error) {
-    console.error("Gemini Recs Error:", error);
-    return "Unable to analyze stats at this time.";
+    return await openRouterChat(
+      'You are a social media strategist for a food truck business.',
+      `Analyze these monthly performance stats:\n- Followers: ${stats.followers}\n- Reach: ${stats.reach}\n- Engagement: ${stats.engagement}%\n- Posts: ${stats.postsLast30Days}\n\nProvide 3 specific, high-impact recommendations. Format as a concise bulleted list.`
+    );
+  } catch {
+    return 'Unable to analyze stats at this time.';
   }
 };
 
-export const generateCateringDescription = async (pkgName: string, items: {meats: number, sides: number}) => {
-  const ai = getAI();
-  if (!ai) return "API Key missing.";
-
+export const generateCateringDescription = async (pkgName: string, items: { meats: number; sides: number }) => {
   try {
-    const prompt = `
-      Write a mouth-watering, professional description for a BBQ catering package named "${pkgName}".
-      It includes ${items.meats} meat choices and ${items.sides} side dishes.
-      Target audience: Corporate events, weddings, and large parties.
-      Tone: Premium, abundant, delicious.
-      Max length: 2 sentences.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    return response.text || "";
-  } catch (error) {
-    console.error("Gemini Desc Error:", error);
-    return "";
+    return await openRouterChat(
+      '',
+      `Write a mouth-watering, professional description for a BBQ catering package named "${pkgName}". It includes ${items.meats} meat choices and ${items.sides} side dishes. Target: corporate events, weddings. Tone: premium. Max 2 sentences.`
+    );
+  } catch {
+    return '';
   }
 };
 
@@ -242,53 +157,34 @@ export const generateSmartSchedule = async (context: {
     const res = await fetch('/api/v1/ai/smart-schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...context,
-        now: start.toISOString(),
-        windowEnd: windowEnd.toISOString(),
-      }),
+      body: JSON.stringify({ ...context, now: start.toISOString(), windowEnd: windowEnd.toISOString() }),
     });
     const data = await res.json();
     if (!res.ok) return { posts: [], strategy: `Error: ${data.error || res.statusText}` };
     return { posts: data.posts || [], strategy: data.strategy || '' };
   } catch (error: any) {
-    const msg = error?.message || 'Network error — is the dev server running?';
-    console.error('Smart Schedule Error:', msg);
-    return { posts: [], strategy: `Error: ${msg}` };
+    return { posts: [], strategy: `Error: ${error?.message || 'Network error'}` };
   }
 };
 
-export const askPitmasterAI = async (history: {role: 'user' | 'model', text: string}[], newMessage: string) => {
-    const ai = getAI();
-    if (!ai) return "System Offline: API Key Missing.";
+export const askPitmasterAI = async (history: { role: 'user' | 'model'; text: string }[], newMessage: string) => {
+  try {
+    const mappedHistory = history.map(h => ({
+      role: h.role === 'model' ? 'assistant' : 'user',
+      content: h.text,
+    }));
 
-    try {
-        const chat = ai.chats.create({
-            model: 'gemini-2.5-flash',
-            config: {
-                systemInstruction: `You are 'Pitmaster Jay', the owner and head pitmaster of "Street Meatz BBQ". 
-                Your expertise is Low & Slow American BBQ smoked over Australian Ironbark wood.
-                
-                Persona Guidelines:
-                1. You are Jay. Speak in the first person ("I", "me", "my smoker").
-                2. Be friendly, knowledgeable, and passionate. Use a bit of Aussie slang occasionally (e.g., "G'day", "Mate", "Ripper").
-                3. You prefer temperatures in Fahrenheit (as per BBQ tradition) but convert if asked.
-                4. Key Temps: Brisket pulls at ~203F. Pork at ~205F. Chicken at 165F.
-                5. Wood: You SWEAR by seasoned Ironbark for the best heat and flavor.
-                6. If asked something unrelated to BBQ, meat, or Street Meatz, politely steer the conversation back to food or say you're busy checking the fire.
-                7. Keep answers concise and practical.
-                `
-            },
-            history: history.map(h => ({
-                role: h.role,
-                parts: [{ text: h.text }]
-            }))
-        });
-
-        const response = await chat.sendMessage({ message: newMessage });
-        return response.text || "I'm checking the smoker, try again in a second.";
-    } catch (error) {
-        console.error("Pitmaster AI Error:", error);
-        return "The smoker is choked up (Error connecting to AI).";
-    }
+    return await openRouterChat(
+      `You are 'Pitmaster Jay', the owner and head pitmaster of a mobile BBQ food truck.
+Your expertise is Low & Slow American BBQ smoked over Australian Ironbark wood.
+Be friendly, knowledgeable, and passionate. Use a bit of Aussie slang occasionally.
+Key Temps: Brisket at ~203F. Pork at ~205F. Chicken at 165F.
+If asked something unrelated to BBQ or food, politely steer back to food.
+Keep answers concise and practical.`,
+      newMessage,
+      { history: mappedHistory }
+    );
+  } catch {
+    return "The smoker is choked up (Error connecting to AI).";
+  }
 };

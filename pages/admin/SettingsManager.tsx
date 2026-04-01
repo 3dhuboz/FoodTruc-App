@@ -4,10 +4,14 @@ import { useApp } from '../../context/AppContext';
 import { useToast } from '../../components/Toast';
 import { CreditCard, Save, CheckCircle, ExternalLink, Loader2, X, AlertCircle, Monitor, Facebook, ChevronDown, ChevronUp, HelpCircle, ArrowRight, Gift, Wand2, Database, Server, Wifi, Banknote, Power, Eye, EyeOff, LayoutTemplate, MessageSquare, Utensils, Smartphone, Shield, Plus, Trash2, Activity, RefreshCw, Lock, WifiOff, Edit2, RotateCcw, Terminal, AlertTriangle, Copy, FileCode, Home, Music, Megaphone, Truck, Settings, Image as ImageIcon, Upload, Info } from 'lucide-react';
 import { generateMarketingImage } from '../../services/gemini';
-import { db, auth, firebaseConfig } from '../../services/firebase';
-import { seedDatabase } from '../../services/dataSeeder';
 import { restSetDoc, restDeleteDoc } from '../../services/firestoreRest';
 import { RewardPrize, AppSettings } from '../../types';
+
+// Stubs for legacy Firebase diagnostics (migrated to D1)
+const firebaseConfig = { projectId: 'migrated-to-d1', apiKey: '' } as any;
+const auth = { currentUser: null } as any;
+const db = null as any;
+const seedDatabase = async () => { console.log('[D1] Use wrangler d1 execute to seed'); };
 
 declare global {
   interface Window {
@@ -845,11 +849,14 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
                       <button type="button" onClick={async () => {
                           setGeminiStatus('testing');
                           try {
-                              const { GoogleGenAI } = await import('@google/genai');
-                              const ai = new GoogleGenAI({ apiKey: geminiKey });
-                              const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: 'Say OK' });
-                              if (res.text) { setGeminiStatus('connected'); toast('AI connection verified!', 'success'); }
-                              else { setGeminiStatus('error'); toast('No response from Gemini.', 'error'); }
+                              const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${geminiKey}` },
+                                body: JSON.stringify({ model: 'google/gemini-2.5-flash-preview', messages: [{ role: 'user', content: 'Say OK' }] }),
+                              });
+                              const data = await res.json();
+                              if (data.choices?.[0]?.message?.content) { setGeminiStatus('connected'); toast('OpenRouter AI connection verified!', 'success'); }
+                              else { setGeminiStatus('error'); toast('No response from AI.', 'error'); }
                           } catch (e: any) {
                               console.error('Gemini test error:', e);
                               setGeminiStatus('error');

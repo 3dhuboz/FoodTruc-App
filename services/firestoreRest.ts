@@ -1,206 +1,117 @@
 /**
- * Firestore REST API helper — bypasses the SDK's WebChannel transport
- * which can be unreliable on some networks. Uses standard fetch() instead.
+ * Legacy compatibility layer — maps restSetDoc/restGetDoc/restListDocs/restDeleteDoc
+ * to the Cloudflare D1 API endpoints.
+ *
+ * This allows SettingsManager, SocialManager, and other admin pages to work
+ * without rewriting their 2000+ lines. Same interface, D1 backend.
  */
-import { firebaseConfig, auth } from './firebase';
 
-/** Get the current user's Firebase Auth ID token for authenticated requests */
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  try {
-    const user = auth?.currentUser;
-    if (user) {
-      const token = await user.getIdToken();
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-  } catch (e) {
-    console.warn('[REST] Failed to get auth token, proceeding without auth:', e);
-  }
-  return headers;
-}
+// Map Firestore collection names → D1 API paths
+const COLLECTION_MAP: Record<string, string> = {
+  settings: '/api/v1/settings',
+  menu: '/api/v1/menu',
+  orders: '/api/v1/orders',
+  events: '/api/v1/events',
+  social_posts: '/api/v1/social-posts',
+  gallery_posts: '/api/v1/gallery',
+  users: '/api/v1/users',
+};
 
-const BASE_URL = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
-
-// Convert a JS value to Firestore REST API field format
-function toFirestoreValue(value: any): any {
-  if (value === null || value === undefined) return { nullValue: null };
-  if (typeof value === 'boolean') return { booleanValue: value };
-  if (typeof value === 'number') {
-    return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
-  }
-  if (typeof value === 'string') return { stringValue: value };
-  if (value instanceof Date) {
-    return { timestampValue: value.toISOString() };
-  }
-  if (Array.isArray(value)) {
-    return { arrayValue: { values: value.map(toFirestoreValue) } };
-  }
-  if (typeof value === 'object') {
-    // Handle Firestore SDK Timestamp objects
-    if (typeof value.toDate === 'function') {
-      return { timestampValue: value.toDate().toISOString() };
-    }
-    // Handle plain timestamp-like objects {seconds, nanoseconds}
-    if ('seconds' in value && 'nanoseconds' in value && Object.keys(value).length === 2) {
-      const ms = value.seconds * 1000 + Math.floor(value.nanoseconds / 1000000);
-      return { timestampValue: new Date(ms).toISOString() };
-    }
-    const fields: Record<string, any> = {};
-    for (const [k, v] of Object.entries(value)) {
-      fields[k] = toFirestoreValue(v);
-    }
-    return { mapValue: { fields } };
-  }
-  return { stringValue: String(value) };
-}
-
-// Convert a flat JS object to Firestore document fields
-function toFirestoreFields(data: Record<string, any>): Record<string, any> {
-  const fields: Record<string, any> = {};
-  for (const [key, value] of Object.entries(data)) {
-    fields[key] = toFirestoreValue(value);
-  }
-  return fields;
+function getApiPath(collection: string, docId?: string): string {
+  const base = COLLECTION_MAP[collection];
+  if (!base) throw new Error(`Unknown collection: ${collection}`);
+  if (docId && collection !== 'settings') return `${base}/${docId}`;
+  return base;
 }
 
 /**
- * Write (merge) fields to a Firestore document via REST API.
- * Equivalent to setDoc(doc(db, collection, docId), data, { merge: true })
+ * Write (merge) data to a D1-backed resource.
+ * Settings: PUT /api/v1/settings with merged data
+ * Everything else: POST to create/upsert
  */
 export async function restSetDoc(
   collectionPath: string,
   docId: string,
   data: Record<string, any>
 ): Promise<void> {
-  // Strip 'id' from payload — it's document metadata, not a field
   const { id: _id, ...cleanData } = data;
-  const fieldPaths = Object.keys(cleanData);
-  if (fieldPaths.length === 0) {
-    console.warn(`[REST WRITE] No fields to write for ${collectionPath}/${docId}`);
+
+  if (collectionPath === 'settings') {
+    // Settings are stored as key-value blobs, merge into the single settings object
+    await fetch('/api/v1/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cleanData),
+    });
     return;
   }
-  const updateMask = fieldPaths.map(f => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join('&');
-  const url = `${BASE_URL}/${collectionPath}/${docId}?${updateMask}`;
 
-  const body = JSON.stringify({ fields: toFirestoreFields(cleanData) });
-  const headers = await getAuthHeaders();
+  const path = getApiPath(collectionPath);
+  const payload = { id: docId, ...cleanData };
 
-  console.log(`[REST WRITE] PATCH ${collectionPath}/${docId}`, fieldPaths, headers.Authorization ? '(authenticated)' : '(NO AUTH)');
-  const res = await fetch(url, {
-    method: 'PATCH',
-    headers,
-    body,
+  // POST = create/upsert for all collections
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
-    const errText = await res.text();
-    console.error(`[REST WRITE] FAILED ${collectionPath}/${docId} (${res.status}):`, errText);
-    throw new Error(`Firestore REST write failed (${res.status}): ${errText}`);
+    // Try PUT for update if POST fails (order updates, etc.)
+    const putPath = getApiPath(collectionPath, docId);
+    const putRes = await fetch(putPath, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cleanData),
+    });
+    if (!putRes.ok) {
+      const errText = await putRes.text();
+      throw new Error(`D1 write failed (${putRes.status}): ${errText}`);
+    }
   }
-  console.log(`[REST WRITE] OK ${collectionPath}/${docId}`);
 }
 
 /**
- * Read a Firestore document via REST API.
+ * Read a single document from D1.
  */
 export async function restGetDoc(
   collectionPath: string,
   docId: string
 ): Promise<Record<string, any> | null> {
-  const url = `${BASE_URL}/${collectionPath}/${docId}`;
-  const headers = await getAuthHeaders();
-  const res = await fetch(url, { headers });
+  if (collectionPath === 'settings') {
+    const res = await fetch('/api/v1/settings');
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  const path = getApiPath(collectionPath, docId);
+  const res = await fetch(path);
   if (res.status === 404) return null;
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Firestore REST read failed (${res.status}): ${errText}`);
-  }
-  const doc = await res.json();
-  if (!doc.fields) return {};
-  return fromFirestoreFields(doc.fields);
-}
-
-// Convert Firestore REST field format back to JS values
-function fromFirestoreValue(field: any): any {
-  if ('nullValue' in field) return null;
-  if ('booleanValue' in field) return field.booleanValue;
-  if ('integerValue' in field) return Number(field.integerValue);
-  if ('doubleValue' in field) return field.doubleValue;
-  if ('stringValue' in field) return field.stringValue;
-  if ('timestampValue' in field) return field.timestampValue;
-  if ('geoPointValue' in field) return field.geoPointValue;
-  if ('referenceValue' in field) return field.referenceValue;
-  if ('bytesValue' in field) return field.bytesValue;
-  if ('arrayValue' in field) {
-    return (field.arrayValue.values || []).map(fromFirestoreValue);
-  }
-  if ('mapValue' in field) {
-    return fromFirestoreFields(field.mapValue.fields || {});
-  }
-  return null;
-}
-
-function fromFirestoreFields(fields: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(fields)) {
-    result[key] = fromFirestoreValue(value);
-  }
-  return result;
+  if (!res.ok) return null;
+  return res.json();
 }
 
 /**
- * List all documents in a Firestore collection via REST API.
- * Returns array of objects with document data + id field.
+ * List all documents in a collection from D1.
  */
 export async function restListDocs(
-  collectionPath: string,
-  orderByField?: string,
-  direction?: 'ASCENDING' | 'DESCENDING'
+  collectionPath: string
 ): Promise<Record<string, any>[]> {
-  let allDocs: Record<string, any>[] = [];
-  let pageToken = '';
-  const headers = await getAuthHeaders();
-  
-  do {
-    let url = `${BASE_URL}/${collectionPath}?pageSize=300`;
-    if (pageToken) url += `&pageToken=${pageToken}`;
-    if (orderByField) url += `&orderBy=${encodeURIComponent(orderByField)}${direction === 'DESCENDING' ? ' desc' : ''}`;
-    
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Firestore REST list failed (${res.status}): ${errText}`);
-    }
-    const data = await res.json();
-    if (data.documents) {
-      for (const doc of data.documents) {
-        const docPath = doc.name as string;
-        const id = docPath.split('/').pop() || '';
-        const fields = doc.fields ? fromFirestoreFields(doc.fields) : {};
-        allDocs.push({ ...fields, id });
-      }
-    }
-    pageToken = data.nextPageToken || '';
-  } while (pageToken);
-  
-  return allDocs;
+  const path = getApiPath(collectionPath);
+  const res = await fetch(path);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 /**
- * Delete a Firestore document via REST API.
+ * Delete a document from D1.
  */
 export async function restDeleteDoc(
   collectionPath: string,
   docId: string
 ): Promise<void> {
-  console.log(`[REST DELETE] ${collectionPath}/${docId}`);
-  const url = `${BASE_URL}/${collectionPath}/${docId}`;
-  const headers = await getAuthHeaders();
-  const res = await fetch(url, { method: 'DELETE', headers });
-  if (!res.ok && res.status !== 404) {
-    const errText = await res.text();
-    console.error(`[REST DELETE] FAILED ${collectionPath}/${docId} (${res.status}):`, errText);
-    throw new Error(`Firestore REST delete failed (${res.status}): ${errText}`);
-  }
-  console.log(`[REST DELETE] OK ${collectionPath}/${docId}`);
+  if (collectionPath === 'settings') return; // Can't delete settings
+  const path = getApiPath(collectionPath, docId);
+  await fetch(path, { method: 'DELETE' });
 }

@@ -259,7 +259,7 @@ export const INITIAL_EVENTS: CalendarEvent[] = [
 export const INITIAL_ADMIN_USER: User = {
   id: 'admin1',
   name: 'assistant Dave',
-  email: 'admin@foodtruckapp.com.au',
+  email: 'admin@streeteats.com.au',
   role: UserRole.ADMIN,
   isVerified: true,
   stamps: 0,
@@ -268,7 +268,7 @@ export const INITIAL_ADMIN_USER: User = {
 export const INITIAL_DEV_USER: User = {
   id: 'dev1',
   name: 'Developer',
-  email: 'dev@foodtruckapp.com.au',
+  email: 'dev@streeteats.com.au',
   role: UserRole.DEV,
   isVerified: true,
   stamps: 0,
@@ -320,7 +320,7 @@ export const INITIAL_SETTINGS: AppSettings = {
   smartPayPublicKey: "",
   smartPaySecretKey: "",
   smsConnected: false,
-  socialAiStudioUrl: 'https://social.streetmeatzbbq.com.au',
+  socialAiStudioUrl: '',
   facebookConnected: false,
   facebookAppId: "",
   facebookPageId: "", 
@@ -333,14 +333,14 @@ export const INITIAL_SETTINGS: AppSettings = {
     BBQ_IMGS.burger2,
     BBQ_IMGS.fries
   ],
-  businessName: "Your Business",
-  businessAddress: "Ipswich, QLD", 
+  businessName: "Street Eats",
+  businessAddress: "",
   logoUrl: LOGO_URL,
-  adminUsername: "admin", 
-  adminPassword: "123",
+  adminUsername: "admin",
+  adminPassword: "admin123",
   rewards: {
     enabled: true,
-    programName: "Meat Sweats Club",
+    programName: "Street Eats Rewards",
     staffPin: "1234",
     maxStamps: 10,
     rewardTitle: "Free Burger", // Fallback

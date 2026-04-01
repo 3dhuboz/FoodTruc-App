@@ -1,65 +1,67 @@
+/**
+ * AppContext — Cloudflare D1 + Offline-First
+ *
+ * Data flow:
+ * 1. Bootstrap: load from IndexedDB (instant, even offline)
+ * 2. Start sync engine: poll D1 API, merge into IndexedDB + React state
+ * 3. Writes: try API first → fallback to outbox queue if offline
+ * 4. Outbox auto-replays when connectivity returns
+ */
 
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User, MenuItem, Order, CookDay, UserRole, CartItem, SocialPost, AppSettings, CalendarEvent, GalleryPost } from '../types';
-import { INITIAL_MENU, INITIAL_COOK_DAYS, INITIAL_ADMIN_USER, INITIAL_DEV_USER, INITIAL_POSTS, INITIAL_SETTINGS, INITIAL_EVENTS } from '../constants';
-import { db, auth, isFirebaseConfigured } from '../services/firebase';
-import { setGeminiApiKey } from '../services/gemini';
-import { restSetDoc, restGetDoc, restListDocs, restDeleteDoc } from '../services/firestoreRest';
-import { 
-  collection, 
-  onSnapshot, 
-  doc, 
-  query, 
-  orderBy
-} from 'firebase/firestore';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged,
-  User as FirebaseUser,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence
-} from 'firebase/auth';
+import { INITIAL_SETTINGS, INITIAL_EVENTS } from '../constants';
+import {
+  fetchMenu as apiFetchMenu, upsertMenuItem, deleteMenuItem as apiDeleteMenuItem,
+  fetchOrders as apiFetchOrders, createOrderApi, updateOrderApi, deleteOrderApi,
+  fetchSettings as apiFetchSettings, updateSettingsApi,
+  fetchEvents as apiFetchEvents, upsertEvent, deleteEventApi,
+  fetchSocialPosts as apiFetchSocialPosts, upsertSocialPost, deleteSocialPostApi,
+  fetchGalleryPosts as apiFetchGalleryPosts, submitGalleryPost, toggleGalleryLikeApi,
+} from '../services/api';
+import {
+  cacheMenu, cacheOrders, cacheOrder, cacheSettings, cacheEvents,
+  getCachedMenu, getCachedOrders, getCachedSettings, getCachedEvents,
+  addToOutbox, getOutboxCount,
+} from '../services/offlineStore';
+import { startSync, stopSync, onSync, getOnlineStatus, bootstrap } from '../services/syncEngine';
 
 interface AppContextType {
   user: User | null;
-  users: User[]; 
+  users: User[];
   login: (role: UserRole, email?: string, password?: string, name?: string, rememberMe?: boolean) => Promise<void>;
   logout: () => void;
-  addUser: (newUser: User) => void; 
-  updateUserProfile: (updatedUser: User) => void; 
-  adminUpdateUser: (updatedUser: User) => void; 
+  addUser: (newUser: User) => void;
+  updateUserProfile: (updatedUser: User) => void;
+  adminUpdateUser: (updatedUser: User) => void;
   deleteUser: (userId: string) => void;
-  
+
   menu: MenuItem[];
   addMenuItem: (item: MenuItem) => Promise<void>;
   updateMenuItem: (item: MenuItem) => Promise<void>;
   deleteMenuItem: (itemId: string) => Promise<void>;
-  
+
   cookDays: CookDay[];
   addCookDay: (day: CookDay) => void;
-  
-  // Calendar & Events
+
   calendarEvents: CalendarEvent[];
   addCalendarEvent: (event: CalendarEvent) => void;
   updateCalendarEvent: (event: CalendarEvent) => void;
   removeCalendarEvent: (eventId: string) => void;
   checkAvailability: (date: string) => boolean;
-  isDatePastCutoff: (dateStr: string) => boolean; 
-  
+  isDatePastCutoff: (dateStr: string) => boolean;
+
   orders: Order[];
   createOrder: (order: Order) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
   updateOrder: (order: Order) => void;
-  
+
   cart: CartItem[];
   addToCart: (item: MenuItem, quantity?: number, specificDate?: string) => void;
   updateCartItemQuantity: (itemId: string, delta: number) => void;
   removeFromCart: (itemId: string) => void;
   clearCart: () => void;
-  
+
   socialPosts: SocialPost[];
   addSocialPost: (post: SocialPost) => void;
   updateSocialPost: (post: SocialPost) => void;
@@ -68,599 +70,375 @@ interface AppContextType {
   galleryPosts: GalleryPost[];
   addGalleryPost: (post: GalleryPost) => void;
   toggleGalleryLike: (postId: string) => Promise<void>;
-  
+
   settings: AppSettings;
   updateSettings: (newSettings: Partial<AppSettings>) => Promise<boolean>;
 
-  // Reminders
   reminders: string[];
   toggleReminder: (eventId: string) => void;
-
-  // Rewards
   verifyStaffPin: (pin: string, action: 'ADD' | 'REDEEM') => boolean;
-  
-  // New State
+
   selectedOrderDate: string | null;
   setSelectedOrderDate: (date: string | null) => void;
-  
+
   isLoading: boolean;
   connectionError: string | null;
+
+  // Offline-first additions
+  isOnline: boolean;
+  pendingSyncCount: number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// --- KEY BUCKETS FOR SPLIT STORAGE ---
-const HOME_KEYS = ['heroCateringImage', 'heroCookImage', 'homePromoterImage', 'homeScheduleCardImage', 'homeMenuCardImage'];
-const CATERING_KEYS = ['diyHeroImage', 'diyCardPackageImage', 'diyCardCustomImage', 'cateringPackageImages', 'cateringPackages'];
-const PAGE_KEYS = ['eventsHeroImage', 'promotersHeroImage', 'promotersSocialImage', 'maintenanceImage', 'logoUrl', 'menuHeroImage', 'galleryHeroImage'];
-const TICKER_KEYS = ['manualTickerImages'];
-const REWARDS_KEYS = ['rewards'];
-
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const BUILD_VERSION = '2026.03.08a';
-  console.log(`[Street Meatz] Build ${BUILD_VERSION} — All writes use authenticated REST API`);
+  const BUILD_VERSION = '2026.04.01a';
+  console.log(`[Street Eats] Build ${BUILD_VERSION} — Cloudflare D1 + Offline-First`);
 
   const [isLoading, setIsLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  
-  // Data States
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
   const [users, setUsers] = useState<User[]>([]);
   const [user, setUser] = useState<User | null>(null);
-
   const [menu, setMenu] = useState<MenuItem[]>([]);
-
   const [cookDays, setCookDays] = useState<CookDay[]>([]);
-  
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-
   const [orders, setOrders] = useState<Order[]>([]);
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
   const [galleryPosts, setGalleryPosts] = useState<GalleryPost[]>([]);
-  
   const [settings, setSettings] = useState<AppSettings>(INITIAL_SETTINGS);
-  
-  // Local States
-  const [cart, setCart] = useState<CartItem[]>(() => {
-      const saved = localStorage.getItem('sm_cart');
-      return saved ? JSON.parse(saved) : [];
-  });
-
   const [reminders, setReminders] = useState<string[]>([]);
-  
-  const [selectedOrderDate, setSelectedOrderDate] = useState<string | null>(() => {
-      return localStorage.getItem('sm_selected_date');
+
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    const saved = localStorage.getItem('sm_cart');
+    return saved ? JSON.parse(saved) : [];
   });
 
-  // --- LOCAL PERSISTENCE EFFECTS ---
+  const [selectedOrderDate, setSelectedOrderDate] = useState<string | null>(() =>
+    localStorage.getItem('sm_selected_date')
+  );
+
+  // Local persistence
   useEffect(() => {
-      try {
-        localStorage.setItem('sm_cart', JSON.stringify(cart));
-      } catch (e) { console.error("LS Error", e); }
+    try { localStorage.setItem('sm_cart', JSON.stringify(cart)); } catch {}
   }, [cart]);
 
   useEffect(() => {
-      try {
-        if (selectedOrderDate) localStorage.setItem('sm_selected_date', selectedOrderDate);
-        else localStorage.removeItem('sm_selected_date');
-      } catch (e) { console.error("LS Error", e); }
+    try {
+      if (selectedOrderDate) localStorage.setItem('sm_selected_date', selectedOrderDate);
+      else localStorage.removeItem('sm_selected_date');
+    } catch {}
   }, [selectedOrderDate]);
 
+  // ─── Bootstrap + Sync Engine ───────────────────────────────
 
-  // --- FIREBASE LISTENERS ---
   useEffect(() => {
-    if (!isFirebaseConfigured) {
-        setConnectionError("Firebase API Key Missing. Please configure VITE_FIREBASE_API_KEY in .env");
-        setIsLoading(false);
-        return;
+    let mounted = true;
+
+    async function init() {
+      // 1. Instant load from IndexedDB cache
+      try {
+        const cached = await bootstrap();
+        if (!mounted) return;
+        if (cached.menu.length > 0) setMenu(cached.menu);
+        if (cached.orders.length > 0) setOrders(cached.orders);
+        if (cached.settings && Object.keys(cached.settings).length > 0) {
+          setSettings(prev => ({ ...prev, ...cached.settings }));
+        }
+        if (cached.events.length > 0) setCalendarEvents(cached.events);
+        console.log('[Bootstrap] Loaded from IndexedDB cache');
+      } catch (e) {
+        console.warn('[Bootstrap] IndexedDB failed:', e);
+      }
+
+      setIsLoading(false);
+
+      // 2. Start sync engine (polls D1 API)
+      startSync(3000, 30000);
+
+      // 3. Check outbox
+      const count = await getOutboxCount();
+      if (mounted) setPendingSyncCount(count);
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-        if (fbUser) {
-            // Immediately restore user profile via REST API (don't wait for SDK onSnapshot)
-            try {
-                const profile = await restGetDoc('users', fbUser.uid);
-                if (profile) setUser({ ...profile, id: fbUser.uid } as User);
-            } catch (e) {
-                console.warn('[Auth] REST profile fetch failed, will rely on SDK:', e);
-            }
-        } else {
-            setUser(currentUser => {
-                if (currentUser && currentUser.role === UserRole.ADMIN && currentUser.id === 'admin1') {
-                    return currentUser;
-                }
-                return null;
-            });
-        }
+    // Listen for sync events
+    const unsub = onSync((event) => {
+      if (!mounted) return;
+      switch (event.type) {
+        case 'orders_updated':
+          setOrders(event.data);
+          break;
+        case 'menu_updated':
+          setMenu(event.data);
+          break;
+        case 'settings_updated':
+          setSettings(prev => ({ ...prev, ...event.data }));
+          break;
+        case 'events_updated':
+          setCalendarEvents(event.data);
+          break;
+        case 'online':
+          setIsOnline(true);
+          setConnectionError(null);
+          break;
+        case 'offline':
+          setIsOnline(false);
+          setConnectionError('Offline — orders will sync when connection returns');
+          break;
+        case 'outbox_synced':
+          getOutboxCount().then(c => mounted && setPendingSyncCount(c));
+          break;
+        case 'outbox_failed':
+          getOutboxCount().then(c => mounted && setPendingSyncCount(c));
+          break;
+      }
     });
-    return () => unsubscribe();
-  }, []);
 
-  useEffect(() => {
-    if (!isFirebaseConfigured) return;
-
-    const handleError = (source: string) => (error: any) => {
-        if (error.code === 'permission-denied') {
-            setConnectionError('Database Access Denied.');
-        } else {
-            console.error(`Firebase Sync Error (${source}):`, error);
-        }
-        markLoaded(source);
-    };
-
-    // Track first snapshot from each core listener before hiding loading screen
-    const loaded = new Set<string>();
-    const REQUIRED = ['Menu', 'Orders', 'Settings'];
-    const markLoaded = (source: string) => {
-        loaded.add(source);
-        if (REQUIRED.every(s => loaded.has(s))) {
-            setIsLoading(false);
-        }
-    };
-
-    // Timeout fallback: show whatever we have after 5s even if Firestore is slow/offline
-    const fallbackTimer = setTimeout(() => setIsLoading(false), 5000);
-
-    const unsubMenu = onSnapshot(collection(db, 'menu'), (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MenuItem));
-        if (data.length > 0) {
-            setMenu(data);
-        }
-        // If snapshot is empty: do NOT seed here — the SDK fires empty initial snapshots
-        // before the server data arrives (~2 mins on slow networks). Running seed logic on
-        // an empty snapshot would write ALL of INITIAL_MENU back to Firestore, overwriting
-        // every admin change. Seeding is handled reliably in the REST bootstrap below.
-        setConnectionError(null);
-        markLoaded('Menu');
-    }, handleError('Menu'));
-
-    const unsubOrders = onSnapshot(query(collection(db, 'orders'), orderBy('createdAt', 'desc')), (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Order));
-        if (data.length > 0) {
-            setOrders(data);
-        }
-        // Do NOT update on empty snapshot — SDK fires empty reconnect snapshots before real data arrives
-        setConnectionError(null);
-        markLoaded('Orders');
-    }, handleError('Orders'));
-
-    const unsubEvents = onSnapshot(collection(db, 'events'), (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CalendarEvent));
-        if (data.length > 0) {
-            setCalendarEvents(data);
-        }
-        // If snapshot is empty: do NOT fall back to INITIAL_EVENTS here — stale closure on
-        // calendarEvents would incorrectly trigger the fallback even after REST bootstrap has
-        // populated state. The REST bootstrap handles the empty-collection fallback correctly.
-        setConnectionError(null);
-    }, handleError('Events'));
-
-    // Gallery Listener
-    const unsubGallery = onSnapshot(query(collection(db, 'gallery_posts'), orderBy('createdAt', 'desc')), (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as GalleryPost));
-        if (data.length > 0) {
-            setGalleryPosts(data);
-        }
-        // Do NOT update on empty snapshot — SDK fires empty reconnect snapshots before real data arrives
-    }, handleError('Gallery'));
-
-    const unsubSocialPosts = onSnapshot(query(collection(db, 'social_posts'), orderBy('scheduledFor', 'desc')), (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as SocialPost));
-        if (data.length > 0) {
-            setSocialPosts(data);
-        }
-        // Do NOT update on empty snapshot — the SDK fires empty initial snapshots on WebSocket
-        // reconnect before server data arrives. This caused all scheduled posts to vanish
-        // on next page load. REST bootstrap below handles the true initial load.
-    }, handleError('SocialPosts'));
-
-    // Settings merge helper
-    const mergeSettings = (docData: any) => {
-        if (!docData) return;
-        // Set Gemini key immediately (not deferred inside React state batch)
-        if (docData.geminiApiKey) {
-            setGeminiApiKey(docData.geminiApiKey);
-        }
-        setSettings(prev => ({ ...prev, ...docData } as AppSettings));
-    };
-
-    // REST bootstrap: load data immediately while onSnapshot connects (may be slow on some networks)
-    // Safe because all writes are now properly awaited — data is always committed before user can refresh
-    // onSnapshot will overwrite this with live data once connected
-    const settingsDocs = ['general', 'ticker', 'img_home', 'img_catering', 'img_pages', 'rewards'];
-    Promise.all(settingsDocs.map(id => restGetDoc('settings', id).catch(() => null)))
-      .then(results => {
-        results.forEach(docData => {
-          if (docData && Object.keys(docData).length > 0) mergeSettings(docData);
-        });
-        markLoaded('Settings');
-        console.log('[REST Bootstrap] Settings loaded');
-      })
-      .catch(e => { console.warn('[REST Bootstrap] Settings failed:', e); markLoaded('Settings'); });
-
-    restListDocs('menu').then(async docs => {
-      if (docs.length > 0) {
-        setMenu(docs as MenuItem[]);
-        markLoaded('Menu');
-        console.log(`[REST Bootstrap] Menu loaded (${docs.length} items)`);
-        // Seed any missing INITIAL_MENU items — safe here because we have the real server state
-        const existingIds = new Set(docs.map(d => d.id));
-        const missing = INITIAL_MENU.filter(item => !existingIds.has(item.id));
-        if (missing.length > 0) {
-          console.log(`[REST Bootstrap] Seeding ${missing.length} missing menu items`);
-          await Promise.all(missing.map(item => restSetDoc('menu', item.id, item))).catch(e => console.warn('[REST Bootstrap] Seed failed:', e));
-        }
-      } else {
-        // Truly empty collection — seed the whole menu
-        console.log('[REST Bootstrap] Menu empty, seeding initial menu');
-        await Promise.all(INITIAL_MENU.map(item => restSetDoc('menu', item.id, item))).catch(e => console.warn('[REST Bootstrap] Full seed failed:', e));
-        setMenu(INITIAL_MENU);
-        markLoaded('Menu');
-      }
-    }).catch(e => { console.warn('[REST Bootstrap] Menu failed:', e); });
-
-    restListDocs('orders').then(docs => {
-      if (docs.length > 0) {
-        const sorted = (docs as Order[]).sort((a, b) => {
-          const aTime = (a.createdAt as any)?.seconds || 0;
-          const bTime = (b.createdAt as any)?.seconds || 0;
-          return bTime - aTime;
-        });
-        setOrders(sorted);
-        console.log(`[REST Bootstrap] Orders loaded (${docs.length})`);
-      }
-      markLoaded('Orders');
-    }).catch(e => { console.warn('[REST Bootstrap] Orders failed:', e); markLoaded('Orders'); });
-
-    restListDocs('events').then(docs => {
-      if (docs.length > 0) setCalendarEvents(docs as CalendarEvent[]);
-      else if (calendarEvents.length === 0) setCalendarEvents(INITIAL_EVENTS);
-      console.log(`[REST Bootstrap] Events loaded (${docs.length})`);
-    }).catch(e => console.warn('[REST Bootstrap] Events failed:', e));
-
-    restListDocs('social_posts').then(docs => {
-      if (docs.length > 0) {
-        const sorted = (docs as SocialPost[]).sort((a, b) =>
-          new Date(b.scheduledFor).getTime() - new Date(a.scheduledFor).getTime()
-        );
-        setSocialPosts(sorted);
-        console.log(`[REST Bootstrap] Social posts loaded (${docs.length})`);
-      }
-    }).catch(e => console.warn('[REST Bootstrap] Social posts failed:', e));
-
-    restListDocs('gallery_posts').then(docs => {
-      if (docs.length > 0) {
-        const sorted = (docs as GalleryPost[]).sort((a, b) =>
-          new Date((b as any).createdAt || 0).getTime() - new Date((a as any).createdAt || 0).getTime()
-        );
-        setGalleryPosts(sorted);
-        console.log(`[REST Bootstrap] Gallery posts loaded (${docs.length})`);
-      }
-    }).catch(e => console.warn('[REST Bootstrap] Gallery posts failed:', e));
-
-    restListDocs('users').then(docs => {
-      if (docs.length > 0) {
-        setUsers(docs as User[]);
-        if (auth.currentUser) {
-          const me = (docs as User[]).find(u => u.id === auth.currentUser?.uid);
-          if (me) setUser(me);
-        }
-        console.log(`[REST Bootstrap] Users loaded (${docs.length})`);
-      }
-    }).catch(e => console.warn('[REST Bootstrap] Users failed:', e));
-
-    const unsubGeneral = onSnapshot(doc(db, 'settings', 'general'), snap => { mergeSettings(snap.data()); markLoaded('Settings'); }, handleError('Settings'));
-    const unsubTicker = onSnapshot(doc(db, 'settings', 'ticker'), snap => mergeSettings(snap.data()), handleError('Ticker'));
-    const unsubImgHome = onSnapshot(doc(db, 'settings', 'img_home'), snap => mergeSettings(snap.data()), handleError('Img Home'));
-    const unsubImgCat = onSnapshot(doc(db, 'settings', 'img_catering'), snap => mergeSettings(snap.data()), handleError('Img Cat'));
-    const unsubImgPages = onSnapshot(doc(db, 'settings', 'img_pages'), snap => mergeSettings(snap.data()), handleError('Img Pages'));
-    const unsubRewards = onSnapshot(doc(db, 'settings', 'rewards'), snap => mergeSettings(snap.data()), handleError('Rewards'));
-
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-        if (data.length > 0) {
-            setUsers(data);
-            if (auth.currentUser) {
-                const me = data.find(u => u.id === auth.currentUser?.uid);
-                if (me) setUser(me);
-            }
-        }
-        // Do NOT update on empty snapshot — SDK fires empty reconnect snapshots before real data arrives
-        setConnectionError(null);
-    }, handleError('Users'));
+    init();
 
     return () => {
-        clearTimeout(fallbackTimer);
-        unsubMenu(); unsubOrders(); unsubEvents(); unsubGallery(); unsubSocialPosts();
-        unsubGeneral(); unsubTicker(); unsubImgHome(); unsubImgCat(); unsubImgPages(); unsubRewards();
-        unsubUsers();
+      mounted = false;
+      unsub();
+      stopSync();
     };
   }, []);
 
-  // --- ACTIONS ---
+  // ─── Auth (simplified — admin credentials, no Firebase) ────
 
-  const login = async (role: UserRole, email?: string, password?: string, name?: string, rememberMe: boolean = true) => {
-    try {
-        if (role === UserRole.ADMIN) {
-            // Dev backdoor — hardcoded, not in Firestore
-            if (email === 'dev' && password === '123') {
-                setUser(INITIAL_DEV_USER);
-                return;
-            }
-            if (email === settings.adminUsername && password === settings.adminPassword) {
-                setUser(INITIAL_ADMIN_USER);
-                return;
-            }
-            throw new Error('Invalid admin credentials');
-        } 
-        if (email && password) {
-            await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
-            try {
-                await signInWithEmailAndPassword(auth, email, password);
-            } catch (e: any) {
-                if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
-                    const res = await createUserWithEmailAndPassword(auth, email, password);
-                    const newUser: User = { id: res.user.uid, name: name || 'New User', email: email, role: UserRole.CUSTOMER, isVerified: true, stamps: 0 };
-                    await restSetDoc('users', res.user.uid, newUser);
-                } else { throw e; }
-            }
-        }
-    } catch (e) {
-        console.error("Auth Error", e);
-        console.error("Authentication failed. Please check credentials.");
-        throw e;
+  const login = async (role: UserRole, email?: string, password?: string) => {
+    if (role === UserRole.ADMIN) {
+      if (email === 'dev' && password === '123') {
+        setUser({ id: 'dev1', name: 'Developer', email: 'dev@local', role: UserRole.DEV, isVerified: true });
+        return;
+      }
+      if (email === settings.adminUsername && password === settings.adminPassword) {
+        setUser({ id: 'admin1', name: 'Admin', email: email || '', role: UserRole.ADMIN, isVerified: true });
+        return;
+      }
+      throw new Error('Invalid admin credentials');
     }
   };
 
-  const logout = async () => {
-    await signOut(auth);
-    setUser(null);
-  };
+  const logout = () => setUser(null);
+  const addUser = () => {};
+  const updateUserProfile = () => {};
+  const adminUpdateUser = () => {};
+  const deleteUser = () => {};
 
-  const addUser = async (newUser: User) => {
-      await restSetDoc('users', newUser.id, newUser as any);
-  };
-
-  const updateUserProfile = async (updatedUser: User) => {
-      await restSetDoc('users', updatedUser.id, updatedUser as any);
-  };
-
-  const adminUpdateUser = async (updatedUser: User) => {
-      await restSetDoc('users', updatedUser.id, updatedUser as any);
-  };
-
-  const deleteUser = async (userId: string) => {
-      await restDeleteDoc('users', userId);
-  };
+  // ─── Menu ──────────────────────────────────────────────────
 
   const addMenuItem = async (item: MenuItem) => {
-      await restSetDoc('menu', item.id, item as any);
-      setMenu(prev => [...prev.filter(m => m.id !== item.id), item]);
+    setMenu(prev => [...prev.filter(m => m.id !== item.id), item]);
+    try {
+      await upsertMenuItem(item as any);
+    } catch { /* will sync via outbox */ }
   };
 
   const updateMenuItem = async (item: MenuItem) => {
-      await restSetDoc('menu', item.id, item as any);
-      setMenu(prev => prev.map(m => m.id === item.id ? item : m));
+    setMenu(prev => prev.map(m => m.id === item.id ? item : m));
+    try {
+      await upsertMenuItem(item as any);
+    } catch { /* will sync via outbox */ }
   };
 
   const deleteMenuItem = async (itemId: string) => {
-      await restDeleteDoc('menu', itemId);
-      setMenu(prev => prev.filter(m => m.id !== itemId));
+    setMenu(prev => prev.filter(m => m.id !== itemId));
+    try {
+      await apiDeleteMenuItem(itemId);
+    } catch { /* will sync via outbox */ }
   };
 
+  // ─── Calendar Events ──────────────────────────────────────
+
   const addCalendarEvent = async (event: CalendarEvent) => {
-      await restSetDoc('events', event.id, event as any);
-      setCalendarEvents(prev => [...prev.filter(e => e.id !== event.id), event]);
+    setCalendarEvents(prev => [...prev.filter(e => e.id !== event.id), event]);
+    try { await upsertEvent(event as any); } catch {}
   };
 
   const updateCalendarEvent = async (event: CalendarEvent) => {
-      await restSetDoc('events', event.id, event as any);
-      setCalendarEvents(prev => prev.map(e => e.id === event.id ? event : e));
+    setCalendarEvents(prev => prev.map(e => e.id === event.id ? event : e));
+    try { await upsertEvent(event as any); } catch {}
   };
 
   const removeCalendarEvent = async (eventId: string) => {
-      await restDeleteDoc('events', eventId);
-      setCalendarEvents(prev => prev.filter(e => e.id !== eventId));
+    setCalendarEvents(prev => prev.filter(e => e.id !== eventId));
+    try { await deleteEventApi(eventId); } catch {}
   };
 
-  // STRICT CUTOFF LOGIC: 9AM Morning PRIOR to cook date
   const isDatePastCutoff = (dateStr: string): boolean => {
-      const cookDate = new Date(dateStr);
-      // Create cutoff date: 1 day before cook date
-      const cutoffDate = new Date(cookDate);
-      cutoffDate.setDate(cookDate.getDate() - 1);
-      cutoffDate.setHours(9, 0, 0, 0); // 9:00 AM
-
-      const now = new Date();
-      return now > cutoffDate;
+    const cookDate = new Date(dateStr);
+    const cutoffDate = new Date(cookDate);
+    cutoffDate.setDate(cookDate.getDate() - 1);
+    cutoffDate.setHours(9, 0, 0, 0);
+    return new Date() > cutoffDate;
   };
 
   const checkAvailability = (dateStr: string): boolean => {
-    // 1. Check cut off
     if (isDatePastCutoff(dateStr)) return false;
-
-    // 2. Check blocks
-    const blocked = calendarEvents.find(e => e.date === dateStr && e.type === 'BLOCKED');
-    if (blocked) return false;
-
-    // 3. Check capacity
-    const ordersOnDay = orders.filter(o => o.cookDay === dateStr && o.type === 'CATERING');
-    if (ordersOnDay.length >= 2) return false;
-    
+    if (calendarEvents.find(e => e.date === dateStr && e.type === 'BLOCKED')) return false;
+    if (orders.filter(o => o.cookDay === dateStr && o.type === 'CATERING').length >= 2) return false;
     return true;
   };
 
-  const createOrder = async (order: Order) => {
-      await restSetDoc('orders', order.id, order as any);
-      setOrders(prev => [order, ...prev]);
-      
-      // If the user had a discount and used it, remove it from their profile
-      if (order.discountApplied && user && user.hasCateringDiscount) {
-          const updatedUser = { ...user, hasCateringDiscount: false };
-          setUser(updatedUser);
-          await updateUserProfile(updatedUser);
-      }
+  // ─── Orders (offline-first) ────────────────────────────────
 
-      clearCart();
+  const createOrder = async (order: Order) => {
+    // Optimistically add to state + cache
+    setOrders(prev => [order, ...prev]);
+    await cacheOrder(order);
+    clearCart();
+
+    if (getOnlineStatus()) {
+      try {
+        const created = await createOrderApi(order);
+        await cacheOrder(created);
+        // Update state with server version (may have server-set fields)
+        setOrders(prev => prev.map(o => o.id === order.id ? created : o));
+      } catch {
+        // Failed — queue for later sync
+        await addToOutbox('CREATE_ORDER', order);
+        setPendingSyncCount(await getOutboxCount());
+        console.warn('[Offline] Order queued for sync:', order.id);
+      }
+    } else {
+      // Offline — queue immediately
+      await addToOutbox('CREATE_ORDER', order);
+      setPendingSyncCount(await getOutboxCount());
+      console.log('[Offline] Order queued:', order.id);
+    }
   };
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
-      await restSetDoc('orders', orderId, { status });
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-      
-      if (status === 'Confirmed') {
-          const order = orders.find(o => o.id === orderId);
-          if (order && order.type === 'CATERING') {
-               const dateStr = new Date(order.cookDay).toISOString().split('T')[0];
-               const newEvent: CalendarEvent = {
-                id: `evt_o_${order.id}`,
-                date: dateStr,
-                type: 'ORDER_PICKUP',
-                title: `Pickup: ${order.customerName}`,
-                orderId: order.id
-              };
-              await restSetDoc('events', newEvent.id, newEvent as any);
-              setCalendarEvents(prev => [...prev.filter(e => e.id !== newEvent.id), newEvent]);
-          }
+    // Optimistic update
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    const updated = orders.find(o => o.id === orderId);
+    if (updated) await cacheOrder({ ...updated, status });
+
+    if (getOnlineStatus()) {
+      try {
+        await updateOrderApi(orderId, { status });
+      } catch {
+        await addToOutbox('UPDATE_STATUS', { id: orderId, status });
+        setPendingSyncCount(await getOutboxCount());
       }
+    } else {
+      await addToOutbox('UPDATE_STATUS', { id: orderId, status });
+      setPendingSyncCount(await getOutboxCount());
+    }
+
+    // Auto-create calendar event for confirmed catering orders
+    if (status === 'Confirmed' && updated?.type === 'CATERING') {
+      const dateStr = new Date(updated.cookDay).toISOString().split('T')[0];
+      const newEvent: CalendarEvent = {
+        id: `evt_o_${updated.id}`, date: dateStr, type: 'ORDER_PICKUP',
+        title: `Pickup: ${updated.customerName}`, orderId: updated.id,
+      };
+      addCalendarEvent(newEvent);
+    }
   };
 
   const updateOrder = async (updatedOrder: Order) => {
-      await restSetDoc('orders', updatedOrder.id, updatedOrder as any);
-      setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
+    setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
+    await cacheOrder(updatedOrder);
+    if (getOnlineStatus()) {
+      try { await updateOrderApi(updatedOrder.id, updatedOrder); } catch {
+        await addToOutbox('UPDATE_ORDER', updatedOrder);
+        setPendingSyncCount(await getOutboxCount());
+      }
+    } else {
+      await addToOutbox('UPDATE_ORDER', updatedOrder);
+      setPendingSyncCount(await getOutboxCount());
+    }
   };
+
+  // ─── Cart ──────────────────────────────────────────────────
 
   const addToCart = (item: MenuItem, quantity: number = 1, specificDate?: string) => {
     if (specificDate && selectedOrderDate && selectedOrderDate !== specificDate) {
-        if (!window.confirm(`Your cart contains items for ${new Date(selectedOrderDate).toLocaleDateString()}. Clear cart to add items for ${new Date(specificDate).toLocaleDateString()}?`)) {
-            return;
-        }
-        setCart([]); 
-        setSelectedOrderDate(specificDate);
+      if (!window.confirm(`Your cart has items for ${new Date(selectedOrderDate).toLocaleDateString()}. Clear for ${new Date(specificDate).toLocaleDateString()}?`)) return;
+      setCart([]);
+      setSelectedOrderDate(specificDate);
     }
-
-    if (!selectedOrderDate && specificDate) {
-        setSelectedOrderDate(specificDate);
-    }
-    
+    if (!selectedOrderDate && specificDate) setSelectedOrderDate(specificDate);
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
-      if (existing) {
-        return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + quantity } : i);
-      }
-      return [...prev, { ...item, quantity: quantity }];
+      if (existing) return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + quantity } : i);
+      return [...prev, { ...item, quantity }];
     });
   };
 
   const updateCartItemQuantity = (itemId: string, delta: number) => {
-      setCart(prev => {
-          return prev.map(item => {
-              if (item.id === itemId) {
-                  return { ...item, quantity: Math.max(0, item.quantity + delta) };
-              }
-              return item;
-          }).filter(i => i.quantity > 0);
-      });
+    setCart(prev => prev.map(item =>
+      item.id === itemId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
+    ).filter(i => i.quantity > 0));
   };
 
   const removeFromCart = (itemId: string) => setCart(prev => prev.filter(i => i.id !== itemId));
   const clearCart = () => setCart([]);
 
+  // ─── Social Posts ──────────────────────────────────────────
+
   const addSocialPost = async (post: SocialPost) => {
-      await restSetDoc('social_posts', post.id, post as any);
-      setSocialPosts(prev => [post, ...prev]);
+    setSocialPosts(prev => [post, ...prev]);
+    try { await upsertSocialPost(post as any); } catch {}
   };
 
   const updateSocialPost = async (post: SocialPost) => {
-      await restSetDoc('social_posts', post.id, post as any);
-      setSocialPosts(prev => prev.map(p => p.id === post.id ? post : p));
+    setSocialPosts(prev => prev.map(p => p.id === post.id ? post : p));
+    try { await upsertSocialPost(post as any); } catch {}
   };
 
   const deleteSocialPost = async (postId: string) => {
-      await restDeleteDoc('social_posts', postId);
-      setSocialPosts(prev => prev.filter(p => p.id !== postId));
+    setSocialPosts(prev => prev.filter(p => p.id !== postId));
+    try { await deleteSocialPostApi(postId); } catch {}
   };
-  
+
+  // ─── Gallery ───────────────────────────────────────────────
+
   const addGalleryPost = async (post: GalleryPost) => {
-      await restSetDoc('gallery_posts', post.id, post as any);
+    try { await submitGalleryPost(post); } catch {}
   };
 
   const toggleGalleryLike = async (postId: string) => {
-      if (!user) return;
-      const post = galleryPosts.find(p => p.id === postId);
-      if (!post) return;
-
-      const isLiked = post.likedBy?.includes(user.id);
-      const newLikedBy = isLiked
-          ? (post.likedBy || []).filter(id => id !== user.id)
-          : [...(post.likedBy || []), user.id];
-      const newLikes = Math.max(0, (post.likes || 0) + (isLiked ? -1 : 1));
-
-      await restSetDoc('gallery_posts', postId, { likes: newLikes, likedBy: newLikedBy });
+    if (!user) return;
+    try { await toggleGalleryLikeApi(postId); } catch {}
   };
 
-  const updateSettings = async (newSettings: Partial<AppSettings>) => {
-      const merged = { ...settings, ...newSettings };
-      setSettings(merged);
-      
-      // Only route the keys that were actually passed, not the entire settings blob
-      const keysToSave = Object.keys(newSettings);
-      const generalPayload: Record<string, any> = {};
-      const homePayload: Record<string, any> = {};
-      const cateringPayload: Record<string, any> = {};
-      const pagePayload: Record<string, any> = {};
-      const tickerPayload: Record<string, any> = {};
-      const rewardsPayload: Record<string, any> = {};
+  // ─── Settings ──────────────────────────────────────────────
 
-      keysToSave.forEach(key => {
-          const val = (newSettings as any)[key];
-          if (TICKER_KEYS.includes(key)) tickerPayload[key] = val;
-          else if (HOME_KEYS.includes(key)) homePayload[key] = val;
-          else if (CATERING_KEYS.includes(key)) cateringPayload[key] = val;
-          else if (PAGE_KEYS.includes(key)) pagePayload[key] = val;
-          else if (REWARDS_KEYS.includes(key)) rewardsPayload[key] = val;
-          else generalPayload[key] = val;
-      });
-
-      // Use REST API for writes (bypasses unreliable SDK WebChannel)
-      const promises = [];
-      if (Object.keys(generalPayload).length > 0) promises.push(restSetDoc('settings', 'general', generalPayload));
-      if (Object.keys(tickerPayload).length > 0) promises.push(restSetDoc('settings', 'ticker', tickerPayload));
-      if (Object.keys(rewardsPayload).length > 0) promises.push(restSetDoc('settings', 'rewards', rewardsPayload));
-      if (Object.keys(homePayload).length > 0) promises.push(restSetDoc('settings', 'img_home', homePayload));
-      if (Object.keys(cateringPayload).length > 0) promises.push(restSetDoc('settings', 'img_catering', cateringPayload));
-      if (Object.keys(pagePayload).length > 0) promises.push(restSetDoc('settings', 'img_pages', pagePayload));
-      try {
-          await Promise.all(promises);
-          console.log('[Settings] Saved via REST API');
-          return true;
-      } catch (err: any) {
-          console.error('[Settings] REST write failed:', err.message);
-          return false;
-      }
+  const updateSettings = async (newSettings: Partial<AppSettings>): Promise<boolean> => {
+    const merged = { ...settings, ...newSettings };
+    setSettings(merged);
+    await cacheSettings(merged);
+    try {
+      await updateSettingsApi(newSettings);
+      return true;
+    } catch (err: any) {
+      console.error('[Settings] Save failed:', err.message);
+      return false;
+    }
   };
+
+  // ─── Misc ──────────────────────────────────────────────────
 
   const addCookDay = (day: CookDay) => setCookDays(prev => [...prev, day]);
 
   const toggleReminder = (eventId: string) => {
-      let newReminders;
-      if (reminders.includes(eventId)) newReminders = reminders.filter(id => id !== eventId);
-      else newReminders = [...reminders, eventId];
-      setReminders(newReminders);
+    setReminders(prev =>
+      prev.includes(eventId) ? prev.filter(id => id !== eventId) : [...prev, eventId]
+    );
   };
 
   const verifyStaffPin = (pin: string, action: 'ADD' | 'REDEEM'): boolean => {
-      if (pin !== settings.rewards.staffPin) return false;
-      if (user) {
-          const currentStamps = user.stamps || 0;
-          let newStamps = currentStamps;
-          if (action === 'ADD') newStamps = currentStamps + 1;
-          else if (action === 'REDEEM') newStamps = Math.max(0, currentStamps - settings.rewards.maxStamps);
-          
-          const updatedUser = { ...user, stamps: newStamps };
-          setUser(updatedUser);
-          updateUserProfile(updatedUser);
-      }
-      return true;
+    if (pin !== settings.rewards?.staffPin) return false;
+    if (user) {
+      const currentStamps = user.stamps || 0;
+      let newStamps = action === 'ADD' ? currentStamps + 1 : Math.max(0, currentStamps - (settings.rewards?.maxStamps || 10));
+      setUser({ ...user, stamps: newStamps });
+    }
+    return true;
   };
 
   return (
@@ -674,11 +452,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       socialPosts, addSocialPost, updateSocialPost, deleteSocialPost,
       galleryPosts, addGalleryPost, toggleGalleryLike,
       settings, updateSettings,
-      reminders, toggleReminder,
-      verifyStaffPin,
+      reminders, toggleReminder, verifyStaffPin,
       selectedOrderDate, setSelectedOrderDate,
-      isLoading,
-      connectionError
+      isLoading, connectionError,
+      isOnline, pendingSyncCount,
     }}>
       {children}
     </AppContext.Provider>
