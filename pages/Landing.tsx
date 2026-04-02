@@ -167,14 +167,25 @@ const Landing: React.FC = () => {
 
   const IMG = {
     foodTruck: 'https://images.unsplash.com/photo-1565123409695-7b5ef63a2efb?auto=format&fit=crop&w=800&q=80',
-    tablet: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=80',
+    // Feature-specific images
+    qrScan: 'https://images.unsplash.com/photo-1614680376593-902f74cf0d41?auto=format&fit=crop&w=800&q=80', // person scanning QR on phone
+    kitchenScreen: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=800&q=80', // screen/display tech
+    tabletPos: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=800&q=80', // person using tablet
+    smsPhone: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=80', // phone notification
+    wifiSignal: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=80', // connectivity/signal
+    contactless: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=800&q=80', // contactless card payment
+    cloudServer: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80', // globe/network
+    handshake: 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=800&q=80', // team/freedom
+    // General
     kitchen: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=800&q=80',
     burger: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
     tacos: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=800&q=80',
+    qr: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=80',
+    tablet: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=800&q=80',
+    // Testimonial avatars
     owner: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=400&q=80',
     owner2: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
     owner3: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
-    qr: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=80',
   };
 
   const testimonials = [
@@ -376,14 +387,14 @@ const Landing: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 perspective-1000 stagger-children">
             {[
-              { icon: QrCode, title: 'QR Ordering', desc: 'Customers scan, browse, and order from their phone. No app download. No queue.', img: IMG.qr },
-              { icon: Monitor, title: 'Kitchen Display', desc: 'Orders appear instantly. Tap to advance: New, Cooking, Ready. Auto-notifies customers.', img: IMG.kitchen },
-              { icon: Smartphone, title: 'FOH Tablet POS', desc: 'Take walk-up orders on any device. Menu grid, cart, name — hits kitchen instantly.', img: IMG.tablet },
-              { icon: Bell, title: 'SMS Notifications', desc: 'Customers get a text when cooking starts and when food is ready. No shouting names.', img: IMG.burger },
-              { icon: WifiOff, title: 'Works Offline', desc: 'ChowBox creates a WiFi hotspot — the brains of your truck. Orders queue locally and sync when internet returns.', img: IMG.foodTruck },
-              { icon: CreditCard, title: 'Tap to Pay', desc: 'Stripe Terminal for contactless payments. Apple Pay, Google Pay, or good old cash.', img: IMG.tacos },
-              { icon: Globe, title: 'Cloud Native', desc: 'Runs on Cloudflare\'s edge. Fast from anywhere — markets, events, festivals.', img: IMG.foodTruck },
-              { icon: Shield, title: 'No Lock-in', desc: 'Month-to-month. No contracts. No proprietary hardware. Your data is always yours.', img: IMG.burger },
+              { icon: QrCode, title: 'QR Ordering', desc: 'Customers scan, browse, and order from their phone. No app download. No queue.', img: IMG.qrScan },
+              { icon: Monitor, title: 'Kitchen Display', desc: 'Orders appear instantly. Tap to advance: New, Cooking, Ready. Auto-notifies customers.', img: IMG.kitchenScreen },
+              { icon: Smartphone, title: 'FOH Tablet POS', desc: 'Take walk-up orders on any device. Menu grid, cart, name — hits kitchen instantly.', img: IMG.tabletPos },
+              { icon: Bell, title: 'SMS Notifications', desc: 'Customers get a text when cooking starts and when food is ready. No shouting names.', img: IMG.smsPhone },
+              { icon: WifiOff, title: 'Works Offline', desc: 'ChowBox creates a WiFi hotspot — the brains of your truck. Orders queue locally and sync when internet returns.', img: IMG.wifiSignal },
+              { icon: CreditCard, title: 'Tap to Pay', desc: 'Stripe Terminal for contactless payments. Apple Pay, Google Pay, or good old cash.', img: IMG.contactless },
+              { icon: Globe, title: 'Cloud Native', desc: 'Runs on Cloudflare\'s edge. Fast from anywhere — markets, events, festivals.', img: IMG.cloudServer },
+              { icon: Shield, title: 'No Lock-in', desc: 'Month-to-month. No contracts. No proprietary hardware. Your data is always yours.', img: IMG.handshake },
             ].map((f, i) => (
               <div key={i} className="card-3d bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden group">
                 <div className="h-32 overflow-hidden relative">
