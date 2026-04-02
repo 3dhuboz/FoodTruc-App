@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { MenuItem, CartItem, Order } from '../types';
-import { Plus, Minus, ShoppingCart, X, ChefHat, CheckCircle, ChevronDown, WifiOff, Clock } from 'lucide-react';
+import { Plus, Minus, ShoppingCart, X, ChefHat, CheckCircle, ChevronDown, WifiOff, Clock, Home } from 'lucide-react';
 
 const newOrderId = () => `qr_${Date.now().toString(36)}`;
 
@@ -321,14 +321,19 @@ const QROrder: React.FC = () => {
 
       {/* Header */}
       <div className="bg-gray-950 border-b border-gray-800 px-5 pt-6 pb-4">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center border border-orange-500/20 shrink-0">
-            <ChefHat size={22} className="text-orange-400" />
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center border border-orange-500/20 shrink-0">
+              <ChefHat size={22} className="text-orange-400" />
+            </div>
+            <div>
+              <h1 className="text-white font-black text-xl leading-tight">{settings.businessName || 'Order Here'}</h1>
+              <p className="text-gray-500 text-xs">Order ahead — we'll text you when it's ready</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-white font-black text-xl leading-tight">{settings.businessName || 'Order Here'}</h1>
-            <p className="text-gray-500 text-xs">Order ahead — we'll text you when it's ready</p>
-          </div>
+          <a href="/" className="w-10 h-10 bg-gray-800 hover:bg-gray-700 rounded-xl flex items-center justify-center transition" title="Back to home">
+            <Home size={18} className="text-gray-400" />
+          </a>
         </div>
       </div>
 
