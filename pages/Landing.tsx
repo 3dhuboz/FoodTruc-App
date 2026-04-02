@@ -3,7 +3,7 @@ import {
   CreditCard, Bell, Smartphone, Globe, Shield, Zap, Star,
   CheckCircle, ArrowRight, ChefHat, Clock, WifiOff, QrCode, Monitor,
   ChevronDown, X, Loader2, XCircle, Package, Cpu, Wifi, Plus, ShoppingCart,
-  ClipboardList, Timer, BadgeDollarSign, Quote, MapPin
+  ClipboardList, Timer, BadgeDollarSign, Quote, MapPin, Users
 } from 'lucide-react';
 
 // ─── Intersection Observer Hook ─────────────────────────────────
