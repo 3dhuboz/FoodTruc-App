@@ -50,7 +50,7 @@ const STEPS = [
       <div className="space-y-4">
         {/* Food truck image with QR overlay */}
         <div className="relative rounded-2xl overflow-hidden h-48">
-          <img src="https://images.unsplash.com/photo-1567129937968-cdad8f07daa0?auto=format&fit=crop&w=800&q=80" alt="Food truck window" className="w-full h-full object-cover" />
+          <img src="https://images.unsplash.com/photo-1565123409695-7b5ef63a2efb?auto=format&fit=crop&w=800&q=80" alt="Food truck" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/20" />
           <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
             <div>
