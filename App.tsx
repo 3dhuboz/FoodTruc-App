@@ -163,7 +163,9 @@ const TenantGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <ScrollToTop />
           <Routes>
             <Route path="/signup-success" element={<SignupSuccess />} />
-            <Route path="/qr-order" element={<QROrder />} />
+            <Route path="/qr-order" element={<AppProvider><QROrder /></AppProvider>} />
+            <Route path="/boh" element={<AppProvider><BOH /></AppProvider>} />
+            <Route path="/foh" element={<AppProvider><FOH /></AppProvider>} />
             <Route path="*" element={<Landing />} />
           </Routes>
         </HashRouter>
