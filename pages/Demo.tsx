@@ -12,20 +12,29 @@ const STEPS = [
     sceneEmoji: '🚛🚛🚛',
     sceneBg: 'from-amber-950 to-gray-950',
     sceneDetail: (
-      <div className="space-y-3">
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
-          <div className="flex items-center gap-2 text-red-400 font-bold text-sm mb-2"><Users size={16} /> Competitor\'s Truck</div>
-          <div className="flex gap-1 flex-wrap">
-            {Array.from({length: 15}).map((_, i) => <div key={i} className="w-6 h-6 bg-red-500/20 rounded-full flex items-center justify-center text-[10px]">👤</div>)}
+      <div className="space-y-4">
+        {/* Market scene image */}
+        <div className="relative rounded-2xl overflow-hidden h-44">
+          <img src="https://images.unsplash.com/photo-1565123409695-7b5ef63a2efb?auto=format&fit=crop&w=800&q=80" alt="Food truck market" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/30" />
+          <div className="absolute bottom-4 left-4">
+            <p className="text-white font-bold">Saturday lunch rush</p>
+            <p className="text-white/60 text-sm">Every truck has a line...</p>
           </div>
-          <p className="text-red-400/60 text-xs mt-2">15 in line. 3 just walked away. ~25 min wait.</p>
         </div>
-        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
-          <div className="flex items-center gap-2 text-green-400 font-bold text-sm mb-2"><Zap size={16} /> Your Truck (ChowNow)</div>
-          <div className="flex gap-1">
-            <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-[10px]">👤</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-red-400 font-bold text-sm mb-2"><Users size={14} /> Other Trucks</div>
+            <p className="text-3xl font-black text-red-400">15</p>
+            <p className="text-red-400/60 text-xs">people in line</p>
+            <p className="text-red-400/40 text-xs mt-1">~25 min wait. 3 walked away.</p>
           </div>
-          <p className="text-green-400/60 text-xs mt-2">No queue. Just a QR code on the counter.</p>
+          <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-green-400 font-bold text-sm mb-2"><Zap size={14} /> Your Truck</div>
+            <p className="text-3xl font-black text-green-400">0</p>
+            <p className="text-green-400/60 text-xs">queue. QR on counter.</p>
+            <p className="text-green-400/40 text-xs mt-1">Customers order from their phone.</p>
+          </div>
         </div>
       </div>
     ),
