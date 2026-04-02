@@ -176,6 +176,24 @@ CREATE TABLE IF NOT EXISTS cook_days (
   is_open INTEGER DEFAULT 1
 );
 
+-- ─── ChowBox Devices (fleet tracking) ───────────────────────
+CREATE TABLE IF NOT EXISTS chowbox_devices (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  hostname TEXT,
+  tunnel_url TEXT,
+  ip_address TEXT,
+  printer_connected INTEGER DEFAULT 0,
+  is_online INTEGER DEFAULT 1,
+  orders_today INTEGER DEFAULT 0,
+  sync_pending INTEGER DEFAULT 0,
+  uptime_seconds INTEGER DEFAULT 0,
+  memory_mb INTEGER DEFAULT 0,
+  node_version TEXT,
+  last_heartbeat TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- ─── Indexes ─────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_menu_tenant ON menu_items(tenant_id);
@@ -192,5 +210,6 @@ CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_events_tenant ON calendar_events(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_social_tenant ON social_posts(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_gallery_tenant ON gallery_posts(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_chowbox_tenant ON chowbox_devices(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_settings_tenant_key ON settings(tenant_id, key);
 CREATE INDEX IF NOT EXISTS idx_cook_days_tenant ON cook_days(tenant_id);

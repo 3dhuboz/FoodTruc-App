@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Utensils, CalendarCheck, Share2, Settings, Users, CalendarDays, Flame, Cloud, WifiOff, Package, Code2, ChefHat } from 'lucide-react';
+import { Utensils, CalendarCheck, Share2, Settings, Users, CalendarDays, Flame, Cloud, WifiOff, Package, Code2, ChefHat, Cpu } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import OrderManager from './OrderManager';
 import MenuManager from './MenuManager';
@@ -11,8 +11,9 @@ import CustomerManager from './CustomerManager';
 import Planner from './Planner';
 import Pitmaster from './Pitmaster';
 import TruckPanel from './TruckPanel';
+import FleetPanel from './FleetPanel';
 
-type TabId = 'orders' | 'truck' | 'planner' | 'pitmaster' | 'menu' | 'catering' | 'customers' | 'social' | 'settings' | 'devtools';
+type TabId = 'orders' | 'truck' | 'planner' | 'pitmaster' | 'menu' | 'catering' | 'customers' | 'social' | 'fleet' | 'settings' | 'devtools';
 
 interface TabDef { id: TabId; icon: React.ElementType; label: string; devOnly?: boolean }
 
@@ -25,6 +26,7 @@ const ALL_TABS: TabDef[] = [
   { id: 'catering',  icon: Package,       label: 'Catering' },
   { id: 'customers', icon: Users,         label: 'Customers' },
   { id: 'social',    icon: Share2,        label: 'Social & AI' },
+  { id: 'fleet',     icon: Cpu,            label: 'Fleet' },
   { id: 'settings',  icon: Settings,      label: 'Settings' },
   { id: 'devtools',  icon: Code2,         label: 'Dev Tools', devOnly: true },
 ];
@@ -117,6 +119,7 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'catering'  && <CateringManager />}
           {activeTab === 'customers' && <CustomerManager />}
           {activeTab === 'social'    && <SocialAIBridge />}
+          {activeTab === 'fleet'     && <FleetPanel />}
           {activeTab === 'settings'  && <SettingsManager mode="admin" />}
           {activeTab === 'devtools'  && <SettingsManager mode="dev" />}
         </div>

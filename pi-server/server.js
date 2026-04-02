@@ -18,7 +18,7 @@
  */
 
 import { createServer } from 'http';
-import { readFileSync, existsSync, statSync } from 'fs';
+import { readFileSync, existsSync, statSync, writeFileSync } from 'fs';
 import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
@@ -31,6 +31,18 @@ const DIST_DIR = join(__dirname, '..', 'dist');
 const DB_PATH = join(__dirname, 'street-eats.db');
 const CLOUD_URL = process.env.CLOUD_URL || 'https://chownow.au';
 const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL || '30000');
+const TENANT_ID = process.env.TENANT_ID || 'default';
+const TUNNEL_URL = process.env.TUNNEL_URL || '';
+
+// Device ID — persistent across reboots
+const DEVICE_ID_PATH = join(__dirname, '.chowbox-id');
+function getDeviceId() {
+  if (existsSync(DEVICE_ID_PATH)) return readFileSync(DEVICE_ID_PATH, 'utf-8').trim();
+  const id = 'cb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  writeFileSync(DEVICE_ID_PATH, id);
+  return id;
+}
+const DEVICE_ID = getDeviceId();
 
 // ─── Database ────────────────────────────────────────────────
 
@@ -579,12 +591,49 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('');
 });
 
+// ─── Heartbeat — phone home to cloud ─────────────────────────
+
+async function sendHeartbeat() {
+  if (!isOnline) return;
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const ordersToday = db.prepare('SELECT COUNT(*) as count FROM orders WHERE created_at >= ?').get(today);
+    const syncPending = db.prepare('SELECT COUNT(*) as count FROM sync_queue WHERE synced = 0').get();
+    const hostname = (await import('os')).hostname();
+    const localIPs = getLocalIPs();
+
+    await fetch(`${CLOUD_URL}/api/v1/heartbeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: DEVICE_ID,
+        tenantId: TENANT_ID,
+        hostname,
+        tunnelUrl: TUNNEL_URL,
+        ipAddress: localIPs[0] || '',
+        printerConnected: isPrinterAvailable(),
+        ordersToday: ordersToday?.count || 0,
+        syncPending: syncPending?.count || 0,
+        uptimeSeconds: Math.floor(process.uptime()),
+        memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        nodeVersion: process.version,
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (e) {
+    // Silent fail — heartbeat is best-effort
+  }
+}
+
 // ─── Sync Loops ──────────────────────────────────────────────
 
-// Fast loop: check connectivity + flush queue (every 5s)
+// Fast loop: check connectivity + flush queue + heartbeat (every 30s)
 setInterval(async () => {
   await checkConnectivity();
-  if (isOnline) await flushSyncQueue();
+  if (isOnline) {
+    await flushSyncQueue();
+    await sendHeartbeat();
+  }
 }, SYNC_INTERVAL);
 
 // Slow loop: pull menu/settings from cloud (every 5 min)

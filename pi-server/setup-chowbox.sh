@@ -71,6 +71,7 @@ RestartSec=5
 Environment=PORT=80
 Environment=CLOUD_URL=https://chownow.au
 Environment=NODE_ENV=production
+Environment=TENANT_ID=default
 
 [Install]
 WantedBy=multi-user.target
@@ -81,9 +82,56 @@ systemctl enable chowbox
 systemctl start chowbox
 
 # ─── USB Printer Permissions ─────────────────────────────────
-# Allow the service to write to USB printers
 echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="*", MODE="0666"' > /etc/udev/rules.d/99-usb-printer.rules
 udevadm control --reload-rules
+
+# ─── Cloudflare Tunnel (optional) ────────────────────────────
+# Provides remote access to this ChowBox from anywhere.
+# Pass TUNNEL_TOKEN as an argument: sudo ./setup-chowbox.sh <tunnel-token>
+if [ -n "$1" ]; then
+  echo "[9/9] Setting up Cloudflare Tunnel..."
+
+  # Install cloudflared
+  if ! command -v cloudflared &> /dev/null; then
+    curl -L --output /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb
+    dpkg -i /tmp/cloudflared.deb
+    rm /tmp/cloudflared.deb
+  fi
+
+  # Create tunnel service
+  cat > /etc/systemd/system/chowbox-tunnel.service << TUNNEL
+[Unit]
+Description=ChowBox Cloudflare Tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token $1
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+TUNNEL
+
+  # Add TUNNEL_URL to the ChowBox service so heartbeats include it
+  mkdir -p /etc/systemd/system/chowbox.service.d
+  cat > /etc/systemd/system/chowbox.service.d/tunnel.conf << OVERRIDE
+[Service]
+Environment=TUNNEL_URL=https://box-$(hostname).chownow.au
+OVERRIDE
+
+  systemctl daemon-reload
+  systemctl enable chowbox-tunnel
+  systemctl start chowbox-tunnel
+  systemctl restart chowbox
+
+  echo "  Tunnel active: https://box-$(hostname).chownow.au"
+else
+  echo "[Tunnel] Skipped — pass tunnel token as argument to enable."
+  echo "  Usage: sudo ./setup-chowbox.sh <cloudflare-tunnel-token>"
+fi
 
 # ─── Done ────────────────────────────────────────────────────
 echo ""
