@@ -4,7 +4,7 @@ import { MenuItem, Order, CartItem } from '../types';
 import {
   Plus, Minus, Trash2, ShoppingCart, ChefHat, X, CheckCircle, Search, Lock,
   Bell, Wifi, WifiOff, CloudOff, ClipboardList, Flame, Clock, Package, Users,
-  CreditCard, Loader2
+  CreditCard, Loader2, PauseCircle, PlayCircle
 } from 'lucide-react';
 import { isNativePaymentAvailable, initTerminal, connectTapToPay, collectPayment } from '../services/stripeTerminal';
 
@@ -239,7 +239,7 @@ const OrderQueue: React.FC<{
 
 // ─── Main FOH POS ────────────────────────────────────────────
 const FOH: React.FC = () => {
-  const { menu, orders, createOrder, updateOrderStatus, settings, isOnline, pendingSyncCount } = useApp();
+  const { menu, orders, createOrder, updateOrderStatus, settings, updateSettings, isOnline, pendingSyncCount } = useApp();
   const [unlocked, setUnlocked] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState('');
@@ -422,6 +422,20 @@ const FOH: React.FC = () => {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {/* QR Order Throttle Toggle */}
+          <button
+            onClick={() => updateSettings({ qrOrdersPaused: !(settings as any).qrOrdersPaused })}
+            className={`text-[10px] px-3 py-1.5 rounded-full font-bold flex items-center gap-1 transition active:scale-95 ${
+              (settings as any).qrOrdersPaused
+                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+          >
+            {(settings as any).qrOrdersPaused
+              ? <><PauseCircle size={12} /> QR Paused</>
+              : <><PlayCircle size={12} /> QR Open</>
+            }
+          </button>
           {pendingSyncCount > 0 && (
             <span className="text-[10px] bg-yellow-900 text-yellow-400 px-2 py-1 rounded-full font-bold flex items-center gap-1">
               <CloudOff size={8} /> {pendingSyncCount}

@@ -289,7 +289,26 @@ const QROrder: React.FC = () => {
     }
   };
 
+  const qrPaused = (settings as any).qrOrdersPaused;
+
   if (successOrderId) return <Success orderId={successOrderId} name={successName} />;
+
+  // Kitchen is backed up — show pause screen
+  if (qrPaused) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-8 text-center gap-6">
+        <div className="w-20 h-20 bg-orange-500/10 rounded-full flex items-center justify-center">
+          <Clock size={40} className="text-orange-400" />
+        </div>
+        <h1 className="text-white font-black text-2xl">Thanks for your patience!</h1>
+        <p className="text-gray-400 max-w-sm leading-relaxed">
+          We're cooking as fast as we can — the food is worth the wait, we promise! QR ordering is briefly paused so we can catch up.
+        </p>
+        <p className="text-orange-400 font-semibold">Head to the window to order directly</p>
+        <p className="text-gray-600 text-sm mt-4">This page updates automatically — check back shortly.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 pb-28">
