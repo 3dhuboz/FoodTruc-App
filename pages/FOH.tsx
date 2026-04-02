@@ -3,8 +3,10 @@ import { useApp } from '../context/AppContext';
 import { MenuItem, Order, CartItem } from '../types';
 import {
   Plus, Minus, Trash2, ShoppingCart, ChefHat, X, CheckCircle, Search, Lock,
-  Bell, Wifi, WifiOff, CloudOff, ClipboardList, Flame, Clock, Package, Users
+  Bell, Wifi, WifiOff, CloudOff, ClipboardList, Flame, Clock, Package, Users,
+  CreditCard, Loader2
 } from 'lucide-react';
+import { isNativePaymentAvailable, initTerminal, connectTapToPay, collectPayment } from '../services/stripeTerminal';
 
 const newOrderId = () => `wu_${Date.now().toString(36)}`;
 
@@ -103,7 +105,11 @@ const OrderQueue: React.FC<{
   orders: Order[];
   onMarkReady: (order: Order) => void;
   onMarkComplete: (order: Order) => void;
-}> = ({ orders, onMarkReady, onMarkComplete }) => {
+  onMarkPaid: (order: Order) => void;
+  onCharge: (order: Order) => void;
+  charging: string | null;
+}> = ({ orders, onMarkReady, onMarkComplete, onMarkPaid, onCharge, charging }) => {
+  const hasNfcPayment = isNativePaymentAvailable();
   const [elapsed, setElapsed] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -115,47 +121,68 @@ const OrderQueue: React.FC<{
     return () => clearInterval(timer);
   }, [orders]);
 
+  const pending = orders.filter(o => o.status === 'Pending');
   const confirmed = orders.filter(o => o.status === 'Confirmed');
   const cooking = orders.filter(o => o.status === 'Cooking');
   const ready = orders.filter(o => o.status === 'Ready');
 
-  const statusColor = (status: string) => {
-    if (status === 'Confirmed') return 'border-yellow-500 bg-yellow-950/30';
-    if (status === 'Cooking') return 'border-orange-500 bg-orange-950/30';
-    if (status === 'Ready') return 'border-green-500 bg-green-950/30';
-    return 'border-gray-700';
-  };
+  const isQrOrder = (o: Order) => o.userId === 'qr_customer' || (o as any).source === 'qr';
 
-  const statusBadge = (status: string) => {
-    if (status === 'Confirmed') return 'bg-yellow-500 text-black';
-    if (status === 'Cooking') return 'bg-orange-500 text-white';
-    if (status === 'Ready') return 'bg-green-500 text-white';
-    return 'bg-gray-600 text-white';
-  };
+  const renderOrder = (order: Order) => {
+    const qr = isQrOrder(order);
+    const borderColor =
+      order.status === 'Pending' ? 'border-purple-500 bg-purple-950/30' :
+      order.status === 'Confirmed' ? 'border-yellow-500 bg-yellow-950/30' :
+      order.status === 'Cooking' ? 'border-orange-500 bg-orange-950/30' :
+      order.status === 'Ready' ? 'border-green-500 bg-green-950/30' : 'border-gray-700';
+    const badge =
+      order.status === 'Pending' ? 'bg-purple-500 text-white' :
+      order.status === 'Confirmed' ? 'bg-yellow-500 text-black' :
+      order.status === 'Cooking' ? 'bg-orange-500 text-white' :
+      'bg-green-500 text-white';
+    const badgeLabel =
+      order.status === 'Pending' ? 'UNPAID' :
+      order.status === 'Confirmed' ? 'NEW' :
+      order.status === 'Cooking' ? 'COOKING' : 'READY';
 
-  const renderOrder = (order: Order) => (
-    <div key={order.id} className={`rounded-xl border p-3 ${statusColor(order.status)} transition`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${statusBadge(order.status)}`}>
-            {order.status === 'Confirmed' ? 'NEW' : order.status === 'Cooking' ? 'COOKING' : 'READY'}
-          </span>
-          <span className="text-white font-black text-sm">#{order.id.slice(-4).toUpperCase()}</span>
+    return (
+      <div key={order.id} className={`rounded-xl border p-3 ${borderColor} transition`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${badge}`}>{badgeLabel}</span>
+            <span className="text-white font-black text-sm">#{order.id.slice(-4).toUpperCase()}</span>
+            {qr && <span className="text-[9px] font-bold bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded">QR</span>}
+          </div>
+          <span className="text-gray-500 text-xs font-mono">{elapsed[order.id] || '0s'}</span>
         </div>
-        <span className="text-gray-500 text-xs font-mono">{elapsed[order.id] || '0s'}</span>
+        <div className="text-gray-300 text-xs font-semibold mb-1">{order.customerName}</div>
+        <div className="text-gray-500 text-[10px] mb-2">
+          {order.items.map((l, i) => <span key={i}>{i > 0 && ' · '}{l.quantity}× {l.item.name}</span>)}
+        </div>
+        <div className="text-orange-400 text-xs font-bold mb-2">${order.total.toFixed(2)}</div>
+        {order.status === 'Pending' && (
+          <div className="space-y-1.5">
+            {hasNfcPayment && (
+              <button onClick={() => onCharge(order)} disabled={charging === order.id}
+                className="w-full bg-blue-500 hover:bg-blue-400 disabled:opacity-60 text-white text-xs font-bold py-2.5 rounded-lg transition active:scale-95 flex items-center justify-center gap-1.5">
+                {charging === order.id ? <><Loader2 size={12} className="animate-spin" /> Tap card...</> : <><CreditCard size={12} /> Charge ${order.total.toFixed(2)}</>}
+              </button>
+            )}
+            <button onClick={() => onMarkPaid(order)}
+              className="w-full bg-purple-500 hover:bg-purple-400 text-white text-xs font-bold py-2 rounded-lg transition active:scale-95">
+              {hasNfcPayment ? 'Cash / External EFTPOS' : 'Mark Paid → Kitchen'}
+            </button>
+          </div>
+        )}
+        {order.status === 'Ready' && (
+          <button onClick={() => onMarkComplete(order)}
+            className="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 rounded-lg transition active:scale-95">
+            Collected
+          </button>
+        )}
       </div>
-      <div className="text-gray-300 text-xs font-semibold mb-1">{order.customerName}</div>
-      <div className="text-gray-500 text-[10px] mb-2">
-        {order.items.map((l, i) => <span key={i}>{i > 0 && ' · '}{l.quantity}× {l.item.name}</span>)}
-      </div>
-      {order.status === 'Ready' && (
-        <button onClick={() => onMarkComplete(order)}
-          className="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 rounded-lg transition active:scale-95">
-          Collected
-        </button>
-      )}
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -170,9 +197,18 @@ const OrderQueue: React.FC<{
           <div className="text-center text-gray-600 text-xs mt-8">No active orders</div>
         )}
 
+        {pending.length > 0 && (
+          <>
+            <div className="text-[10px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-1">
+              <Users size={10} /> Awaiting Payment ({pending.length})
+            </div>
+            {pending.map(renderOrder)}
+          </>
+        )}
+
         {ready.length > 0 && (
           <>
-            <div className="text-[10px] font-black text-green-500 uppercase tracking-widest flex items-center gap-1">
+            <div className="text-[10px] font-black text-green-500 uppercase tracking-widest flex items-center gap-1 mt-2">
               <Package size={10} /> Ready ({ready.length})
             </div>
             {ready.map(renderOrder)}
@@ -191,7 +227,7 @@ const OrderQueue: React.FC<{
         {confirmed.length > 0 && (
           <>
             <div className="text-[10px] font-black text-yellow-500 uppercase tracking-widest flex items-center gap-1 mt-2">
-              <Clock size={10} /> New ({confirmed.length})
+              <Clock size={10} /> In Kitchen ({confirmed.length})
             </div>
             {confirmed.map(renderOrder)}
           </>
@@ -221,7 +257,7 @@ const FOH: React.FC = () => {
   const today = new Date().toISOString().split('T')[0];
   const activeOrders = useMemo(() =>
     orders.filter(o =>
-      ['Confirmed', 'Cooking', 'Ready'].includes(o.status) &&
+      ['Pending', 'Confirmed', 'Cooking', 'Ready'].includes(o.status) &&
       (o.cookDay === today || o.createdAt?.startsWith(today))
     ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [orders, today]
@@ -299,6 +335,50 @@ const FOH: React.FC = () => {
     createOrder(order);
     setCart([]); setShowCustomer(false);
     setLastOrderNum(orderId.slice(-4).toUpperCase());
+  };
+
+  const [charging, setCharging] = useState<string | null>(null);
+  const [terminalReady, setTerminalReady] = useState(false);
+
+  // Init Stripe Terminal on mount if native
+  useEffect(() => {
+    if (isNativePaymentAvailable() && unlocked) {
+      initTerminal().then(ok => {
+        if (ok) connectTapToPay().then(setTerminalReady);
+      });
+    }
+  }, [unlocked]);
+
+  const handleCharge = async (order: Order) => {
+    setCharging(order.id);
+    try {
+      const result = await collectPayment(order.total, order.id);
+      if (result.success) {
+        // Payment collected — send to kitchen
+        await updateOrderStatus(order.id, 'Confirmed');
+        // Play success chime
+        try {
+          if (!audioCtx.current) audioCtx.current = new AudioContext();
+          const ctx = audioCtx.current;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.setValueAtTime(800, ctx.currentTime);
+          osc.frequency.setValueAtTime(1200, ctx.currentTime + 0.15);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+        } catch {}
+      } else {
+        alert(result.error || 'Payment failed');
+      }
+    } finally {
+      setCharging(null);
+    }
+  };
+
+  const handleMarkPaid = (order: Order) => {
+    updateOrderStatus(order.id, 'Confirmed');
   };
 
   const handleMarkComplete = (order: Order) => {
@@ -449,7 +529,7 @@ const FOH: React.FC = () => {
 
           {/* Orders Panel */}
           {activePanel === 'orders' && (
-            <OrderQueue orders={activeOrders} onMarkReady={() => {}} onMarkComplete={handleMarkComplete} />
+            <OrderQueue orders={activeOrders} onMarkReady={() => {}} onMarkComplete={handleMarkComplete} onMarkPaid={handleMarkPaid} onCharge={handleCharge} charging={charging} />
           )}
         </div>
       </div>

@@ -261,18 +261,19 @@ function queueSync(action, tableName, recordId, payload) {
 // ─── Cloud Sync ──────────────────────────────────────────────
 
 let isOnline = false;
+let lastSyncLog = 0;
 
 async function checkConnectivity() {
   try {
-    const res = await fetch(`${CLOUD_URL}/api/v1/health`, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(`${CLOUD_URL}/api/v1/health`, { signal: AbortSignal.timeout(3000) });
     const wasOffline = !isOnline;
     isOnline = res.ok;
     if (wasOffline && isOnline) {
-      console.log('[Sync] Internet detected — flushing queue');
+      console.log('[Sync] ✅ Internet detected — flushing queue');
       flushSyncQueue();
     }
   } catch {
-    if (isOnline) console.log('[Sync] Lost internet connection');
+    if (isOnline) console.log('[Sync] ❌ Lost internet connection');
     isOnline = false;
   }
 }
@@ -280,38 +281,63 @@ async function checkConnectivity() {
 async function flushSyncQueue() {
   const items = db.prepare('SELECT * FROM sync_queue WHERE synced = 0 ORDER BY created_at').all();
   if (items.length === 0) return;
-  console.log(`[Sync] Flushing ${items.length} queued items to cloud`);
 
-  for (const item of items) {
-    try {
-      const payload = JSON.parse(item.payload);
-
-      if (item.table_name === 'orders') {
-        if (item.action === 'CREATE') {
-          await fetch(`${CLOUD_URL}/api/v1/orders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-        } else if (item.action === 'UPDATE') {
-          await fetch(`${CLOUD_URL}/api/v1/orders/${item.record_id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-        }
-      }
-
-      // Mark as synced
-      db.prepare('UPDATE sync_queue SET synced = 1 WHERE id = ?').run(item.id);
-    } catch (err) {
-      console.error(`[Sync] Failed to sync ${item.id}:`, err.message);
-      // Will retry next cycle
-    }
+  // Only log periodically to avoid spam
+  const now = Date.now();
+  if (now - lastSyncLog > 30000) {
+    console.log(`[Sync] ${items.length} items in queue — flushing one at a time`);
+    lastSyncLog = now;
   }
 
-  // Clean up old synced items
-  db.prepare("DELETE FROM sync_queue WHERE synced = 1 AND created_at < datetime('now', '-1 hour')").run();
+  // Process ONE item per cycle — small request, survives flaky connections
+  const item = items[0];
+  try {
+    const payload = JSON.parse(item.payload);
+
+    if (item.table_name === 'orders') {
+      const endpoint = item.action === 'CREATE'
+        ? `${CLOUD_URL}/api/v1/orders`
+        : `${CLOUD_URL}/api/v1/orders/${item.record_id}`;
+      const method = item.action === 'CREATE' ? 'POST' : 'PUT';
+
+      const res = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(5000), // 5s timeout — fail fast on bad signal
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    }
+
+    // Notification queue items (SMS/email)
+    if (item.action === 'NOTIFY') {
+      const payload = JSON.parse(item.payload);
+      await fetch(`${CLOUD_URL}/api/v1${item.table_name}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(5000),
+      }).catch(() => {}); // Notifications are best-effort
+    }
+
+    // Mark as synced
+    db.prepare('UPDATE sync_queue SET synced = 1 WHERE id = ?').run(item.id);
+    console.log(`[Sync] ✅ Synced: ${item.action} ${item.table_name} ${item.record_id.slice(-6)}`);
+  } catch (err) {
+    // Increment retry count — give up after 100 retries
+    const retries = (item.retries || 0) + 1;
+    if (retries > 100) {
+      db.prepare('UPDATE sync_queue SET synced = 1 WHERE id = ?').run(item.id); // Mark as done, won't retry
+      console.error(`[Sync] ❌ Gave up on ${item.id} after 100 retries`);
+    }
+    // Will retry next cycle (5s)
+  }
+
+  // Clean up old synced items periodically
+  if (Math.random() < 0.01) { // 1% chance per cycle to avoid constant cleanup
+    db.prepare("DELETE FROM sync_queue WHERE synced = 1 AND created_at < datetime('now', '-1 hour')").run();
+  }
 }
 
 async function pullFromCloud() {
@@ -478,17 +504,31 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('');
 });
 
-// Connectivity check + sync loop
+// ─── Sync Loops ──────────────────────────────────────────────
+
+// Fast loop: check connectivity + flush queue (every 5s)
 setInterval(async () => {
   await checkConnectivity();
-  if (isOnline) {
-    await flushSyncQueue();
-    await pullFromCloud();
-  }
+  if (isOnline) await flushSyncQueue();
 }, SYNC_INTERVAL);
 
-// Initial connectivity check
+// Slow loop: pull menu/settings from cloud (every 5 min)
+setInterval(async () => {
+  if (isOnline) await pullFromCloud();
+}, 300000);
+
+// Initial sync
 checkConnectivity();
+setTimeout(() => { if (isOnline) pullFromCloud(); }, 3000);
+
+// Log queue status every 60s
+setInterval(() => {
+  const pending = db.prepare('SELECT COUNT(*) as count FROM sync_queue WHERE synced = 0').get();
+  const total = db.prepare('SELECT COUNT(*) as count FROM orders').get();
+  if (pending.count > 0 || !isOnline) {
+    console.log(`[Status] Orders: ${total.count} | Queue: ${pending.count} pending | Internet: ${isOnline ? '✅' : '❌'}`);
+  }
+}, 60000);
 
 // ─── Helpers ─────────────────────────────────────────────────
 

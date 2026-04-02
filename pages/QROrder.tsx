@@ -144,7 +144,10 @@ const Checkout: React.FC<{
           className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white font-black text-xl py-5 rounded-2xl transition active:scale-95">
           {submitting ? 'Placing...' : `Place Order — $${total.toFixed(2)}`}
         </button>
-        <p className="text-center text-gray-600 text-xs">Pay at the counter when collected</p>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+          <p className="text-gray-400 text-sm">Pay at the window when you collect</p>
+          <p className="text-gray-600 text-xs mt-1">Card, tap, or cash accepted</p>
+        </div>
       </div>
     </div>
   );
@@ -159,7 +162,8 @@ const Success: React.FC<{ orderId: string; name: string }> = ({ orderId, name })
         <CheckCircle size={48} className="text-green-400" />
       </div>
       <div className="text-white font-black text-3xl">Order placed!</div>
-      <p className="text-gray-300">Thanks {name} — we'll text you when it's ready.</p>
+      <p className="text-gray-300">Thanks {name} — head to the window to pay.</p>
+      <p className="text-gray-500 text-sm">We'll text you when it's ready.</p>
       <div className="bg-gray-900 border border-gray-800 rounded-2xl px-8 py-5">
         <div className="text-gray-500 text-sm mb-1">Your order number</div>
         <div className="text-orange-400 font-black text-4xl font-mono">#{orderId.slice(-4).toUpperCase()}</div>
@@ -229,7 +233,7 @@ const QROrder: React.FC = () => {
       id: orderId, userId: 'qr_customer', customerName: name,
       customerPhone: phone || undefined,
       items: cart.map(c => ({ item: c, quantity: c.quantity })),
-      total, status: 'Confirmed',
+      total, status: 'Pending',
       cookDay: new Date().toISOString().split('T')[0],
       type: 'TAKEAWAY', temperature: 'HOT', fulfillmentMethod: 'PICKUP',
       createdAt: new Date().toISOString(), pickupLocation: settings.businessAddress,

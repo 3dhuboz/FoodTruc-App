@@ -12,6 +12,11 @@
     "db:seed": "wrangler d1 execute foodtruck-db --file=schema.sql --remote"
   },
   "dependencies": {
+    "@capacitor-community/stripe-terminal": "^8.1.1",
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
+    "@capacitor/ios": "^8.3.0",
     "lucide-react": "^0.564.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
