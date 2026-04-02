@@ -144,18 +144,29 @@ const AppRoutes = () => {
   );
 };
 
-/** Gate: waits for tenant resolution before rendering the app */
+/** Gate: waits for tenant resolution before rendering the app.
+ *  If this is the platform tenant (chownow/default), show the SaaS Landing page
+ *  instead of the customer app — chownow.au is the host, not a food truck. */
 const TenantGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isResolved, isTenantError } = useTenant();
+  const { tenant, isResolved, isTenantError } = useTenant();
 
   if (!isResolved) {
     return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
   }
 
-  if (isTenantError) {
+  // Platform tenant or error → show SaaS landing/signup site
+  const isPlatformTenant = tenant?.id === 'default' || tenant?.slug === 'chownow';
+  if (isTenantError || isPlatformTenant) {
     return (
       <Suspense fallback={<PageLoader />}>
-        <Landing />
+        <HashRouter>
+          <ScrollToTop />
+          <Routes>
+            <Route path="/signup-success" element={<SignupSuccess />} />
+            <Route path="/qr-order" element={<QROrder />} />
+            <Route path="*" element={<Landing />} />
+          </Routes>
+        </HashRouter>
       </Suspense>
     );
   }
