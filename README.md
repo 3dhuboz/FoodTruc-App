@@ -1,92 +1,75 @@
-# FoodTruck App - White-Label Mobile Ordering Platform
+# Street Eats
 
-A fully-featured, mobile-first food truck and catering ordering web app. Built with React 19, TypeScript, Firebase, and Square Payments. White-label ready  rebrand for any food business.
+An offline-first food truck POS system with QR ordering, kitchen display, and Raspberry Pi local mode.
 
-## Features
+## What It Does
 
-- **Online Ordering**  Takeaway and catering orders with real-time tracking
-- **Catering Builder (DIY)**  Customers build custom catering packs
-- **Square Payments**  Auto-generated payment links for invoices, webhook for payment confirmation
-- **AI Assistant**  Powered by Google Gemini for chat, social content, and image generation
-- **Admin Dashboard**  Orders, planner, menu management, customers, social & AI, settings
-- **Rewards Program**  Configurable loyalty stamps system
-- **Email & SMS**  Invoice sending, order notifications, SMS blasts (Twilio/MessageBird)
-- **PWA**  Installable progressive web app with offline support
-- **Events & Gallery**  Manage cook days, events, and photo gallery
-- **Fully Configurable**  Business name, colors, logos, menus all editable from admin settings
+- **QR Ordering** — Customers scan a QR code, browse the menu, order from their phone, and pay via Stripe (Apple Pay, Google Pay, card) or at the window
+- **Front of House (FOH)** — Tablet-based POS for walk-up orders, order queue with payment status, NFC tap-to-pay via Stripe Terminal, QR throttle toggle
+- **Back of House (BOH)** — Kitchen display system with bump-to-complete workflow, auto-SMS when food is ready
+- **Offline-First** — Works without internet. Orders queue locally in IndexedDB and sync to cloud when connectivity returns
+- **Raspberry Pi Mode** — Self-contained local server with WiFi hotspot for events with no mobile coverage
+
+## Live Demo
+
+- **Customer ordering:** https://foodtruck-app.pages.dev/#/qr-order
+- **Kitchen display:** https://foodtruck-app.pages.dev/#/boh (PIN: 1234)
+- **Front of house POS:** https://foodtruck-app.pages.dev/#/foh (PIN: 1234)
+- **Admin panel:** https://foodtruck-app.pages.dev/#/admin (admin / admin123)
+- **Product page:** https://foodtruck-app.pages.dev/#/landing
 
 ## Tech Stack
 
-- **Frontend:** React 19, TypeScript, TailwindCSS 4, Lucide Icons
-- **Backend:** Express 5 (dev server), Vercel Serverless Functions (production)
-- **Database:** Firebase (Auth, Firestore, Storage)
-- **Payments:** Square (Checkout API + Webhooks)
-- **AI:** Google Gemini, Anthropic Claude
-- **Email:** Nodemailer (SMTP), SendGrid, Amazon SES
-- **SMS:** Twilio, MessageBird
-- **Build:** Vite 6
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, TypeScript, Vite, TailwindCSS 4 |
+| Backend | Cloudflare Pages Functions |
+| Database | Cloudflare D1 (SQLite, Sydney) |
+| Offline | IndexedDB + outbox queue + auto-sync |
+| Payments | Stripe Checkout + Stripe Terminal (NFC) |
+| Native App | Capacitor 8 (Android + iOS) |
+| AI | OpenRouter (Gemini 2.5 Flash) |
+| Pi Server | Node.js + better-sqlite3 |
+| PWA | vite-plugin-pwa + service worker |
 
 ## Quick Start
 
-1. Clone this repo
-2. Copy `.env.example` to `.env` and fill in your Firebase + API keys
-3. Install dependencies:
-   ```
-   npm install
-   ```
-4. Start the dev server:
-   ```
-   npm run dev
-   ```
-5. Open http://localhost:5173
+```bash
+npm install
+npm run dev          # Vite + wrangler pages dev
+npm run build        # Build for production
+npm run deploy       # Build + deploy to CF Pages
+```
 
-## Configuration
+## Raspberry Pi Setup
 
-### Firebase Setup
-1. Create a Firebase project at https://console.firebase.google.com
-2. Enable Authentication (Email/Password)
-3. Create a Firestore database
-4. Enable Storage
-5. Copy your config values into `.env`
+```bash
+git clone https://github.com/3dhuboz/FoodTruc-App.git ~/street-eats
+cd ~/street-eats && npm run build
+cd pi-server && sudo chmod +x setup-pi.sh && sudo ./setup-pi.sh
+sudo street-eats-connect-phone.sh "YourPhone" "password"
+```
 
-### Square Payments Setup
-1. Create a Square Developer account at https://developer.squareup.com
-2. Get your Access Token and Location ID
-3. Configure in Admin > Dev Tools > Payment Gateway
-4. Set up webhook URL: `https://your-domain.com/api/v1/payment/square-webhook`
-5. Subscribe to `payment.completed` events
+Hardware: Raspberry Pi 5 + USB WiFi adapter with antenna (~$35 AUD)
 
-### Admin Login
-Default admin credentials are configured in Settings. First-time setup available at `/setup`.
+## Stripe Setup
 
-### Environment Variables
-See `.env.example` for all required and optional environment variables.
+```bash
+npx wrangler pages secret put STRIPE_SECRET_KEY --project-name foodtruck-app
+```
 
-## Deployment
+Webhook: `https://foodtruck-app.pages.dev/api/v1/stripe/webhook` → `checkout.session.completed`
 
-### Vercel (Recommended)
-1. Connect your GitHub repo to Vercel
-2. Set environment variables in Vercel dashboard
-3. Deploy  serverless API routes are auto-detected from `/api` folder
-
-### Custom Server
-The Express server in `server.ts` handles both the Vite dev middleware and all API routes for local development.
-
-## Project Structure
+## Order Flow
 
 ```
-/api/v1/           Vercel serverless API routes
-/components/       Shared React components (Layout, Toast, etc.)
-/context/          AppContext (global state management)
-/pages/            All page components (Home, Menu, Order, Admin, etc.)
-/pages/admin/      Admin dashboard tabs
-/public/           Static assets, PWA manifest
-/services/         Firebase, Gemini AI, Data Seeder
-server.ts          Express dev server with all API routes
-constants.ts       Default settings and seed data
-types.ts           TypeScript interfaces
+Customer scans QR → browses menu → places order
+  → Pays online (Stripe) → "Confirmed" → kitchen
+  → Or pays at window → FOH marks paid → "Confirmed" → kitchen
+  → BOH cooks → BUMP → customer gets SMS → collects food
+  → No food without payment. No walk-offs.
 ```
 
 ## License
 
-Private  All rights reserved.
+Private — All rights reserved.

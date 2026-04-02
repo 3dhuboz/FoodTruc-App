@@ -335,7 +335,7 @@ const QROrder: React.FC = () => {
       {/* Category Pills — sticky */}
       <div className="sticky top-0 z-10 bg-gray-950/95 backdrop-blur-xl border-b border-gray-800 px-4 py-2.5 flex gap-2 overflow-x-auto scrollbar-hide">
         {categories.map(cat => (
-          <button key={cat} onClick={() => setActiveCategory(cat)}
+          <button key={cat} onClick={() => { setActiveCategory(cat); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
             className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-semibold transition ${
               activeCategory === cat ? 'bg-orange-500 text-white' : 'bg-gray-800 text-gray-400'
             }`}>{cat}</button>
