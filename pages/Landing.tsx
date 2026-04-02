@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   CreditCard, Bell, Smartphone, Globe, Shield, Zap, Star,
   CheckCircle, ArrowRight, ChefHat, Clock, WifiOff, QrCode, Monitor,
-  ChevronDown, X, Loader2, XCircle, Package, Cpu, Wifi,
+  ChevronDown, X, Loader2, XCircle, Package, Cpu, Wifi, Plus,
   ClipboardList, Timer, BadgeDollarSign, Quote, MapPin
 } from 'lucide-react';
 
