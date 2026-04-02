@@ -38,17 +38,28 @@ const STEPS = [
     visual: 'phone',
     sceneBg: 'from-orange-950 to-gray-950',
     sceneDetail: (
-      <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 max-w-xs mx-auto">
-        <div className="flex items-center justify-center mb-4">
-          <div className="w-32 h-32 bg-white rounded-2xl p-3 flex items-center justify-center">
-            <QrCode size={80} className="text-gray-900" />
+      <div className="space-y-4">
+        {/* Food truck image with QR overlay */}
+        <div className="relative rounded-2xl overflow-hidden h-48">
+          <img src="https://images.unsplash.com/photo-1567129937968-cdad8f07daa0?auto=format&fit=crop&w=800&q=80" alt="Food truck window" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/20" />
+          <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
+            <div>
+              <p className="text-white font-bold text-lg">Your Truck</p>
+              <p className="text-white/60 text-sm">No queue. Just a sign.</p>
+            </div>
+            <div className="w-16 h-16 bg-white rounded-xl p-1.5 flex items-center justify-center shadow-lg">
+              <QrCode size={40} className="text-gray-900" />
+            </div>
           </div>
         </div>
-        <div className="text-center">
-          <p className="text-white font-bold text-lg">📱 Scan to Order</p>
-          <p className="text-gray-500 text-sm mt-1">Camera opens → menu loads → done</p>
-          <div className="mt-3 flex items-center justify-center gap-2 text-green-400 text-sm font-bold">
-            <CheckCircle size={14} /> No app download needed
+        <div className="bg-gray-900 rounded-xl border border-gray-800 p-4 flex items-center gap-4">
+          <div className="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center border border-green-500/20">
+            <CheckCircle size={20} className="text-green-400" />
+          </div>
+          <div>
+            <p className="text-white font-bold text-sm">No app download needed</p>
+            <p className="text-gray-500 text-xs">Camera opens → menu loads → 2 seconds</p>
           </div>
         </div>
       </div>
@@ -74,16 +85,17 @@ const STEPS = [
         </div>
         <div className="p-3 space-y-2">
           {[
-            { name: 'Smash Burger', price: '$16.50', desc: 'Double patty, cheese, sauce' },
-            { name: 'Loaded Fries', price: '$12.00', desc: 'Pulled pork, cheese, jalapeños' },
-            { name: 'Cold Brew', price: '$5.00', desc: 'House-made, served over ice' },
+            { name: 'Smash Burger', price: '$16.50', desc: 'Double patty, cheese, sauce', img: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=120&q=80' },
+            { name: 'Loaded Fries', price: '$12.00', desc: 'Pulled pork, cheese, jalapeños', img: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=120&q=80' },
+            { name: 'Cold Brew', price: '$5.00', desc: 'House-made, served over ice', img: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=120&q=80' },
           ].map((item, i) => (
-            <div key={i} className="bg-gray-800 rounded-xl p-3 flex items-center justify-between">
-              <div>
+            <div key={i} className="bg-gray-800 rounded-xl p-2 flex items-center gap-3">
+              <img src={item.img} alt={item.name} className="w-14 h-14 rounded-lg object-cover shrink-0" />
+              <div className="flex-1 min-w-0">
                 <p className="text-white text-sm font-bold">{item.name}</p>
                 <p className="text-gray-500 text-[10px]">{item.desc}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col items-end gap-1 shrink-0">
                 <span className="text-orange-400 text-sm font-bold">{item.price}</span>
                 <div className="w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center">
                   <span className="text-white text-xs font-bold">+</span>
@@ -189,8 +201,12 @@ const STEPS = [
             <p className="text-green-400/60 text-xs mt-1">"Your order is ready for pickup!"</p>
           </div>
         </div>
-        <div className="text-center text-gray-500 text-sm">
-          🏃 → 🍔🍟☕ → 😊👍
+        <div className="relative rounded-xl overflow-hidden h-32">
+          <img src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=600&q=80" alt="Food ready for pickup" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+          <div className="absolute bottom-3 left-3 text-white text-sm font-bold flex items-center gap-2">
+            <CheckCircle size={14} className="text-green-400" /> Walks to window. Picks up. Done.
+          </div>
         </div>
       </div>
     ),
