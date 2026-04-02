@@ -42,9 +42,15 @@ const RotatingWords: React.FC = () => {
     const timer = setInterval(() => setIdx(p => (p + 1) % words.length), 2500);
     return () => clearInterval(timer);
   }, []);
+  // Render all words in a stacked container — the longest word sets the width,
+  // only the active word is visible. This prevents layout shifts.
   return (
-    <span className="inline-block">
-      <span className="text-orange-400 transition-opacity duration-500">{words[idx]}</span>
+    <span className="inline-grid">
+      {words.map((w, i) => (
+        <span key={i} className={`col-start-1 row-start-1 text-orange-400 transition-opacity duration-500 ${i === idx ? 'opacity-100' : 'opacity-0'}`}>
+          {w}
+        </span>
+      ))}
     </span>
   );
 };
