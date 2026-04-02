@@ -218,88 +218,47 @@ const Landing: React.FC = () => {
         <div className="absolute inset-0">
           <video
             autoPlay muted loop playsInline
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover scale-105"
             poster={IMG.foodTruck}
           >
-            <source src="https://videos.pexels.com/video-files/3298572/3298572-uhd_2560_1440_30fps.mp4" type="video/mp4" />
+            {/* Happy people at food trucks / street food festivals */}
+            <source src="https://videos.pexels.com/video-files/2709388/2709388-uhd_2560_1440_24fps.mp4" type="video/mp4" />
           </video>
-          {/* Dark gradient overlays for text readability */}
-          <div className="absolute inset-0 bg-gray-950/75" />
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-gray-950/60 to-gray-950/40" />
-          <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-gray-950/50" />
+          <div className="absolute inset-0 bg-gray-950/70" />
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/30 to-gray-950/60" />
         </div>
-        {/* Glow orbs */}
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-orange-500/8 rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-orange-600/5 rounded-full blur-[100px]" />
 
-        <div className="relative max-w-6xl mx-auto px-6 pt-28 pb-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          {/* Left: Text */}
-          <div>
-            <div className="inline-flex items-center gap-2 bg-orange-500/10 text-orange-400 px-4 py-2 rounded-full text-sm font-bold mb-6 border border-orange-500/20 animate-fade-in">
-              <Zap size={14} /> Built for Australian food trucks
-            </div>
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-black leading-[0.9] mb-6">
-              Your food truck,<br />
-              <RotatingWords />
-            </h1>
-            <p className="text-lg md:text-xl text-gray-400 max-w-lg mb-8 leading-relaxed">
-              The all-in-one system that replaces your clipboard, calculator, and shouting across the kitchen. Works offline. ChowBox included — the brains of your truck.
-            </p>
-            <div className="flex flex-wrap gap-4 mb-8">
-              <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-2xl text-lg transition active:scale-95 flex items-center gap-2 shadow-lg shadow-orange-500/20">
-                Get Started <ArrowRight size={20} />
-              </button>
-              <a href="#/qr-order" className="bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-2xl text-lg transition border border-white/10 flex items-center gap-2">
-                <QrCode size={18} /> Try Demo
-              </a>
-            </div>
-            <div className="flex items-center gap-6 text-sm text-gray-500">
-              <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> No contracts</span>
-              <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> ChowBox included</span>
-              <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> Cancel anytime</span>
-            </div>
+        {/* Content — centered */}
+        <div className="relative max-w-4xl mx-auto px-6 pt-32 pb-24 text-center">
+          <div className="inline-flex items-center gap-2 bg-orange-500/15 text-orange-400 px-5 py-2.5 rounded-full text-sm font-bold mb-8 border border-orange-500/20 backdrop-blur-sm">
+            <Zap size={14} /> Built for Australian food trucks
           </div>
-
-          {/* Right: 3D Device Mockup */}
-          <div className="hidden lg:block perspective-1000">
-            <div className="relative device-3d">
-              {/* Main device frame */}
-              <div className="relative bg-gray-900/80 backdrop-blur-sm rounded-3xl border border-gray-700/50 p-3 shadow-2xl shadow-black/50">
-                <div className="bg-gray-950 rounded-2xl overflow-hidden aspect-[9/16] max-h-[500px] relative">
-                  <img src={IMG.burger} alt="Food truck menu" className="w-full h-full object-cover opacity-90" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-5 space-y-3">
-                    <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/10">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-white text-sm font-bold">Smash Burger</span>
-                        <span className="text-orange-400 text-sm font-bold">$16.50</span>
-                      </div>
-                      <div className="text-gray-400 text-xs">Double patty, cheese, pickles, special sauce</div>
-                    </div>
-                    <div className="bg-orange-500 rounded-xl p-3 text-center">
-                      <span className="text-white text-sm font-bold flex items-center justify-center gap-2"><QrCode size={14} /> Add to Order</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Floating elements */}
-              <div className="absolute -top-6 -right-8 bg-green-500/90 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg animate-float">
-                Order #47 Ready!
-              </div>
-              <div className="absolute -bottom-4 -left-8 bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-xl text-sm shadow-lg animate-float-slow flex items-center gap-2">
-                <CreditCard size={14} className="text-orange-400" /> Tap to pay
-              </div>
-              <div className="absolute top-1/3 -right-12 bg-orange-500/90 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg animate-float-delayed">
-                +$24.50
-              </div>
-            </div>
+          <h1 className="text-5xl md:text-6xl lg:text-8xl font-black leading-[0.85] mb-6">
+            Your food truck,<br />
+            <RotatingWords />
+          </h1>
+          <p className="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto mb-10 leading-relaxed">
+            The all-in-one system that replaces your clipboard, calculator, and shouting across the kitchen. Powered by the ChowBox — the brains of your truck.
+          </p>
+          <div className="flex flex-wrap gap-4 justify-center mb-10">
+            <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-black px-10 py-5 rounded-2xl text-xl transition active:scale-95 flex items-center gap-3 shadow-lg shadow-orange-500/25">
+              Get Started <ArrowRight size={22} />
+            </button>
+            <a href="#/qr-order" className="bg-white/10 hover:bg-white/15 backdrop-blur-sm text-white font-bold px-10 py-5 rounded-2xl text-xl transition border border-white/20 flex items-center gap-3">
+              <QrCode size={20} /> Try Demo
+            </a>
+          </div>
+          <div className="flex items-center justify-center gap-8 text-sm text-gray-400">
+            <span className="flex items-center gap-2"><CheckCircle size={16} className="text-green-400" /> No contracts</span>
+            <span className="flex items-center gap-2"><CheckCircle size={16} className="text-green-400" /> ChowBox included</span>
+            <span className="flex items-center gap-2"><CheckCircle size={16} className="text-green-400" /> Cancel anytime</span>
           </div>
         </div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-gray-600 animate-pulse-slow">
-          <span className="text-xs uppercase tracking-widest">Scroll</span>
-          <ChevronDown size={16} />
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-gray-500 animate-pulse-slow">
+          <span className="text-xs uppercase tracking-widest font-bold">Scroll</span>
+          <ChevronDown size={18} />
         </div>
       </div>
 
