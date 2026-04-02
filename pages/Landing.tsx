@@ -102,7 +102,7 @@ const SignupModal: React.FC<SignupModalProps> = ({ plan, onClose }) => {
             {plan === 'pro' ? 'PRO' : 'STARTER'} PLAN
           </div>
           <h2 className="text-2xl font-black text-white">Get started with ChowNow</h2>
-          <p className="text-gray-400 text-sm mt-1">{plan === 'pro' ? '$99/month' : '$49/month'} + ChowBox</p>
+          <p className="text-gray-400 text-sm mt-1">{plan === 'pro' ? '$149/month' : '$99/month'} + $299 ChowBox</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -587,38 +587,54 @@ const Landing: React.FC = () => {
             <Timer size={14} /> Save 10+ hours/week on order management
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 perspective-1000">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 perspective-1000">
           {/* Starter */}
-          <div className="card-3d bg-gray-900 border border-gray-800 rounded-2xl p-8">
-            <div className="text-orange-400 font-bold text-sm uppercase tracking-widest mb-2">Starter</div>
+          <div className="card-3d bg-gray-900 border border-gray-800 rounded-2xl p-7">
+            <div className="text-gray-400 font-bold text-sm uppercase tracking-widest mb-2">Starter</div>
             <div className="flex items-baseline gap-1 mb-1">
-              <span className="text-5xl font-black text-white">$49</span>
+              <span className="text-5xl font-black text-white">$99</span>
               <span className="text-gray-500 text-lg">/month</span>
             </div>
-            <p className="text-gray-600 text-sm mb-6">+ one-time ChowBox fee</p>
+            <p className="text-gray-600 text-sm mb-6">+ $299 ChowBox (one-time)</p>
             <ul className="space-y-3 mb-8">
-              {['FOH + BOH + QR ordering', 'Unlimited orders', 'SMS notifications (BYO Twilio)', 'Offline mode + ChowBox', 'Up to 2 devices', '31-item menu'].map((f, i) => (
-                <li key={i} className="flex items-center gap-3 text-gray-300 text-sm"><CheckCircle size={16} className="text-green-400 shrink-0" /> {f}</li>
+              {['FOH + BOH + QR ordering', 'Unlimited orders', 'SMS notifications', 'Offline mode', 'Up to 2 devices', '31-item menu'].map((f, i) => (
+                <li key={i} className="flex items-center gap-2 text-gray-300 text-sm"><CheckCircle size={14} className="text-green-400 shrink-0" /> {f}</li>
               ))}
             </ul>
             <button onClick={() => setSignupPlan('starter')} className="block w-full text-center bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 rounded-xl border border-white/10 transition text-lg">Get Started</button>
           </div>
 
           {/* Pro */}
-          <div className="card-3d relative bg-gray-900 rounded-2xl p-8 glow-border">
-            <div className="absolute -top-3 right-6 bg-orange-500 text-white text-xs font-black px-4 py-1 rounded-full">MOST POPULAR</div>
+          <div className="card-3d relative bg-gray-900 border-2 border-orange-500/50 rounded-2xl p-7">
+            <div className="absolute -top-3 right-6 bg-orange-500 text-white text-xs font-black px-4 py-1 rounded-full">POPULAR</div>
             <div className="text-orange-400 font-bold text-sm uppercase tracking-widest mb-2">Pro</div>
             <div className="flex items-baseline gap-1 mb-1">
-              <span className="text-5xl font-black text-white">$99</span>
+              <span className="text-5xl font-black text-white">$149</span>
               <span className="text-gray-500 text-lg">/month</span>
             </div>
-            <p className="text-gray-600 text-sm mb-6">+ one-time ChowBox fee</p>
+            <p className="text-gray-600 text-sm mb-6">+ $299 ChowBox (one-time)</p>
             <ul className="space-y-3 mb-8">
               {['Everything in Starter', 'Unlimited devices', 'Unlimited menu items', 'Stripe Terminal payments', 'Catering & event management', 'Custom branding', 'Priority support'].map((f, i) => (
-                <li key={i} className="flex items-center gap-3 text-gray-300 text-sm"><CheckCircle size={16} className="text-green-400 shrink-0" /> {f}</li>
+                <li key={i} className="flex items-center gap-2 text-gray-300 text-sm"><CheckCircle size={14} className="text-green-400 shrink-0" /> {f}</li>
               ))}
             </ul>
-            <button onClick={() => setSignupPlan('pro')} className="block w-full text-center bg-orange-500 hover:bg-orange-400 text-white font-black py-3.5 rounded-xl transition text-lg shadow-lg shadow-orange-500/20">Get Started</button>
+            <button onClick={() => setSignupPlan('pro')} className="block w-full text-center bg-orange-500 hover:bg-orange-400 text-white font-black py-3.5 rounded-xl transition text-lg">Get Started</button>
+          </div>
+
+          {/* ChowBox */}
+          <div className="card-3d bg-gray-900 border border-gray-800 rounded-2xl p-7">
+            <div className="text-green-400 font-bold text-sm uppercase tracking-widest mb-2 flex items-center gap-2"><Package size={14} /> ChowBox</div>
+            <div className="flex items-baseline gap-1 mb-1">
+              <span className="text-5xl font-black text-white">$299</span>
+              <span className="text-gray-500 text-lg">one-time</span>
+            </div>
+            <p className="text-gray-600 text-sm mb-6">The brains of your truck</p>
+            <ul className="space-y-3 mb-8">
+              {['Pre-configured hardware', 'Creates own WiFi hotspot', 'Works with zero signal', 'Plug in and go', 'Runs entire system offline', 'Shipped to your door'].map((f, i) => (
+                <li key={i} className="flex items-center gap-2 text-gray-300 text-sm"><CheckCircle size={14} className="text-green-400 shrink-0" /> {f}</li>
+              ))}
+            </ul>
+            <p className="text-center text-gray-500 text-sm font-medium">Included with every plan signup</p>
           </div>
         </div>
       </Section>
