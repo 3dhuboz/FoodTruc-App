@@ -55,7 +55,7 @@ export const onRequest = async (context: any) => {
     const existing = await db.prepare("SELECT COUNT(*) as count FROM settings WHERE tenant_id = ?").bind(resolvedTenantId).first() as any;
     if (existing.count === 0) {
       const defaults = {
-        businessName: 'Street Eats',
+        businessName: 'ChowNow',
         businessAddress: '',
         maintenanceMode: false,
         rewards: { enabled: false, staffPin: '1234', maxStamps: 10, programName: 'Rewards', rewardTitle: 'Free Item', rewardImage: '', possiblePrizes: [] },

@@ -1,13 +1,13 @@
 {
-  "short_name": "Street Eats",
-  "name": "Street Eats",
-  "description": "Order ahead from food trucks. Skip the queue, get notified when your food is ready.",
+  "short_name": "ChowNow",
+  "name": "ChowNow",
+  "description": "Food truck workflow, sorted. Order ahead, skip the queue, get notified when your food is ready.",
   "categories": ["food", "shopping", "lifestyle"],
   "icons": [
     {
-      "src": "/favicon.svg",
-      "type": "image/svg+xml",
-      "sizes": "any",
+      "src": "/favicon.png",
+      "type": "image/png",
+      "sizes": "32x32",
       "purpose": "any"
     },
     {
@@ -17,7 +17,7 @@
       "purpose": "any maskable"
     },
     {
-      "src": "/logo.png",
+      "src": "/icon-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any maskable"

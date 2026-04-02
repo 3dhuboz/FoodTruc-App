@@ -227,7 +227,7 @@ const TruckPanel: React.FC = () => {
               <div>
                 <h4 className="text-white font-bold text-lg">No Signal? No Problem.</h4>
                 <p className="text-gray-400 text-sm mt-1">
-                  When running at events with no mobile coverage, use the Street Eats Pi. Customers scan this WiFi QR code — their phone auto-connects to the local network and the ordering page opens automatically via captive portal. Zero internet required.
+                  When running at events with no mobile coverage, use the ChowNow Pi. Customers scan this WiFi QR code — their phone auto-connects to the local network and the ordering page opens automatically via captive portal. Zero internet required.
                 </p>
               </div>
               <div className="bg-gray-800 rounded-xl p-4 space-y-2 text-sm">
@@ -254,7 +254,7 @@ const TruckPanel: React.FC = () => {
                 </a>
               </div>
               <p className="text-gray-600 text-xs">
-                Requires a Raspberry Pi running the Street Eats local server. Print this QR code alongside your regular QR code — flip between them based on signal.
+                Requires a Raspberry Pi running the ChowNow local server. Print this QR code alongside your regular QR code — flip between them based on signal.
               </p>
             </div>
           </div>

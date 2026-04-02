@@ -1,4 +1,14 @@
 
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string;
+  primaryColor: string;
+  plan: string;
+  status: string;
+}
+
 export enum UserRole {
   GUEST = 'GUEST',
   CUSTOMER = 'CUSTOMER',

@@ -2,10 +2,14 @@
  * API client for Cloudflare D1 backend.
  * All data goes through /api/v1/* endpoints.
  */
-import type { MenuItem, Order, CalendarEvent, User, SocialPost, GalleryPost, AppSettings } from '../types';
+import type { MenuItem, Order, CalendarEvent, User, SocialPost, GalleryPost, AppSettings, Tenant } from '../types';
 
 let getToken: () => Promise<string | null> = async () => null;
 export const initApi = (tokenFn: () => Promise<string | null>) => { getToken = tokenFn; };
+
+// Dev-mode tenant override (set via TenantContext when running on localhost)
+let devTenantId: string | null = null;
+export const setDevTenantId = (id: string | null) => { devTenantId = id; };
 
 // Auto-detect local mode (Pi server) vs cloud mode
 function getBaseUrl(): string {
@@ -27,6 +31,7 @@ async function apiFetch<T = any>(path: string, options: RequestInit = {}): Promi
   const token = await getToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string> || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (devTenantId && isLocalMode()) headers['X-Tenant-ID'] = devTenantId;
   const base = getBaseUrl();
   const res = await fetch(`${base}/api/v1${path}`, { ...options, headers });
   if (!res.ok) {
@@ -100,3 +105,6 @@ export const sendSms = (endpoint: string, payload: any) =>
   apiFetch(`/sms/${endpoint}`, { method: 'POST', body: JSON.stringify(payload) }).catch(() => {});
 export const sendEmail = (endpoint: string, payload: any) =>
   apiFetch(`/email/${endpoint}`, { method: 'POST', body: JSON.stringify(payload) }).catch(() => {});
+
+// Tenant (no auth required — used on bootstrap)
+export const fetchTenant = () => apiFetch<Tenant>('/tenant');

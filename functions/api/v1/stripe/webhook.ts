@@ -53,7 +53,7 @@ export const onRequest = async (context: any) => {
               body: JSON.stringify({
                 settings: parsed.smsSettings,
                 order: { id: orderId, customerName: order.customer_name, customerPhone: order.customer_phone, status: 'Confirmed' },
-                businessName: parsed.businessName || 'Street Eats',
+                businessName: parsed.businessName || 'ChowNow',
               }),
             }).catch(() => {});
           }

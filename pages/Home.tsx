@@ -5,7 +5,7 @@ import { ShoppingCart, QrCode, Calendar, Clock, MapPin, ChefHat, ArrowRight, Fla
 
 const Home: React.FC = () => {
   const { settings, menu, calendarEvents, orders } = useApp();
-  const businessName = settings.businessName || 'Street Eats';
+  const businessName = settings.businessName || 'ChowNow';
   const address = settings.businessAddress || '';
   const logo = settings.logoUrl;
 
@@ -196,7 +196,7 @@ const Home: React.FC = () => {
       {/* Footer tagline */}
       <div className="text-center py-12 px-6">
         <p className="text-gray-600 text-sm">
-          Powered by <span className="text-orange-400 font-bold">Street Eats</span>
+          Powered by <span className="text-orange-400 font-bold">ChowNow</span>
         </p>
       </div>
     </div>

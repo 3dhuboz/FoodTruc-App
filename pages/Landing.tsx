@@ -27,8 +27,8 @@ const Landing: React.FC = () => {
   ];
 
   const faqs = [
-    { q: 'Do I need special hardware?', a: 'No. Street Eats runs in any web browser. Use an iPad, Android tablet, old laptop — whatever you have. For payments, plug in a Stripe Terminal reader or use Tap to Pay on your phone.' },
-    { q: 'Does it work without internet?', a: 'Yes. Street Eats has a full offline mode. Orders are saved locally in IndexedDB and sync automatically when connectivity returns. Menu stays cached so customers can still browse.' },
+    { q: 'Do I need special hardware?', a: 'No. ChowNow runs in any web browser. Use an iPad, Android tablet, old laptop — whatever you have. For payments, plug in a Stripe Terminal reader or use Tap to Pay on your phone.' },
+    { q: 'Does it work without internet?', a: 'Yes. ChowNow has a full offline mode. Orders are saved locally in IndexedDB and sync automatically when connectivity returns. Menu stays cached so customers can still browse.' },
     { q: 'How do customers order?', a: 'They scan a QR code displayed on your truck. This opens a mobile-friendly menu in their browser — no app download. They add items, enter their name and phone, and place the order. They get an SMS when food is ready.' },
     { q: 'What about payments?', a: 'Currently supports pay-at-counter (cash or card via your existing terminal). Stripe Terminal integration for in-app tap-to-pay is coming soon.' },
     { q: 'Can I use it for events and festivals?', a: 'Absolutely. The QR ordering is perfect for high-volume events — customers order from the queue instead of waiting at the window. The kitchen display handles the volume.' },
@@ -226,7 +226,7 @@ const Landing: React.FC = () => {
       <div className="border-t border-gray-800 bg-gradient-to-b from-gray-900 to-gray-950">
         <div className="max-w-3xl mx-auto px-6 py-20 text-center">
           <h2 className="text-3xl md:text-4xl font-black mb-4">Ready to ditch the clipboard?</h2>
-          <p className="text-gray-400 mb-8 max-w-xl mx-auto">Set up Street Eats in minutes. No hardware, no contracts, no onboarding calls. Just a better way to run your truck.</p>
+          <p className="text-gray-400 mb-8 max-w-xl mx-auto">Set up ChowNow in minutes. No hardware, no contracts, no onboarding calls. Just a better way to run your truck.</p>
           <a href="#/qr-order" className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-2xl text-lg transition active:scale-95">
             Try the Demo <ArrowRight size={20} />
           </a>
@@ -238,7 +238,7 @@ const Landing: React.FC = () => {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
           <div className="flex items-center gap-2">
             <ChefHat size={18} className="text-orange-400" />
-            <span className="font-bold text-white">Street Eats</span>
+            <span className="font-bold text-white">ChowNow</span>
           </div>
           <div>Built in Australia. Powered by Cloudflare.</div>
         </div>

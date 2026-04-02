@@ -30,7 +30,7 @@ const PinGate: React.FC<{ pin: string; onUnlock: () => void }> = ({ pin, onUnloc
   return (
     <div className="fixed inset-0 bg-gray-950 flex flex-col items-center justify-center gap-8">
       <div className="flex items-center gap-3 text-white text-2xl font-bold">
-        <ChefHat size={32} className="text-orange-400" /> Street Eats POS
+        <ChefHat size={32} className="text-orange-400" /> ChowNow POS
       </div>
       <div className={`flex gap-3 ${shake ? 'animate-bounce' : ''}`}>
         {Array.from({ length: pin.length }).map((_, i) => (

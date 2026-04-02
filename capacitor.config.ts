@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'au.com.streeteats.app',
-  appName: 'Street Eats',
+  appId: 'au.com.chownow.app',
+  appName: 'ChowNow',
   webDir: 'dist',
   server: {
     // Allow loading images from Unsplash (menu item photos)

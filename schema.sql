@@ -34,8 +34,8 @@ CREATE INDEX IF NOT EXISTS idx_tenants_subdomain ON tenants(subdomain);
 CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
 
 -- Seed default tenant
-INSERT OR IGNORE INTO tenants (id, name, slug, subdomain, plan, status)
-VALUES ('default', 'Street Eats', 'street-eats', 'app', 'enterprise', 'active');
+INSERT OR IGNORE INTO tenants (id, name, slug, subdomain, plan, status, logo_url)
+VALUES ('default', 'ChowNow', 'chownow', 'app', 'enterprise', 'active', '/logo.png');
 
 -- ─── Users ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (

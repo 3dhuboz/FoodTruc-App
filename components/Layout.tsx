@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { useTenant } from '../context/TenantContext';
 import { Link, useLocation } from 'react-router-dom';
 import { ChefHat, UtensilsCrossed, CalendarDays, User as UserIcon, LogOut, LayoutDashboard, Mail, MapPin, Menu, X, Gift, AlertTriangle, Image as ImageIcon, QrCode, ShoppingCart, WifiOff } from 'lucide-react';
 
@@ -9,10 +10,15 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout, cart, settings, connectionError, isOnline, pendingSyncCount } = useApp();
+  const { tenant } = useTenant();
   const location = useLocation();
-  const businessName = settings.businessName || 'Street Eats';
+  // Tenant name takes priority, then settings, then fallback
+  const businessName = tenant?.name || settings.businessName || 'ChowNow';
+  // Tenant logo takes priority, then settings logo
+  const logoUrl = tenant?.logoUrl || settings?.logoUrl;
 
-  const isActive = (path: string) => location.pathname === path ? 'text-orange-400' : 'text-gray-400 hover:text-white';
+  const brandColor = tenant?.primaryColor || '#f97316';
+  const isActive = (path: string) => location.pathname === path ? 'text-[var(--brand-color)]' : 'text-gray-400 hover:text-white';
 
   const NavItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => (
     <Link to={to} className={`flex flex-col items-center justify-center space-y-1 ${isActive(to)} transition-colors duration-300`}>
@@ -36,9 +42,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Desktop Header */}
       <header className={`hidden md:flex items-center justify-between px-8 py-4 fixed top-0 left-0 right-0 z-50 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/50 transition-all ${connectionError ? 'mt-8' : ''}`}>
         <Link to="/" className="flex items-center gap-3 group">
-          {settings?.logoUrl ? (
+          {logoUrl ? (
             <div className="w-12 h-12 flex items-center justify-center overflow-visible">
-              <img src={settings.logoUrl} alt={businessName} className="w-full h-full object-contain" />
+              <img src={logoUrl} alt={businessName} className="w-full h-full object-contain" />
             </div>
           ) : (
             <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center border border-orange-500/20">
@@ -98,9 +104,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Mobile Header */}
       <header className={`md:hidden flex items-center justify-between p-4 fixed top-0 w-full z-50 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/50 ${connectionError ? 'mt-8' : ''}`}>
         <Link to="/" className="flex items-center gap-2">
-          {settings?.logoUrl ? (
+          {logoUrl ? (
             <div className="w-9 h-9 flex items-center justify-center overflow-visible">
-              <img src={settings.logoUrl} alt={businessName} className="w-full h-full object-contain" />
+              <img src={logoUrl} alt={businessName} className="w-full h-full object-contain" />
             </div>
           ) : (
             <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center border border-orange-500/20">
@@ -133,8 +139,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           {/* Brand */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              {settings?.logoUrl ? (
-                <img src={settings.logoUrl} alt={businessName} className="h-10 object-contain" />
+              {logoUrl ? (
+                <img src={logoUrl} alt={businessName} className="h-10 object-contain" />
               ) : (
                 <ChefHat size={24} className="text-orange-400" />
               )}
@@ -165,7 +171,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               © {new Date().getFullYear()} {businessName}. All rights reserved.
             </p>
             <p className="text-xs text-gray-700 mt-2">
-              Powered by <span className="text-orange-400 font-bold">Street Eats</span>
+              Powered by <span className="text-orange-400 font-bold">ChowNow</span>
             </p>
           </div>
         </div>

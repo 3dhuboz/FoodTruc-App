@@ -93,7 +93,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const BUILD_VERSION = '2026.04.01a';
-  console.log(`[Street Eats] Build ${BUILD_VERSION} — Cloudflare D1 + Offline-First`);
+  console.log(`[ChowNow] Build ${BUILD_VERSION} — Cloudflare D1 + Offline-First`);
 
   const [isLoading, setIsLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);

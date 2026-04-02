@@ -2,6 +2,7 @@
 import React, { Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
+import { TenantProvider, useTenant } from './context/TenantContext';
 import Layout from './components/Layout';
 import ScrollToTop from './components/ScrollToTop';
 import { ToastProvider } from './components/Toast';
@@ -141,15 +142,38 @@ const AppRoutes = () => {
   );
 };
 
+/** Gate: waits for tenant resolution before rendering the app */
+const TenantGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isResolved, isTenantError } = useTenant();
+
+  if (!isResolved) {
+    return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
+  }
+
+  if (isTenantError) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <Landing />
+      </Suspense>
+    );
+  }
+
+  return <>{children}</>;
+};
+
 const App: React.FC = () => {
   return (
     <ToastProvider>
-      <AppProvider>
-        <HashRouter>
-          <ScrollToTop />
-          <AppRoutes />
-        </HashRouter>
-      </AppProvider>
+      <TenantProvider>
+        <TenantGate>
+          <AppProvider>
+            <HashRouter>
+              <ScrollToTop />
+              <AppRoutes />
+            </HashRouter>
+          </AppProvider>
+        </TenantGate>
+      </TenantProvider>
     </ToastProvider>
   );
 };

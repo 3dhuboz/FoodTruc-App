@@ -333,14 +333,14 @@ export const INITIAL_SETTINGS: AppSettings = {
     BBQ_IMGS.burger2,
     BBQ_IMGS.fries
   ],
-  businessName: "Street Eats",
+  businessName: "", // Resolved from tenant context at runtime
   businessAddress: "",
   logoUrl: LOGO_URL,
   adminUsername: "admin",
   adminPassword: "admin123",
   rewards: {
     enabled: true,
-    programName: "Street Eats Rewards",
+    programName: "ChowNow Rewards",
     staffPin: "1234",
     maxStamps: 10,
     rewardTitle: "Free Burger", // Fallback

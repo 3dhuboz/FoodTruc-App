@@ -37,7 +37,7 @@ const MIGRATIONS: { version: number; name: string; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_tenants_subdomain ON tenants(subdomain);
       CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
       INSERT OR IGNORE INTO tenants (id, name, slug, subdomain, plan, status)
-      VALUES ('default', 'Street Eats', 'street-eats', 'app', 'enterprise', 'active');
+      VALUES ('default', 'ChowNow', 'chownow', 'app', 'enterprise', 'active');
     `
   },
   {
@@ -81,6 +81,14 @@ const MIGRATIONS: { version: number; name: string; sql: string }[] = [
       DROP TABLE IF EXISTS settings;
       ALTER TABLE settings_v2 RENAME TO settings;
       CREATE INDEX IF NOT EXISTS idx_settings_tenant_key ON settings(tenant_id, key);
+    `
+  },
+  {
+    version: 4,
+    name: 'rebrand_chownow',
+    sql: `
+      UPDATE tenants SET name = 'ChowNow', slug = 'chownow', logo_url = '/logo.png', primary_color = '#f97316' WHERE id = 'default';
+      UPDATE settings SET data = REPLACE(data, '"Street Eats"', '"ChowNow"') WHERE tenant_id = 'default' AND key = 'general';
     `
   },
 ];
