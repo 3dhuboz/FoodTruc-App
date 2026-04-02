@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { Order } from '../types';
 import { pollSingleOrder } from '../services/syncEngine';
-import { CheckCircle, Clock, Flame, Package, ChefHat, AlertCircle, ArrowLeft } from 'lucide-react';
+import { CheckCircle, Clock, Flame, Package, ChefHat, AlertCircle, ArrowLeft, CreditCard } from 'lucide-react';
 
 type TrackableStatus = 'Confirmed' | 'Cooking' | 'Ready' | 'Completed' | 'Cancelled' | 'Rejected';
 
 const STEPS: { status: TrackableStatus; label: string; icon: React.ReactNode }[] = [
-  { status: 'Confirmed', label: 'Order Received', icon: <CheckCircle size={20} /> },
+  { status: 'Confirmed', label: 'Order Confirmed', icon: <CheckCircle size={20} /> },
   { status: 'Cooking', label: 'Cooking Now', icon: <Flame size={20} /> },
   { status: 'Ready', label: 'Ready for Pickup!', icon: <Package size={20} /> },
   { status: 'Completed', label: 'Collected', icon: <CheckCircle size={20} /> },
@@ -22,6 +22,8 @@ const STATUS_INDEX: Partial<Record<string, number>> = {
 
 const OrderStatus: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
+  const [searchParams] = useSearchParams();
+  const isPaidRedirect = searchParams.get('paid') === 'true';
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +85,33 @@ const OrderStatus: React.FC = () => {
 
       {order && !isCancelled && (
         <div className="w-full max-w-sm space-y-6">
+          {/* Payment confirmed banner (shown after Stripe redirect) */}
+          {isPaidRedirect && (
+            <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4 flex items-center gap-3">
+              <CreditCard size={20} className="text-green-400 shrink-0" />
+              <div>
+                <div className="text-green-400 font-bold text-sm">Payment confirmed</div>
+                <div className="text-green-400/70 text-xs">Your order is being prepared</div>
+              </div>
+            </div>
+          )}
+
+          {/* Awaiting payment notice */}
+          {order.status === 'Awaiting Payment' && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-4 text-center">
+              <div className="text-yellow-400 font-bold">Processing payment...</div>
+              <div className="text-yellow-400/70 text-xs mt-1">This page will update automatically</div>
+            </div>
+          )}
+
+          {/* Pending payment notice (pay at window) */}
+          {order.status === 'Pending' && (
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-2xl p-4 text-center">
+              <div className="text-purple-400 font-bold">Pay at the window</div>
+              <div className="text-purple-400/70 text-xs mt-1">Your order will start once payment is confirmed</div>
+            </div>
+          )}
+
           {/* Order Header */}
           <div className="bg-gray-900 rounded-2xl p-6 text-center border border-gray-800">
             <div className="text-gray-400 text-sm mb-1">Order</div>

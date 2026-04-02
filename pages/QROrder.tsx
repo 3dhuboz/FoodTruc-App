@@ -111,8 +111,9 @@ const CartSheet: React.FC<{
 const Checkout: React.FC<{
   cart: CartItem[]; total: number;
   onConfirm: (name: string, phone: string) => void;
+  onPayOnline: (name: string, phone: string) => void;
   onBack: () => void; submitting: boolean;
-}> = ({ cart, total, onConfirm, onBack, submitting }) => {
+}> = ({ cart, total, onConfirm, onPayOnline, onBack, submitting }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   return (
@@ -133,21 +134,33 @@ const Checkout: React.FC<{
           </div>
         </div>
 
-        <p className="text-gray-500 text-sm">We'll call your name and text you when it's ready.</p>
+        <p className="text-gray-500 text-sm">Enter your details — we'll text you when it's ready.</p>
 
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" autoFocus
           className="w-full bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4 text-white placeholder-gray-600 outline-none focus:border-orange-500 text-lg" />
         <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Mobile for SMS notification" type="tel" inputMode="tel"
           className="w-full bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4 text-white placeholder-gray-600 outline-none focus:border-orange-500 text-lg" />
 
-        <button onClick={() => name.trim() && onConfirm(name.trim(), phone.trim())} disabled={!name.trim() || submitting}
-          className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white font-black text-xl py-5 rounded-2xl transition active:scale-95">
-          {submitting ? 'Placing...' : `Place Order — $${total.toFixed(2)}`}
+        {/* Pay Now — Stripe Checkout (Apple Pay, Google Pay, card) */}
+        <button onClick={() => name.trim() && onPayOnline(name.trim(), phone.trim())} disabled={!name.trim() || submitting}
+          className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-black text-xl py-5 rounded-2xl transition active:scale-95 flex items-center justify-center gap-2">
+          {submitting ? 'Redirecting...' : `Pay Now — $${total.toFixed(2)}`}
         </button>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
-          <p className="text-gray-400 text-sm">Pay at the window when you collect</p>
-          <p className="text-gray-600 text-xs mt-1">Card, tap, or cash accepted</p>
+        <p className="text-center text-gray-600 text-xs -mt-2">Apple Pay, Google Pay, or card</p>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 border-t border-gray-800" />
+          <span className="text-gray-600 text-xs font-bold uppercase">or</span>
+          <div className="flex-1 border-t border-gray-800" />
         </div>
+
+        {/* Pay at Window */}
+        <button onClick={() => name.trim() && onConfirm(name.trim(), phone.trim())} disabled={!name.trim() || submitting}
+          className="w-full bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white font-bold text-base py-4 rounded-2xl transition active:scale-95">
+          Pay at the Window
+        </button>
+        <p className="text-center text-gray-600 text-xs -mt-2">Cash, card, or tap at the counter</p>
       </div>
     </div>
   );
@@ -162,8 +175,8 @@ const Success: React.FC<{ orderId: string; name: string }> = ({ orderId, name })
         <CheckCircle size={48} className="text-green-400" />
       </div>
       <div className="text-white font-black text-3xl">Order placed!</div>
-      <p className="text-gray-300">Thanks {name} — head to the window to pay.</p>
-      <p className="text-gray-500 text-sm">We'll text you when it's ready.</p>
+      <p className="text-gray-300">Thanks {name}!</p>
+      <p className="text-gray-500 text-sm">Head to the window to pay — we'll text you when it's ready.</p>
       <div className="bg-gray-900 border border-gray-800 rounded-2xl px-8 py-5">
         <div className="text-gray-500 text-sm mb-1">Your order number</div>
         <div className="text-orange-400 font-black text-4xl font-mono">#{orderId.slice(-4).toUpperCase()}</div>
@@ -226,6 +239,7 @@ const QROrder: React.FC = () => {
     });
   };
 
+  // Pay at Window — order goes in as "Pending" (unpaid)
   const handleConfirm = async (name: string, phone: string) => {
     setSubmitting(true);
     const orderId = newOrderId();
@@ -242,6 +256,37 @@ const QROrder: React.FC = () => {
       await createOrder(order);
       setSuccessOrderId(orderId); setSuccessName(name); setCart([]);
     } finally { setSubmitting(false); }
+  };
+
+  // Pay Now — redirect to Stripe Checkout
+  const handlePayOnline = async (name: string, phone: string) => {
+    setSubmitting(true);
+    const orderId = newOrderId();
+    try {
+      const res = await fetch('/api/v1/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          customerName: name,
+          customerPhone: phone,
+          items: cart.map(c => ({ name: c.name, price: c.price, quantity: c.quantity })),
+          total,
+          pickupLocation: settings.businessAddress,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        // Redirect to Stripe hosted checkout
+        window.location.href = data.url;
+      } else {
+        alert(data.error || 'Payment setup failed. Try paying at the window.');
+        setSubmitting(false);
+      }
+    } catch {
+      alert('Could not connect to payment service. Try paying at the window.');
+      setSubmitting(false);
+    }
   };
 
   if (successOrderId) return <Success orderId={successOrderId} name={successName} />;
@@ -348,7 +393,7 @@ const QROrder: React.FC = () => {
 
       {/* Checkout */}
       {showCheckout && (
-        <Checkout cart={cart} total={total} onConfirm={handleConfirm}
+        <Checkout cart={cart} total={total} onConfirm={handleConfirm} onPayOnline={handlePayOnline}
           onBack={() => { setShowCheckout(false); setShowCart(true); }} submitting={submitting} />
       )}
     </div>
