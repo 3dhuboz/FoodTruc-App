@@ -78,7 +78,7 @@ export function printOrderLabel(order) {
   }
 
   try {
-    const orderNum = order.id?.slice(-4)?.toUpperCase() || '????';
+    const orderNum = order.collectionPin || order.collection_pin || order.id?.slice(-4)?.toUpperCase() || '????';
     const time = new Date(order.createdAt || Date.now()).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
     const name = order.customerName || 'Walk-up';
 

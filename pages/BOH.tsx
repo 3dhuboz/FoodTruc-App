@@ -204,8 +204,9 @@ const BOH: React.FC = () => {
                   {/* Header */}
                   <div className="px-5 pt-4 pb-2 flex items-start justify-between">
                     <div>
-                      <div className="text-3xl font-black tracking-tight">#{order.id.slice(-4).toUpperCase()}</div>
+                      <div className="text-3xl font-black tracking-tight">{order.collectionPin || '#' + order.id.slice(-4).toUpperCase()}</div>
                       <div className="text-gray-400 text-base font-semibold mt-0.5">{order.customerName}</div>
+                      {order.status === 'Cooking' && <div className="text-orange-400 text-xs font-bold mt-1 animate-pulse">COOKING</div>}
                     </div>
                     <div className={`text-right ${urgencyColor(time.urgency)}`}>
                       <div className="text-2xl font-black tabular-nums">{time.text}</div>

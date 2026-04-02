@@ -114,11 +114,12 @@ const OrderStatus: React.FC = () => {
 
           {/* Order Header */}
           <div className="bg-gray-900 rounded-2xl p-6 text-center border border-gray-800">
-            <div className="text-gray-400 text-sm mb-1">Order</div>
-            <div className="text-3xl font-black text-white font-mono">
-              #{order.id.slice(-4).toUpperCase()}
+            <div className="text-gray-400 text-sm mb-1">Your order code</div>
+            <div className="text-5xl font-black text-orange-400 font-mono">
+              {order.collectionPin || '#' + order.id.slice(-4).toUpperCase()}
             </div>
-            <div className="text-gray-300 mt-1">{order.customerName}</div>
+            <div className="text-gray-500 text-xs mt-1 mb-1">Show this at the window</div>
+            <div className="text-gray-300">{order.customerName}</div>
             {order.pickupLocation && (
               <div className="text-orange-400 text-sm mt-2">📍 {order.pickupLocation}</div>
             )}

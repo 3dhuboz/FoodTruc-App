@@ -19,10 +19,10 @@ export const onRequest = async (context: any) => {
     if (!settings?.enabled || !order?.customerPhone) return json({ skipped: true });
 
     const phone = normalizePhone(order.customerPhone);
-    const orderNum = (order.id || '').slice(-4).toUpperCase();
+    const pin = order.collectionPin || '#' + (order.id || '').slice(-4).toUpperCase();
     const location = order.pickupLocation || 'the truck';
 
-    const message = `🎉 ${businessName || 'Your food'} — Order #${orderNum} is READY! Come collect it at ${location}. Thanks, ${order.customerName}!`;
+    const message = `🎉 ${businessName || 'Your food'} — Order ${pin} is READY! Show "${pin}" at ${location} to collect. Thanks, ${order.customerName}!`;
 
     await sendTwilioSms(settings, phone, message);
     return json({ sent: true });

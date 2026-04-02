@@ -150,7 +150,7 @@ const OrderQueue: React.FC<{
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${badge}`}>{badgeLabel}</span>
-            <span className="text-white font-black text-sm">#{order.id.slice(-4).toUpperCase()}</span>
+            <span className="text-white font-black text-sm">{order.collectionPin || '#' + order.id.slice(-4).toUpperCase()}</span>
             {qr && <span className="text-[9px] font-bold bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded">QR</span>}
           </div>
           <span className="text-gray-500 text-xs font-mono">{elapsed[order.id] || '0s'}</span>
@@ -396,7 +396,7 @@ const FOH: React.FC = () => {
             <div key={order.id} className="bg-green-500 text-black px-6 py-3 flex items-center justify-between cursor-pointer" onClick={() => dismissAlert(order.id)}>
               <div className="flex items-center gap-3">
                 <Bell size={22} className="animate-bounce" />
-                <span className="font-black">READY — #{order.id.slice(-4).toUpperCase()} ({order.customerName})</span>
+                <span className="font-black">READY — {order.collectionPin || '#' + order.id.slice(-4).toUpperCase()} ({order.customerName})</span>
               </div>
               <span className="text-green-900 font-bold text-sm">Dismiss</span>
             </div>

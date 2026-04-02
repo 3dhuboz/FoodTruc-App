@@ -40,6 +40,15 @@ export const onRequest = async (context: any) => {
       const order = await request.json();
       const id = order.id || generateId();
       const now = new Date().toISOString();
+
+      // Auto-generate collection PIN if not provided (e.g., "A47", "C12")
+      let pin = order.collectionPin;
+      if (!pin) {
+        const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26)); // A-Z
+        const num = String(Math.floor(Math.random() * 90) + 10); // 10-99
+        pin = letter + num;
+      }
+
       await db.prepare(
         `INSERT INTO orders (id, tenant_id, user_id, customer_name, customer_email, customer_phone, items, total, deposit_amount, status, cook_day, type, pickup_time, created_at, temperature, fulfillment_method, delivery_address, delivery_fee, collection_pin, pickup_location, discount_applied, payment_intent_id, square_checkout_id, source, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -50,7 +59,7 @@ export const onRequest = async (context: any) => {
         order.type, order.pickupTime || null, order.createdAt || now,
         order.temperature || 'HOT', order.fulfillmentMethod || 'PICKUP',
         order.deliveryAddress || null, order.deliveryFee || null,
-        order.collectionPin || null, order.pickupLocation || null,
+        pin, order.pickupLocation || null,
         order.discountApplied ? 1 : 0, order.paymentIntentId || null,
         order.squareCheckoutId || null, order.source || 'walk_up', now
       ).run();
