@@ -23,7 +23,7 @@ export const onRequest = async (context: any) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         personalizations: [{ to: [{ email: order.customerEmail, name: order.customerName }] }],
-        from: { email: settings.fromEmail || `noreply@${businessName?.toLowerCase().replace(/\s+/g, '')}.com.au`, name: businessName || 'Food Truck' },
+        from: { email: settings.fromEmail || `noreply@${businessName?.toLowerCase().replace(/\s+/g, '')}.com.au`, name: businessName || 'Street Eats' },
         subject: `🎉 Order #${orderNum} is Ready!`,
         content: [{
           type: 'text/html',

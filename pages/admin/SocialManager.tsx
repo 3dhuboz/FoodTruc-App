@@ -598,7 +598,7 @@ const SocialManager: React.FC = () => {
   const downloadPost = (url: string) => {
       const a = document.createElement('a');
       a.href = url;
-      a.download = `streetmeatz-ugc-${Date.now()}.jpg`;
+      a.download = `streeteats-ugc-${Date.now()}.jpg`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1428,7 +1428,7 @@ const SocialManager: React.FC = () => {
                             <input
                                 type="text"
                                 title="Hashtags"
-                                placeholder="#streetmeatz, #bbq, ..."
+                                placeholder="#streeteats, #bbq, ..."
                                 value={Array.isArray(editForm.hashtags) ? editForm.hashtags.join(', ') : (editForm.hashtags || '')}
                                 onChange={e => setEditForm(f => ({ ...f, hashtags: e.target.value as any }))}
                                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"

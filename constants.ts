@@ -279,7 +279,7 @@ export const INITIAL_POSTS: SocialPost[] = [
     id: 'p1',
     platform: 'Instagram',
     content: 'Sold out of Brisket for today! 🍖🔥 Catch us next week at the Brewery.',
-    hashtags: ['#soldout', '#brisket', '#streetmeatz', '#bbq'],
+    hashtags: ['#soldout', '#brisket', '#streeteats', '#bbq'],
     scheduledFor: new Date().toISOString(),
     status: 'Posted',
     image: BBQ_IMGS.wholeBrisket
@@ -386,9 +386,9 @@ export const INITIAL_SETTINGS: AppSettings = {
   emailSettings: {
     enabled: false,
     provider: 'smtp',
-    fromEmail: 'noreply@foodtruckapp.com.au',
+    fromEmail: 'noreply@chownow.au',
     fromName: 'Your Business',
-    adminEmail: 'admin@foodtruckapp.com.au'
+    adminEmail: 'admin@chownow.au'
   },
   invoiceSettings: {
     paymentUrl: '',

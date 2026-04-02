@@ -12,11 +12,11 @@ An offline-first food truck POS system with QR ordering, kitchen display, and Ra
 
 ## Live Demo
 
-- **Customer ordering:** https://foodtruck-app.pages.dev/#/qr-order
-- **Kitchen display:** https://foodtruck-app.pages.dev/#/boh (PIN: 1234)
-- **Front of house POS:** https://foodtruck-app.pages.dev/#/foh (PIN: 1234)
-- **Admin panel:** https://foodtruck-app.pages.dev/#/admin (admin / admin123)
-- **Product page:** https://foodtruck-app.pages.dev/#/landing
+- **Customer ordering:** https://chownow.au/#/qr-order
+- **Kitchen display:** https://chownow.au/#/boh (PIN: 1234)
+- **Front of house POS:** https://chownow.au/#/foh (PIN: 1234)
+- **Admin panel:** https://chownow.au/#/admin (admin / admin123)
+- **Product page:** https://chownow.au/#/landing
 
 ## Tech Stack
 
@@ -58,7 +58,7 @@ Hardware: Raspberry Pi 5 + USB WiFi adapter with antenna (~$35 AUD)
 npx wrangler pages secret put STRIPE_SECRET_KEY --project-name foodtruck-app
 ```
 
-Webhook: `https://foodtruck-app.pages.dev/api/v1/stripe/webhook` → `checkout.session.completed`
+Webhook: `https://chownow.au/api/v1/stripe/webhook` → `checkout.session.completed`
 
 ## Order Flow
 

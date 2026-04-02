@@ -82,7 +82,7 @@ const Contact: React.FC = () => {
                             </div>
                             <div>
                                 <p className="text-xs font-bold text-gray-500 uppercase">Email</p>
-                                <a href="mailto:admin@foodtruckapp.com.au" className="text-white text-lg font-bold hover:text-bbq-red transition">admin@foodtruckapp.com.au</a>
+                                <a href="mailto:admin@chownow.au" className="text-white text-lg font-bold hover:text-bbq-red transition">admin@chownow.au</a>
                             </div>
                         </div>
                         <div className="flex gap-4">
@@ -109,12 +109,7 @@ const Contact: React.FC = () => {
                 </div>
 
                 <div className="flex gap-4 pt-4">
-                    <a href="https://facebook.com/foodtruckapp" target="_blank" className="flex-1 bg-[#1877F2] py-3 rounded-lg text-white font-bold flex justify-center items-center gap-2 hover:opacity-90 transition">
-                        <Facebook size={18}/> Facebook
-                    </a>
-                    <a href="https://instagram.com/foodtruckapp" target="_blank" className="flex-1 bg-gradient-to-tr from-yellow-500 to-purple-600 py-3 rounded-lg text-white font-bold flex justify-center items-center gap-2 hover:opacity-90 transition">
-                        <Instagram size={18}/> Instagram
-                    </a>
+                    <p className="text-gray-500 text-sm">Follow us on social media — coming soon!</p>
                 </div>
             </div>
         </div>

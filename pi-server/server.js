@@ -13,7 +13,7 @@
  *
  * Environment:
  *   PORT=80             # Default 80 for captive portal
- *   CLOUD_URL=https://foodtruck-app.pages.dev  # Cloud sync target
+ *   CLOUD_URL=https://chownow.au  # Cloud sync target
  *   SYNC_INTERVAL=30000 # Cloud sync interval in ms (default 30s)
  */
 
@@ -28,7 +28,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '80');
 const DIST_DIR = join(__dirname, '..', 'dist');
 const DB_PATH = join(__dirname, 'street-eats.db');
-const CLOUD_URL = process.env.CLOUD_URL || 'https://foodtruck-app.pages.dev';
+const CLOUD_URL = process.env.CLOUD_URL || 'https://chownow.au';
 const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL || '30000');
 
 // ─── Database ────────────────────────────────────────────────

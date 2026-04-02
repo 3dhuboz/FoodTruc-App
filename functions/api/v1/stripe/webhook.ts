@@ -3,7 +3,7 @@
  * When a Checkout Session completes, marks the order as "Confirmed" (paid).
  *
  * Setup: In Stripe Dashboard → Webhooks → add endpoint:
- *   URL: https://foodtruck-app.pages.dev/api/v1/stripe/webhook
+ *   URL: https://chownow.au/api/v1/stripe/webhook
  *   Events: checkout.session.completed
  */
 import { getDB } from '../_lib/db';

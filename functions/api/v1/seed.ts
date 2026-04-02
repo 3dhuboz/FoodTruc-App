@@ -51,7 +51,7 @@ export const onRequest = async (context: any) => {
     const existing = await db.prepare("SELECT COUNT(*) as count FROM settings").first() as any;
     if (existing.count === 0) {
       const defaults = {
-        businessName: 'Food Truck',
+        businessName: 'Street Eats',
         businessAddress: '',
         maintenanceMode: false,
         rewards: { enabled: false, staffPin: '1234', maxStamps: 10, programName: 'Rewards', rewardTitle: 'Free Item', rewardImage: '', possiblePrizes: [] },

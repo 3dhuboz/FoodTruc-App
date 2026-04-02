@@ -220,7 +220,7 @@ ExecStart=/usr/bin/node ${SCRIPT_DIR}/server.js
 Restart=always
 RestartSec=5
 Environment=PORT=80
-Environment=CLOUD_URL=https://foodtruck-app.pages.dev
+Environment=CLOUD_URL=https://chownow.au
 Environment=SYNC_INTERVAL=5000
 
 [Install]

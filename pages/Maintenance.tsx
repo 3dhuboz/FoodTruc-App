@@ -42,7 +42,7 @@ const Maintenance: React.FC = () => {
                     <div className="bg-gray-800 p-2 rounded-lg text-bbq-red"><Mail size={20}/></div>
                     <div>
                         <p className="text-xs text-gray-500 uppercase font-bold">Email</p>
-                        <a href="mailto:admin@foodtruckapp.com.au" className="font-bold hover:text-bbq-gold transition">admin@foodtruckapp.com.au</a>
+                        <a href="mailto:admin@chownow.au" className="font-bold hover:text-bbq-gold transition">admin@chownow.au</a>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -55,8 +55,7 @@ const Maintenance: React.FC = () => {
             </div>
 
             <div className="flex justify-center gap-4 mt-8 pt-6 border-t border-white/10">
-                <a href="https://facebook.com/foodtruckapp" target="_blank" className="p-3 bg-blue-600 rounded-full text-white hover:bg-blue-500 transition"><Facebook size={20}/></a>
-                <a href="https://instagram.com/foodtruckapp" target="_blank" className="p-3 bg-pink-600 rounded-full text-white hover:bg-pink-500 transition"><Instagram size={20}/></a>
+                <p className="text-gray-500 text-sm">Follow us on social media — coming soon!</p>
             </div>
         </div>
 
