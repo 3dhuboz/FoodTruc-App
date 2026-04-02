@@ -5,11 +5,15 @@
  * Body: { amount: number (cents), orderId: string, currency?: string }
  * Returns: { clientSecret: string, paymentIntentId: string }
  */
+import { getTenantFromRequest } from '../_lib/tenant';
+
 export const onRequest = async (context: any) => {
   const { request, env } = context;
   const json = (d: any, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
   if (request.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+
+  const { tenantId } = await getTenantFromRequest(request, env);
 
   const stripeKey = env.STRIPE_SECRET_KEY;
   if (!stripeKey) return json({ error: 'Stripe not configured' }, 500);
@@ -29,6 +33,7 @@ export const onRequest = async (context: any) => {
       capture_method: 'automatic',
       'metadata[orderId]': orderId,
       'metadata[source]': 'street_eats_terminal',
+      'metadata[tenantId]': tenantId,
     });
 
     const res = await fetch('https://api.stripe.com/v1/payment_intents', {

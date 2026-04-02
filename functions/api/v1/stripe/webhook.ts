@@ -7,6 +7,7 @@
  *   Events: checkout.session.completed
  */
 import { getDB } from '../_lib/db';
+import { getTenantFromRequest } from '../_lib/tenant';
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
@@ -28,17 +29,21 @@ export const onRequest = async (context: any) => {
         const db = getDB(env);
         const now = new Date().toISOString();
 
+        // Webhooks come from Stripe, not a tenant subdomain.
+        // Look up the order first and derive tenantId from the order row.
+        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+        const tenantId = order?.tenant_id;
+
         // Move order from "Awaiting Payment" to "Confirmed"
         db.prepare(
-          'UPDATE orders SET status = ?, payment_intent_id = ?, updated_at = ? WHERE id = ? AND status = ?'
-        ).run('Confirmed', session.payment_intent || session.id, now, orderId, 'Awaiting Payment');
+          'UPDATE orders SET status = ?, payment_intent_id = ?, updated_at = ? WHERE id = ? AND status = ? AND tenant_id = ?'
+        ).run('Confirmed', session.payment_intent || session.id, now, orderId, 'Awaiting Payment', tenantId);
 
-        console.log(`[Webhook] Order ${orderId} → Confirmed (payment: ${session.payment_intent})`);
+        console.log(`[Webhook] Order ${orderId} (tenant: ${tenantId}) → Confirmed (payment: ${session.payment_intent})`);
 
         // Try to send SMS notification (best effort)
-        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
         if (order?.customer_phone) {
-          const settings = db.prepare("SELECT data FROM settings WHERE key = 'general'").get() as any;
+          const settings = db.prepare("SELECT data FROM settings WHERE key = 'general' AND tenant_id = ?").get(tenantId) as any;
           const parsed = settings?.data ? JSON.parse(settings.data) : {};
           if (parsed.smsSettings?.enabled) {
             // Fire and forget — don't block webhook response

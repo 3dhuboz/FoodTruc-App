@@ -1,4 +1,5 @@
 import { getDB, parseJson } from '../_lib/db';
+import { getTenantFromRequest } from '../_lib/tenant';
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
@@ -6,11 +7,13 @@ export const onRequest = async (context: any) => {
 
   if (request.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
 
+  const { tenantId } = await getTenantFromRequest(request, env);
+
   try {
     const db = getDB(env);
 
     if (request.method === 'GET') {
-      const { results } = await db.prepare('SELECT * FROM settings').all();
+      const { results } = await db.prepare('SELECT * FROM settings WHERE tenant_id = ?').bind(tenantId).all();
       const settings: Record<string, any> = {};
       for (const row of results as any[]) {
         Object.assign(settings, parseJson(row.data, {}));
@@ -21,9 +24,9 @@ export const onRequest = async (context: any) => {
     if (request.method === 'PUT') {
       const data = await request.json();
       // Store as single 'general' key for simplicity
-      const existing = await db.prepare("SELECT data FROM settings WHERE key = 'general'").first() as any;
+      const existing = await db.prepare("SELECT data FROM settings WHERE tenant_id = ? AND key = 'general'").bind(tenantId).first() as any;
       const merged = { ...parseJson(existing?.data, {}), ...data };
-      await db.prepare("INSERT OR REPLACE INTO settings (key, data) VALUES ('general', ?)").bind(JSON.stringify(merged)).run();
+      await db.prepare("INSERT OR REPLACE INTO settings (tenant_id, key, data) VALUES (?, 'general', ?)").bind(tenantId, JSON.stringify(merged)).run();
       return json(merged);
     }
 

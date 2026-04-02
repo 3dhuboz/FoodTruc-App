@@ -33,6 +33,7 @@ export interface AuthResult {
   userId: string;
   role: string;
   email: string;
+  tenantId: string | null;
 }
 
 export async function verifyAuth(request: Request, env: any): Promise<AuthResult | null> {
@@ -40,12 +41,12 @@ export async function verifyAuth(request: Request, env: any): Promise<AuthResult
 
   // Admin API key backdoor
   if (env.ADMIN_API_KEY && authHeader === `Bearer ${env.ADMIN_API_KEY}`) {
-    return { userId: 'admin1', role: 'ADMIN', email: 'admin@local' };
+    return { userId: 'admin1', role: 'ADMIN', email: 'admin@local', tenantId: 'default' };
   }
 
   // Setup mode — no Clerk configured
   if (!env.CLERK_PUBLISHABLE_KEY) {
-    return { userId: 'setup', role: 'ADMIN', email: 'setup@local' };
+    return { userId: 'setup', role: 'ADMIN', email: 'setup@local', tenantId: 'default' };
   }
 
   if (!authHeader?.startsWith('Bearer ')) return null;
@@ -73,6 +74,7 @@ export async function verifyAuth(request: Request, env: any): Promise<AuthResult
       userId: payload.sub || '',
       role: payload.publicMetadata?.role || 'CUSTOMER',
       email: payload.email || '',
+      tenantId: payload.publicMetadata?.tenantId || null,
     };
   } catch {
     return null;

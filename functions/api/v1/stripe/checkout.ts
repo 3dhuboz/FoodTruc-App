@@ -7,12 +7,15 @@
  * Returns: { url: string } — redirect the customer here
  */
 import { getDB, generateId, rowToOrder } from '../_lib/db';
+import { getTenantFromRequest } from '../_lib/tenant';
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
   const json = (d: any, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
   if (request.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+
+  const { tenantId } = await getTenantFromRequest(request, env);
 
   const stripeKey = env.STRIPE_SECRET_KEY;
   if (!stripeKey) return json({ error: 'Stripe not configured' }, 500);
@@ -72,10 +75,10 @@ export const onRequest = async (context: any) => {
     const db = getDB(env);
     const now = new Date().toISOString();
     db.prepare(
-      `INSERT OR REPLACE INTO orders (id, user_id, customer_name, customer_email, customer_phone, items, total, status, cook_day, type, created_at, temperature, fulfillment_method, pickup_location, source, updated_at, square_checkout_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR REPLACE INTO orders (id, tenant_id, user_id, customer_name, customer_email, customer_phone, items, total, status, cook_day, type, created_at, temperature, fulfillment_method, pickup_location, source, updated_at, square_checkout_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
-      orderId, 'qr_customer', body.customerName || 'Customer',
+      orderId, tenantId, 'qr_customer', body.customerName || 'Customer',
       body.customerEmail || null, body.customerPhone || null,
       JSON.stringify(body.items || []), body.total || 0,
       'Awaiting Payment', now.split('T')[0], 'TAKEAWAY', now,

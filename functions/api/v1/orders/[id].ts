@@ -1,4 +1,5 @@
 import { getDB, rowToOrder } from '../_lib/db';
+import { getTenantFromRequest } from '../_lib/tenant';
 
 export const onRequest = async (context: any) => {
   const { request, env, params } = context;
@@ -7,12 +8,14 @@ export const onRequest = async (context: any) => {
 
   if (request.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
 
+  const { tenantId } = await getTenantFromRequest(request, env);
+
   try {
     const db = getDB(env);
 
     // GET single order — public (for customer order status tracking)
     if (request.method === 'GET') {
-      const row = await db.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
+      const row = await db.prepare('SELECT * FROM orders WHERE id = ? AND tenant_id = ?').bind(id, tenantId).first();
       if (!row) return json({ error: 'Order not found' }, 404);
       return json(rowToOrder(row));
     }
@@ -46,14 +49,15 @@ export const onRequest = async (context: any) => {
       fields.push('updated_at = ?');
       binds.push(new Date().toISOString());
       binds.push(id);
+      binds.push(tenantId);
 
-      await db.prepare(`UPDATE orders SET ${fields.join(', ')} WHERE id = ?`).bind(...binds).run();
-      const row = await db.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
+      await db.prepare(`UPDATE orders SET ${fields.join(', ')} WHERE id = ? AND tenant_id = ?`).bind(...binds).run();
+      const row = await db.prepare('SELECT * FROM orders WHERE id = ? AND tenant_id = ?').bind(id, tenantId).first();
       return json(rowToOrder(row));
     }
 
     if (request.method === 'DELETE') {
-      await db.prepare('DELETE FROM orders WHERE id = ?').bind(id).run();
+      await db.prepare('DELETE FROM orders WHERE id = ? AND tenant_id = ?').bind(id, tenantId).run();
       return new Response(null, { status: 204 });
     }
 
