@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   CreditCard, Bell, Smartphone, Globe, Shield, Zap, Star,
   CheckCircle, ArrowRight, ChefHat, Clock, WifiOff, QrCode, Monitor,
-  ChevronDown, X, Loader2, XCircle, Package, Cpu, Wifi, Plus,
+  ChevronDown, X, Loader2, XCircle, Package, Cpu, Wifi, Plus, ShoppingCart,
   ClipboardList, Timer, BadgeDollarSign, Quote, MapPin
 } from 'lucide-react';
 
@@ -251,92 +251,138 @@ const Landing: React.FC = () => {
           <p className="text-sm text-gray-500 mb-12">No contracts. No lock-in. Cancel anytime.</p>
         </div>
 
-        {/* Product showcase: 3 screens side by side */}
-        {/* Product showcase — mock UI screens */}
-        <div className="relative max-w-6xl mx-auto px-6 pb-20">
-          <div className="relative bg-gray-900/50 rounded-3xl border border-gray-800/50 p-4 md:p-6 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-t from-orange-500/5 via-transparent to-transparent rounded-3xl" />
-            <div className="relative grid grid-cols-1 md:grid-cols-3 gap-4">
+      </div>
 
-              {/* Mock: QR Order screen */}
-              <div className="bg-gray-950 rounded-2xl p-4 border border-gray-800">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-orange-500 rounded-md flex items-center justify-center"><QrCode size={12} className="text-white" /></div>
-                  <span className="text-white text-xs font-bold">Customer View</span>
-                </div>
-                {/* Mock menu items */}
-                <div className="space-y-2">
-                  {['Smash Burger', 'Pulled Pork Tacos', 'Loaded Fries'].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between bg-gray-900 rounded-lg p-2.5">
-                      <div>
-                        <div className="text-white text-xs font-bold">{item}</div>
-                        <div className="text-gray-500 text-[10px]">Tap to customise</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-orange-400 text-xs font-bold">${(16.5 + i * 3).toFixed(0)}</span>
-                        <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center"><Plus size={12} className="text-white" /></div>
+      {/* ─── The ChowNow Experience — Animated Scroll Story ─────── */}
+      <Section className="relative">
+        <div className="max-w-5xl mx-auto px-6 py-24">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center gap-2 bg-blue-500/10 text-blue-400 px-4 py-2 rounded-full text-sm font-bold mb-4 border border-blue-500/20">
+              <Star size={14} /> The Customer Experience
+            </div>
+            <h2 className="text-3xl md:text-5xl font-black mb-4">See how it works. For real.</h2>
+            <p className="text-gray-400 text-lg max-w-2xl mx-auto">Follow a customer from arrival to collection. This is what happens when your truck runs ChowNow.</p>
+          </div>
+
+          {/* Story timeline */}
+          <div className="relative">
+            {/* Vertical line */}
+            <div className="absolute left-6 md:left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-red-500/50 via-orange-500/50 to-green-500/50" />
+
+            {[
+              {
+                step: 1,
+                title: 'The scene: lunch rush',
+                desc: 'Your customer arrives at a food truck market. The truck next door has a 15-person queue. People are leaving. Sound familiar?',
+                detail: 'Long queues = lost customers. Every person who walks away is $20+ gone.',
+                icon: Users,
+                color: 'text-red-400',
+                bg: 'bg-red-500/10 border-red-500/20',
+                side: 'left',
+              },
+              {
+                step: 2,
+                title: 'They spot your QR code',
+                desc: 'No queue at your window — just a sign: "Scan to Order." They pull out their phone and scan the QR code in 2 seconds.',
+                detail: 'No app to download. No signup. The menu opens instantly in their browser.',
+                icon: QrCode,
+                color: 'text-orange-400',
+                bg: 'bg-orange-500/10 border-orange-500/20',
+                side: 'right',
+              },
+              {
+                step: 3,
+                title: 'They browse your full menu',
+                desc: 'Photos, descriptions, prices — all on their phone. They add a Smash Burger, Loaded Fries, and a Drink to their cart.',
+                detail: 'Customers spend 30% more when they can browse visually without queue pressure.',
+                icon: ShoppingCart,
+                color: 'text-orange-400',
+                bg: 'bg-orange-500/10 border-orange-500/20',
+                side: 'left',
+              },
+              {
+                step: 4,
+                title: 'They place their order',
+                desc: 'Name, phone number, tap "Place Order." Done. They can sit down, chat with friends, or check out other stalls.',
+                detail: 'Your kitchen screen shows the order instantly. No handwriting. No errors.',
+                icon: CheckCircle,
+                color: 'text-blue-400',
+                bg: 'bg-blue-500/10 border-blue-500/20',
+                side: 'right',
+              },
+              {
+                step: 5,
+                title: 'Kitchen starts cooking',
+                desc: 'Your cook taps "Start" on the kitchen display. The customer instantly gets an SMS: "Your order is being prepared!"',
+                detail: 'No shouting names. No confusion. The customer knows exactly what\'s happening.',
+                icon: ChefHat,
+                color: 'text-orange-400',
+                bg: 'bg-orange-500/10 border-orange-500/20',
+                side: 'left',
+              },
+              {
+                step: 6,
+                title: 'Food is ready',
+                desc: 'Cook taps "Ready." Customer gets another SMS: "Your order is ready for pickup!" They walk straight to the window.',
+                detail: 'No waiting. No guessing. No missed pickups. They collect and go.',
+                icon: Bell,
+                color: 'text-green-400',
+                bg: 'bg-green-500/10 border-green-500/20',
+                side: 'right',
+              },
+              {
+                step: 7,
+                title: 'Meanwhile, the queue next door...',
+                desc: 'The competitor\'s queue is still 12 deep. Three people just walked away. You\'ve served 8 QR orders in the same time.',
+                detail: 'More orders. Happier customers. Zero extra staff. That\'s ChowNow.',
+                icon: Zap,
+                color: 'text-orange-400',
+                bg: 'bg-orange-500/10 border-orange-500/20',
+                side: 'left',
+              },
+            ].map((scene, i) => {
+              const isLeft = scene.side === 'left';
+              return (
+                <Section key={i} className="relative mb-12 last:mb-0">
+                  <div className={`flex items-start gap-6 md:gap-12 ${isLeft ? 'md:flex-row' : 'md:flex-row-reverse'} flex-col md:flex-row`}>
+                    {/* Timeline dot */}
+                    <div className="absolute left-6 md:left-1/2 -translate-x-1/2 z-10">
+                      <div className={`w-12 h-12 ${scene.bg} border rounded-xl flex items-center justify-center`}>
+                        <scene.icon size={20} className={scene.color} />
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-3 bg-orange-500 rounded-lg py-2 text-center">
-                  <span className="text-white text-xs font-bold">View Cart (3 items)</span>
-                </div>
-              </div>
 
-              {/* Mock: Kitchen Display */}
-              <div className="bg-gray-950 rounded-2xl p-4 border border-gray-800">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-orange-500 rounded-md flex items-center justify-center"><Monitor size={12} className="text-white" /></div>
-                  <span className="text-white text-xs font-bold">Kitchen Display</span>
-                </div>
-                {/* Mock order cards */}
-                <div className="space-y-2">
-                  {[
-                    { name: 'Jake #12', status: 'NEW', color: 'bg-blue-500', items: '2x Burger, 1x Fries' },
-                    { name: 'Sarah #13', status: 'COOKING', color: 'bg-orange-500', items: '1x Tacos, 1x Drink' },
-                    { name: 'Dave #14', status: 'READY', color: 'bg-green-500', items: '3x Burger, 2x Fries' },
-                  ].map((order, i) => (
-                    <div key={i} className="bg-gray-900 rounded-lg p-2.5">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-white text-xs font-bold">{order.name}</span>
-                        <span className={`${order.color} text-white text-[9px] font-black px-2 py-0.5 rounded-full`}>{order.status}</span>
+                    {/* Content card */}
+                    <div className={`ml-16 md:ml-0 md:w-[calc(50%-3rem)] ${isLeft ? 'md:pr-0' : 'md:pl-0 md:ml-auto'}`}>
+                      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition">
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className={`text-xs font-black ${scene.color} uppercase tracking-widest`}>Step {scene.step}</span>
+                        </div>
+                        <h3 className="text-white font-bold text-xl mb-2">{scene.title}</h3>
+                        <p className="text-gray-300 text-sm leading-relaxed mb-3">{scene.desc}</p>
+                        <p className="text-gray-500 text-xs leading-relaxed italic">{scene.detail}</p>
                       </div>
-                      <div className="text-gray-500 text-[10px]">{order.items}</div>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-3 text-center text-gray-600 text-[10px]">Tap order to advance status</div>
-              </div>
+                  </div>
+                </Section>
+              );
+            })}
+          </div>
 
-              {/* Mock: FOH POS */}
-              <div className="bg-gray-950 rounded-2xl p-4 border border-gray-800">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-orange-500 rounded-md flex items-center justify-center"><Smartphone size={12} className="text-white" /></div>
-                  <span className="text-white text-xs font-bold">Front of House</span>
-                </div>
-                {/* Mock POS grid */}
-                <div className="grid grid-cols-3 gap-1.5 mb-3">
-                  {['Burger', 'Tacos', 'Fries', 'Wings', 'Drink', 'Ribs'].map((item, i) => (
-                    <div key={i} className="bg-gray-900 rounded-lg p-2 text-center">
-                      <div className="text-white text-[10px] font-bold">{item}</div>
-                      <div className="text-orange-400 text-[9px]">${(12 + i * 3)}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="bg-gray-900 rounded-lg p-2.5 flex items-center justify-between">
-                  <span className="text-gray-400 text-[10px]">Customer: <span className="text-white font-bold">Walk-up</span></span>
-                  <span className="text-white text-xs font-bold">$47.50</span>
-                </div>
-                <div className="mt-2 bg-green-500 rounded-lg py-2 text-center">
-                  <span className="text-white text-xs font-bold">Confirm Order</span>
-                </div>
-              </div>
-
+          {/* CTA after story */}
+          <div className="text-center mt-16">
+            <p className="text-gray-400 text-lg mb-6">Want to see it for yourself?</p>
+            <div className="flex flex-wrap gap-4 justify-center">
+              <a href="/#/qr-order" className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-full text-lg transition active:scale-95 flex items-center gap-2">
+                Try the Live Demo <ArrowRight size={20} />
+              </a>
+              <button onClick={() => setSignupPlan('pro')} className="bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-full text-lg transition border border-white/10">
+                Get Started
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      </Section>
 
       {/* ─── Social Proof Bar ───────────────────────────────────── */}
       <Section className="border-y border-gray-800 bg-gray-900/50">
