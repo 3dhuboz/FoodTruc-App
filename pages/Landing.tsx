@@ -252,53 +252,87 @@ const Landing: React.FC = () => {
         </div>
 
         {/* Product showcase: 3 screens side by side */}
+        {/* Product showcase — mock UI screens */}
         <div className="relative max-w-6xl mx-auto px-6 pb-20">
           <div className="relative bg-gray-900/50 rounded-3xl border border-gray-800/50 p-4 md:p-6 overflow-hidden">
-            {/* Subtle glow behind */}
             <div className="absolute inset-0 bg-gradient-to-t from-orange-500/5 via-transparent to-transparent rounded-3xl" />
-            <div className="relative grid grid-cols-3 gap-3 md:gap-4">
-              {/* Screen 1: QR Order */}
-              <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
-                <img src={IMG.qrScan} alt="Customer scanning QR code" className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                <div className="absolute bottom-3 left-3 right-3">
-                  <div className="flex items-center gap-2 text-white">
-                    <div className="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center"><QrCode size={14} /></div>
-                    <div>
-                      <div className="text-xs font-bold">QR Ordering</div>
-                      <div className="text-[10px] text-gray-300">Customers scan & order</div>
+            <div className="relative grid grid-cols-1 md:grid-cols-3 gap-4">
+
+              {/* Mock: QR Order screen */}
+              <div className="bg-gray-950 rounded-2xl p-4 border border-gray-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 bg-orange-500 rounded-md flex items-center justify-center"><QrCode size={12} className="text-white" /></div>
+                  <span className="text-white text-xs font-bold">Customer View</span>
+                </div>
+                {/* Mock menu items */}
+                <div className="space-y-2">
+                  {['Smash Burger', 'Pulled Pork Tacos', 'Loaded Fries'].map((item, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-900 rounded-lg p-2.5">
+                      <div>
+                        <div className="text-white text-xs font-bold">{item}</div>
+                        <div className="text-gray-500 text-[10px]">Tap to customise</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-orange-400 text-xs font-bold">${(16.5 + i * 3).toFixed(0)}</span>
+                        <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center"><Plus size={12} className="text-white" /></div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
+                </div>
+                <div className="mt-3 bg-orange-500 rounded-lg py-2 text-center">
+                  <span className="text-white text-xs font-bold">View Cart (3 items)</span>
                 </div>
               </div>
-              {/* Screen 2: Kitchen Display */}
-              <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
-                <img src={IMG.kitchenScreen} alt="Kitchen display system" className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                <div className="absolute bottom-3 left-3 right-3">
-                  <div className="flex items-center gap-2 text-white">
-                    <div className="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center"><Monitor size={14} /></div>
-                    <div>
-                      <div className="text-xs font-bold">Kitchen Display</div>
-                      <div className="text-[10px] text-gray-300">Cook & bump orders</div>
+
+              {/* Mock: Kitchen Display */}
+              <div className="bg-gray-950 rounded-2xl p-4 border border-gray-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 bg-orange-500 rounded-md flex items-center justify-center"><Monitor size={12} className="text-white" /></div>
+                  <span className="text-white text-xs font-bold">Kitchen Display</span>
+                </div>
+                {/* Mock order cards */}
+                <div className="space-y-2">
+                  {[
+                    { name: 'Jake #12', status: 'NEW', color: 'bg-blue-500', items: '2x Burger, 1x Fries' },
+                    { name: 'Sarah #13', status: 'COOKING', color: 'bg-orange-500', items: '1x Tacos, 1x Drink' },
+                    { name: 'Dave #14', status: 'READY', color: 'bg-green-500', items: '3x Burger, 2x Fries' },
+                  ].map((order, i) => (
+                    <div key={i} className="bg-gray-900 rounded-lg p-2.5">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-white text-xs font-bold">{order.name}</span>
+                        <span className={`${order.color} text-white text-[9px] font-black px-2 py-0.5 rounded-full`}>{order.status}</span>
+                      </div>
+                      <div className="text-gray-500 text-[10px]">{order.items}</div>
                     </div>
-                  </div>
+                  ))}
+                </div>
+                <div className="mt-3 text-center text-gray-600 text-[10px]">Tap order to advance status</div>
+              </div>
+
+              {/* Mock: FOH POS */}
+              <div className="bg-gray-950 rounded-2xl p-4 border border-gray-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 bg-orange-500 rounded-md flex items-center justify-center"><Smartphone size={12} className="text-white" /></div>
+                  <span className="text-white text-xs font-bold">Front of House</span>
+                </div>
+                {/* Mock POS grid */}
+                <div className="grid grid-cols-3 gap-1.5 mb-3">
+                  {['Burger', 'Tacos', 'Fries', 'Wings', 'Drink', 'Ribs'].map((item, i) => (
+                    <div key={i} className="bg-gray-900 rounded-lg p-2 text-center">
+                      <div className="text-white text-[10px] font-bold">{item}</div>
+                      <div className="text-orange-400 text-[9px]">${(12 + i * 3)}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-gray-900 rounded-lg p-2.5 flex items-center justify-between">
+                  <span className="text-gray-400 text-[10px]">Customer: <span className="text-white font-bold">Walk-up</span></span>
+                  <span className="text-white text-xs font-bold">$47.50</span>
+                </div>
+                <div className="mt-2 bg-green-500 rounded-lg py-2 text-center">
+                  <span className="text-white text-xs font-bold">Confirm Order</span>
                 </div>
               </div>
-              {/* Screen 3: FOH POS */}
-              <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
-                <img src={IMG.tabletPos} alt="Front of house POS" className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                <div className="absolute bottom-3 left-3 right-3">
-                  <div className="flex items-center gap-2 text-white">
-                    <div className="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center"><Smartphone size={14} /></div>
-                    <div>
-                      <div className="text-xs font-bold">FOH POS</div>
-                      <div className="text-[10px] text-gray-300">Walk-up orders & pay</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+
             </div>
           </div>
         </div>
@@ -385,31 +419,23 @@ const Landing: React.FC = () => {
             <h2 className="text-3xl md:text-5xl font-black mb-4">Everything your truck needs</h2>
             <p className="text-gray-400 max-w-xl mx-auto text-lg">One system. Built for how food trucks actually work.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 perspective-1000 stagger-children">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 stagger-children">
             {[
-              { icon: QrCode, title: 'QR Ordering', desc: 'Customers scan, browse, and order from their phone. No app download. No queue.', img: IMG.qrScan },
-              { icon: Monitor, title: 'Kitchen Display', desc: 'Orders appear instantly. Tap to advance: New, Cooking, Ready. Auto-notifies customers.', img: IMG.kitchenScreen },
-              { icon: Smartphone, title: 'FOH Tablet POS', desc: 'Take walk-up orders on any device. Menu grid, cart, name — hits kitchen instantly.', img: IMG.tabletPos },
-              { icon: Bell, title: 'SMS Notifications', desc: 'Customers get a text when cooking starts and when food is ready. No shouting names.', img: IMG.smsPhone },
-              { icon: WifiOff, title: 'Works Offline', desc: 'ChowBox creates a WiFi hotspot — the brains of your truck. Orders queue locally and sync when internet returns.', img: IMG.wifiSignal },
-              { icon: CreditCard, title: 'Tap to Pay', desc: 'Stripe Terminal for contactless payments. Apple Pay, Google Pay, or good old cash.', img: IMG.contactless },
-              { icon: Globe, title: 'Cloud Native', desc: 'Runs on Cloudflare\'s edge. Fast from anywhere — markets, events, festivals.', img: IMG.cloudServer },
-              { icon: Shield, title: 'No Lock-in', desc: 'Month-to-month. No contracts. No proprietary hardware. Your data is always yours.', img: IMG.handshake },
+              { icon: QrCode, title: 'QR Ordering', desc: 'Customers scan, browse, and order from their phone. No app download. No queue.' },
+              { icon: Monitor, title: 'Kitchen Display', desc: 'Orders appear instantly. Tap to advance: New, Cooking, Ready. Auto-notifies customers.' },
+              { icon: Smartphone, title: 'FOH Tablet POS', desc: 'Take walk-up orders on any device. Menu grid, cart, name — hits kitchen instantly.' },
+              { icon: Bell, title: 'SMS Notifications', desc: 'Customers get a text when cooking starts and when food is ready. No shouting names.' },
+              { icon: WifiOff, title: 'Works Offline', desc: 'ChowBox creates a WiFi hotspot — the brains of your truck. Orders queue locally and sync when internet returns.' },
+              { icon: CreditCard, title: 'Tap to Pay', desc: 'Stripe Terminal for contactless payments. Apple Pay, Google Pay, or good old cash.' },
+              { icon: Globe, title: 'Cloud Native', desc: 'Runs on Cloudflare\'s edge. Fast from anywhere — markets, events, festivals.' },
+              { icon: Shield, title: 'No Lock-in', desc: 'Month-to-month. No contracts. No proprietary hardware. Your data is always yours.' },
             ].map((f, i) => (
-              <div key={i} className="card-3d bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden group">
-                <div className="h-32 overflow-hidden relative">
-                  <img src={f.img} alt={f.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 opacity-60" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent" />
-                  <div className="absolute bottom-3 left-4">
-                    <div className="w-10 h-10 bg-orange-500/20 backdrop-blur-sm rounded-xl flex items-center justify-center border border-orange-500/30">
-                      <f.icon size={20} className="text-orange-400" />
-                    </div>
-                  </div>
+              <div key={i} className="card-3d bg-gray-900 border border-gray-800 rounded-2xl p-6 group hover:border-orange-500/30 transition-all">
+                <div className="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center mb-4 border border-orange-500/20 group-hover:bg-orange-500/20 transition">
+                  <f.icon size={22} className="text-orange-400" />
                 </div>
-                <div className="p-5">
-                  <h3 className="text-white font-bold mb-1.5">{f.title}</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed">{f.desc}</p>
-                </div>
+                <h3 className="text-white font-bold text-lg mb-2">{f.title}</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">{f.desc}</p>
               </div>
             ))}
           </div>
