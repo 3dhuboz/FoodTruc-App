@@ -213,52 +213,83 @@ const Landing: React.FC = () => {
       </nav>
 
       {/* ─── Hero ───────────────────────────────────────────────── */}
-      <div className="relative min-h-screen flex items-center overflow-hidden">
-        {/* Background: looping food truck video */}
-        <div className="absolute inset-0">
-          <video
-            autoPlay muted loop playsInline
-            className="absolute inset-0 w-full h-full object-cover scale-105"
-            poster={IMG.foodTruck}
-          >
-            {/* Happy people at food trucks / street food festivals */}
-            <source src="https://videos.pexels.com/video-files/2709388/2709388-uhd_2560_1440_24fps.mp4" type="video/mp4" />
-          </video>
-          <div className="absolute inset-0 bg-gray-950/70" />
-          <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/30 to-gray-950/60" />
-        </div>
+      <div className="relative overflow-hidden">
+        {/* Clean gradient background — no busy video */}
+        <div className="absolute inset-0 bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-orange-500/6 rounded-full blur-[150px]" />
 
-        {/* Content — centered */}
-        <div className="relative max-w-4xl mx-auto px-6 pt-32 pb-24 text-center">
-          <div className="inline-flex items-center gap-2 bg-orange-500/15 text-orange-400 px-5 py-2.5 rounded-full text-sm font-bold mb-8 border border-orange-500/20 backdrop-blur-sm">
-            <Zap size={14} /> Built for Australian food trucks
+        {/* Top section: headline + CTAs */}
+        <div className="relative max-w-5xl mx-auto px-6 pt-32 pb-12 text-center">
+          <div className="inline-flex items-center gap-2 bg-orange-500/10 text-orange-400 px-5 py-2 rounded-full text-sm font-bold mb-8 border border-orange-500/20">
+            <Zap size={14} /> The POS built for food trucks
           </div>
-          <h1 className="text-5xl md:text-6xl lg:text-8xl font-black leading-[0.85] mb-6">
-            Your food truck,<br />
-            <RotatingWords />
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black leading-[0.95] mb-6 tracking-tight">
+            From first order to<br />full service. <span className="text-orange-400"><RotatingWords /></span>
           </h1>
-          <p className="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto mb-10 leading-relaxed">
-            The all-in-one system that replaces your clipboard, calculator, and shouting across the kitchen. Powered by the ChowBox — the brains of your truck.
+          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+            QR ordering, kitchen display, front-of-house POS, and offline mode — all powered by the ChowBox. The brains of your truck.
           </p>
-          <div className="flex flex-wrap gap-4 justify-center mb-10">
-            <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-black px-10 py-5 rounded-2xl text-xl transition active:scale-95 flex items-center gap-3 shadow-lg shadow-orange-500/25">
-              Get Started <ArrowRight size={22} />
+          <div className="flex flex-wrap gap-4 justify-center mb-6">
+            <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-full text-lg transition active:scale-95 flex items-center gap-2 shadow-lg shadow-orange-500/20">
+              Get Started <ArrowRight size={20} />
             </button>
-            <a href="#/qr-order" className="bg-white/10 hover:bg-white/15 backdrop-blur-sm text-white font-bold px-10 py-5 rounded-2xl text-xl transition border border-white/20 flex items-center gap-3">
-              <QrCode size={20} /> Try Demo
+            <a href="#/qr-order" className="bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-full text-lg transition border border-white/10 flex items-center gap-2">
+              Try Demo
             </a>
           </div>
-          <div className="flex items-center justify-center gap-8 text-sm text-gray-400">
-            <span className="flex items-center gap-2"><CheckCircle size={16} className="text-green-400" /> No contracts</span>
-            <span className="flex items-center gap-2"><CheckCircle size={16} className="text-green-400" /> ChowBox included</span>
-            <span className="flex items-center gap-2"><CheckCircle size={16} className="text-green-400" /> Cancel anytime</span>
-          </div>
+          <p className="text-sm text-gray-500 mb-12">No contracts. ChowBox included. Cancel anytime.</p>
         </div>
 
-        {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-gray-500 animate-pulse-slow">
-          <span className="text-xs uppercase tracking-widest font-bold">Scroll</span>
-          <ChevronDown size={18} />
+        {/* Product showcase: 3 screens side by side */}
+        <div className="relative max-w-6xl mx-auto px-6 pb-20">
+          <div className="relative bg-gray-900/50 rounded-3xl border border-gray-800/50 p-4 md:p-6 overflow-hidden">
+            {/* Subtle glow behind */}
+            <div className="absolute inset-0 bg-gradient-to-t from-orange-500/5 via-transparent to-transparent rounded-3xl" />
+            <div className="relative grid grid-cols-3 gap-3 md:gap-4">
+              {/* Screen 1: QR Order */}
+              <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
+                <img src={IMG.qr} alt="Customer scanning QR code" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                <div className="absolute bottom-3 left-3 right-3">
+                  <div className="flex items-center gap-2 text-white">
+                    <div className="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center"><QrCode size={14} /></div>
+                    <div>
+                      <div className="text-xs font-bold">QR Ordering</div>
+                      <div className="text-[10px] text-gray-300">Customers scan & order</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {/* Screen 2: Kitchen Display */}
+              <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
+                <img src={IMG.kitchen} alt="Kitchen display system" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                <div className="absolute bottom-3 left-3 right-3">
+                  <div className="flex items-center gap-2 text-white">
+                    <div className="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center"><Monitor size={14} /></div>
+                    <div>
+                      <div className="text-xs font-bold">Kitchen Display</div>
+                      <div className="text-[10px] text-gray-300">Cook & bump orders</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {/* Screen 3: FOH POS */}
+              <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
+                <img src={IMG.tablet} alt="Front of house POS" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                <div className="absolute bottom-3 left-3 right-3">
+                  <div className="flex items-center gap-2 text-white">
+                    <div className="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center"><Smartphone size={14} /></div>
+                    <div>
+                      <div className="text-xs font-bold">FOH POS</div>
+                      <div className="text-[10px] text-gray-300">Walk-up orders & pay</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
