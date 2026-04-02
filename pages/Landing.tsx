@@ -1,15 +1,53 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  ShoppingCart, CreditCard, Bell, Smartphone, Globe, Shield, Zap, Star,
+  CreditCard, Bell, Smartphone, Globe, Shield, Zap, Star,
   CheckCircle, ArrowRight, ChefHat, Clock, WifiOff, QrCode, Monitor,
-  Users, ChevronDown, TrendingUp, DollarSign, X, Loader2
+  ChevronDown, X, Loader2, XCircle, Package, Cpu, Wifi,
+  ClipboardList, Timer, BadgeDollarSign, Quote, MapPin
 } from 'lucide-react';
 
-// ─── Signup Modal ───────────────────────────────────────────────
-interface SignupModalProps {
-  plan: 'starter' | 'pro';
-  onClose: () => void;
+// ─── Intersection Observer Hook ─────────────────────────────────
+function useInView(threshold = 0.15) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setInView(true); obs.disconnect(); } }, { threshold });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return { ref, inView };
 }
+
+// ─── Animated Counter ───────────────────────────────────────────
+const Counter: React.FC<{ end: number; suffix?: string; duration?: number }> = ({ end, suffix = '', duration = 2000 }) => {
+  const [count, setCount] = useState(0);
+  const { ref, inView } = useInView();
+  useEffect(() => {
+    if (!inView) return;
+    let start = 0;
+    const step = Math.ceil(end / (duration / 16));
+    const timer = setInterval(() => { start += step; if (start >= end) { setCount(end); clearInterval(timer); } else setCount(start); }, 16);
+    return () => clearInterval(timer);
+  }, [inView, end, duration]);
+  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
+};
+
+// ─── Rotating Words ─────────────────────────────────────────────
+const RotatingWords: React.FC = () => {
+  const words = ['QR ordering', 'Kitchen display', 'Tap-to-pay', 'Offline mode', 'QR ordering'];
+  return (
+    <span className="inline-block h-[1.15em] overflow-hidden align-bottom">
+      <span className="inline-flex flex-col animate-rotate-words">
+        {words.map((w, i) => <span key={i} className="text-orange-400">{w}</span>)}
+      </span>
+    </span>
+  );
+};
+
+// ─── Signup Modal (preserved) ───────────────────────────────────
+interface SignupModalProps { plan: 'starter' | 'pro'; onClose: () => void; }
 
 const SignupModal: React.FC<SignupModalProps> = ({ plan, onClose }) => {
   const [businessName, setBusinessName] = useState('');
@@ -22,25 +60,17 @@ const SignupModal: React.FC<SignupModalProps> = ({ plan, onClose }) => {
   const [error, setError] = useState('');
   const slugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-generate slug from business name
   useEffect(() => {
-    if (!slug || slug === toSlug(businessName.slice(0, -1))) {
-      setSlug(toSlug(businessName));
-    }
+    if (!slug || slug === toSlug(businessName.slice(0, -1))) setSlug(toSlug(businessName));
   }, [businessName]);
 
-  // Debounced slug availability check
   useEffect(() => {
     setSlugAvailable(null);
     if (slug.length < 3) return;
     if (slugTimer.current) clearTimeout(slugTimer.current);
     slugTimer.current = setTimeout(async () => {
       setSlugChecking(true);
-      try {
-        const res = await fetch(`/api/v1/signup/check?slug=${encodeURIComponent(slug)}`);
-        const data = await res.json();
-        setSlugAvailable(data.available);
-      } catch { setSlugAvailable(null); }
+      try { const res = await fetch(`/api/v1/signup/check?slug=${encodeURIComponent(slug)}`); const data = await res.json(); setSlugAvailable(data.available); } catch { setSlugAvailable(null); }
       setSlugChecking(false);
     }, 500);
   }, [slug]);
@@ -48,82 +78,46 @@ const SignupModal: React.FC<SignupModalProps> = ({ plan, onClose }) => {
   const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+    e.preventDefault(); setError('');
     if (!businessName || !email || !slug) { setError('Please fill in all required fields.'); return; }
     if (slugAvailable === false) { setError('That subdomain is taken. Try another.'); return; }
-
     setSubmitting(true);
     try {
-      const res = await fetch('/api/v1/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessName, email, phone, slug, plan }),
-      });
+      const res = await fetch('/api/v1/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessName, email, phone, slug, plan }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Signup failed');
-      // Redirect to Stripe Checkout
       window.location.href = data.url;
-    } catch (err: any) {
-      setError(err.message);
-      setSubmitting(false);
-    }
+    } catch (err: any) { setError(err.message); setSubmitting(false); }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-8 relative" onClick={e => e.stopPropagation()}>
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-8 relative animate-scale-in" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20} /></button>
-
         <div className="text-center mb-6">
           <div className="inline-flex items-center gap-2 bg-orange-500/10 text-orange-400 px-3 py-1 rounded-full text-xs font-bold mb-3 border border-orange-500/20">
             {plan === 'pro' ? 'PRO' : 'STARTER'} PLAN
           </div>
           <h2 className="text-2xl font-black text-white">Get started with ChowNow</h2>
-          <p className="text-gray-400 text-sm mt-1">
-            {plan === 'pro' ? '$99/month + Pi hardware' : '$49/month + Pi hardware'}
-          </p>
+          <p className="text-gray-400 text-sm mt-1">{plan === 'pro' ? '$99/month' : '$49/month'} + Pi hardware</p>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-xs text-gray-400 font-bold uppercase tracking-widest">Business Name *</label>
-            <input
-              type="text" value={businessName} onChange={e => setBusinessName(e.target.value)}
-              placeholder="Smoky Joe's BBQ"
-              className="w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-orange-500 focus:outline-none transition"
-              required
-            />
+            <input type="text" value={businessName} onChange={e => setBusinessName(e.target.value)} placeholder="Smoky Joe's BBQ" className="w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-orange-500 focus:outline-none transition" required />
           </div>
-
           <div>
             <label className="text-xs text-gray-400 font-bold uppercase tracking-widest">Email *</label>
-            <input
-              type="email" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="joe@smokyjoes.com.au"
-              className="w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-orange-500 focus:outline-none transition"
-              required
-            />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="joe@smokyjoes.com.au" className="w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-orange-500 focus:outline-none transition" required />
           </div>
-
           <div>
             <label className="text-xs text-gray-400 font-bold uppercase tracking-widest">Phone</label>
-            <input
-              type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-              placeholder="0412 345 678"
-              className="w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-orange-500 focus:outline-none transition"
-            />
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0412 345 678" className="w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-orange-500 focus:outline-none transition" />
           </div>
-
           <div>
             <label className="text-xs text-gray-400 font-bold uppercase tracking-widest">Your Subdomain *</label>
             <div className="flex items-center mt-1 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden focus-within:border-orange-500 transition">
-              <input
-                type="text" value={slug} onChange={e => setSlug(toSlug(e.target.value))}
-                placeholder="smokyjoes"
-                className="flex-1 bg-transparent px-4 py-3 text-white placeholder-gray-600 focus:outline-none"
-                required
-              />
+              <input type="text" value={slug} onChange={e => setSlug(toSlug(e.target.value))} placeholder="smokyjoes" className="flex-1 bg-transparent px-4 py-3 text-white placeholder-gray-600 focus:outline-none" required />
               <span className="text-gray-500 text-sm pr-4 whitespace-nowrap">.chownow.au</span>
             </div>
             <div className="mt-1 h-5 text-xs">
@@ -132,275 +126,515 @@ const SignupModal: React.FC<SignupModalProps> = ({ plan, onClose }) => {
               {!slugChecking && slugAvailable === false && <span className="text-red-400">Taken — try another</span>}
             </div>
           </div>
-
           {error && <div className="text-red-400 text-sm bg-red-500/10 px-4 py-2 rounded-xl">{error}</div>}
-
-          <button
-            type="submit"
-            disabled={submitting || slugAvailable === false}
-            className="w-full bg-orange-500 hover:bg-orange-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-black py-3.5 rounded-xl transition flex items-center justify-center gap-2"
-          >
+          <button type="submit" disabled={submitting || slugAvailable === false} className="w-full bg-orange-500 hover:bg-orange-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-black py-3.5 rounded-xl transition flex items-center justify-center gap-2">
             {submitting ? <><Loader2 size={18} className="animate-spin" /> Processing...</> : <>Continue to Payment <ArrowRight size={18} /></>}
           </button>
-
-          <p className="text-center text-gray-600 text-xs">
-            Includes ChowNow Pi hardware kit. Secure payment via Stripe.
-          </p>
+          <p className="text-center text-gray-600 text-xs">Includes ChowNow Pi hardware kit. Secure payment via Stripe.</p>
         </form>
       </div>
     </div>
   );
 };
 
+// ─── Section Wrapper with Scroll Animation ──────────────────────
+const Section: React.FC<{ children: React.ReactNode; className?: string; id?: string }> = ({ children, className = '', id }) => {
+  const { ref, inView } = useInView(0.02);
+  return <section ref={ref} id={id} className={`${className} will-change-transform transition-all duration-700 ease-out ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>{children}</section>;
+};
+
 // ─── Landing Page ───────────────────────────────────────────────
 const Landing: React.FC = () => {
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [signupPlan, setSignupPlan] = useState<'starter' | 'pro' | null>(null);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [scrolled, setScrolled] = useState(false);
+  const [activeTestimonial, setActiveTestimonial] = useState(0);
 
-  const features = [
-    { icon: QrCode, title: 'QR Skip-the-Queue', desc: 'Customers scan a QR code, order from their phone, and get an SMS when food is ready. No app download needed.' },
-    { icon: Monitor, title: 'Kitchen Display (KDS)', desc: 'Back-of-house sees orders in real-time. Tap to advance: New → Cooking → Ready. Auto-notifies customers and FOH.' },
-    { icon: Smartphone, title: 'FOH Tablet Ordering', desc: 'Take walk-up orders on a tablet. Menu grid, cart, customer name — order hits the kitchen instantly.' },
-    { icon: Bell, title: 'Instant Notifications', desc: 'SMS + email when order starts cooking and when it\'s ready. FOH gets an audio chime + visual alert.' },
-    { icon: WifiOff, title: 'Works Offline', desc: 'No WiFi? No problem. Orders are queued locally and sync automatically when connectivity returns. Like Square, but built for trucks.' },
-    { icon: CreditCard, title: 'Flexible Payments', desc: 'Stripe Terminal for tap-to-pay, Square integration, or cash at the counter. Your choice.' },
-    { icon: Globe, title: 'Works Everywhere', desc: 'Cloud-native on Cloudflare\'s edge network. Fast from any location — events, markets, festivals.' },
-    { icon: Shield, title: 'No Lock-in', desc: 'No contracts. No proprietary hardware. Runs on any tablet, phone, or laptop with a browser.' },
-  ];
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
-  const steps = [
-    { num: '1', title: 'Sign Up & Pay', desc: 'Choose your plan, enter your business details, and complete payment.' },
-    { num: '2', title: 'Get Your Pi', desc: 'We build and ship your ChowNow Pi — plug it in and you\'re live.' },
-    { num: '3', title: 'Set Up Your Menu', desc: 'Log into your admin dashboard, add your menu items, and print your QR code.' },
-    { num: '4', title: 'Start Serving', desc: 'Customers scan, order, and pay. Kitchen sees it all. You focus on cooking.' },
+  // Auto-rotate testimonials
+  useEffect(() => {
+    const timer = setInterval(() => setActiveTestimonial(p => (p + 1) % 3), 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const IMG = {
+    foodTruck: 'https://images.unsplash.com/photo-1565123409695-7b5ef63a2efb?auto=format&fit=crop&w=800&q=80',
+    tablet: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=80',
+    kitchen: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=800&q=80',
+    burger: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
+    tacos: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=800&q=80',
+    owner: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=400&q=80',
+    owner2: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
+    owner3: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
+    qr: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=80',
+  };
+
+  const testimonials = [
+    { name: 'Jake M.', biz: 'Smoky Jake\'s BBQ', loc: 'Gold Coast, QLD', quote: 'We cut our order wait time in half. Customers love scanning the QR instead of queuing at the window.', stars: 5, img: IMG.owner },
+    { name: 'Sarah L.', biz: 'Taco Madre', loc: 'Melbourne, VIC', quote: 'The Pi saved us at a festival with zero phone signal. Every other truck was dead — we kept serving.', stars: 5, img: IMG.owner3 },
+    { name: 'Dave R.', biz: 'The Burger Co', loc: 'Sydney, NSW', quote: 'Kitchen display changed everything. No more shouting orders. My team just watches the screen and cooks.', stars: 5, img: IMG.owner2 },
   ];
 
   const faqs = [
     { q: 'Do I need special hardware?', a: 'Your subscription includes a ChowNow Pi — a small device that runs the whole system. Beyond that, use any tablet, phone, or laptop with a browser for your FOH and kitchen displays.' },
-    { q: 'Does it work without internet?', a: 'Yes. ChowNow has a full offline mode. The Pi creates its own WiFi hotspot, so customers can order even when there\'s no mobile coverage at events.' },
-    { q: 'How do customers order?', a: 'They scan a QR code displayed on your truck. This opens a mobile-friendly menu in their browser — no app download. They add items, enter their name and phone, and place the order. They get an SMS when food is ready.' },
-    { q: 'What about payments?', a: 'Supports pay-at-counter (cash or card via your existing terminal), plus Stripe Terminal for in-app tap-to-pay on Pro plans.' },
-    { q: 'Can I use it for events and festivals?', a: 'Absolutely. The QR ordering is perfect for high-volume events — customers order from the queue instead of waiting at the window. The kitchen display handles the volume. The Pi means no internet needed.' },
-    { q: 'Is there a contract or lock-in?', a: 'No. Month-to-month. Cancel anytime. Your data is yours.' },
+    { q: 'Does it work without internet?', a: 'Yes. The Pi creates its own WiFi hotspot, so customers can order even at events with zero mobile coverage. Orders sync to the cloud when connectivity returns.' },
+    { q: 'How do customers order?', a: 'They scan a QR code on your truck. A mobile-friendly menu opens in their browser — no app download. They order, pay, and get an SMS when food is ready.' },
+    { q: 'What payment methods are supported?', a: 'Cash at counter, card via your existing terminal, plus Stripe Terminal for in-app tap-to-pay on Pro plans. Apple Pay and Google Pay supported.' },
+    { q: 'Can I use it for events and festivals?', a: 'Absolutely. The Pi means no internet needed. QR ordering handles high volume without extra staff. The kitchen display keeps everything flowing.' },
+    { q: 'Is there a contract?', a: 'No. Month-to-month. Cancel anytime. Your data is yours. We even help you export if you leave.' },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      {/* Signup Modal */}
+    <div className="min-h-screen bg-gray-950 text-white" style={{ overflowX: 'clip' }}>
       {signupPlan && <SignupModal plan={signupPlan} onClose={() => setSignupPlan(null)} />}
 
-      {/* Hero */}
-      <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-900/30 via-gray-950 to-gray-950" />
-        <div className="relative max-w-6xl mx-auto px-6 py-20 md:py-32">
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 bg-orange-500/10 text-orange-400 px-4 py-2 rounded-full text-sm font-bold mb-6 border border-orange-500/20">
+      {/* ─── Sticky Navbar ──────────────────────────────────────── */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/50 py-3' : 'bg-transparent py-5'}`}>
+        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between">
+          <img src="/logo-horizontal.png" alt="ChowNow" className="h-8 object-contain" />
+          <div className="hidden md:flex items-center gap-8">
+            <a href="#features" className="text-sm text-gray-400 hover:text-white transition font-medium">Features</a>
+            <a href="#pricing" className="text-sm text-gray-400 hover:text-white transition font-medium">Pricing</a>
+            <a href="#faq" className="text-sm text-gray-400 hover:text-white transition font-medium">FAQ</a>
+            <a href="#/qr-order" className="text-sm text-gray-400 hover:text-white transition font-medium">Demo</a>
+          </div>
+          <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-bold px-5 py-2 rounded-full text-sm transition active:scale-95">
+            Get Started
+          </button>
+        </div>
+      </nav>
+
+      {/* ─── Hero ───────────────────────────────────────────────── */}
+      <div className="relative min-h-screen flex items-center overflow-hidden">
+        {/* Background layers */}
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-950/40 via-gray-950 to-gray-950" />
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-orange-500/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-orange-600/5 rounded-full blur-[100px]" />
+
+        <div className="relative max-w-6xl mx-auto px-6 pt-28 pb-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          {/* Left: Text */}
+          <div>
+            <div className="inline-flex items-center gap-2 bg-orange-500/10 text-orange-400 px-4 py-2 rounded-full text-sm font-bold mb-6 border border-orange-500/20 animate-fade-in">
               <Zap size={14} /> Built for Australian food trucks
             </div>
-            <h1 className="text-5xl md:text-7xl font-black leading-[0.9] mb-6">
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-black leading-[0.9] mb-6">
               Your food truck,<br />
-              <span className="text-orange-400">fully digital.</span>
+              <RotatingWords />
             </h1>
-            <p className="text-xl text-gray-300 max-w-xl mb-8 leading-relaxed">
-              Front of house. Back of house. QR ordering. Kitchen display. Offline mode.
-              Everything a food truck needs — nothing it doesn't.
+            <p className="text-lg md:text-xl text-gray-400 max-w-lg mb-8 leading-relaxed">
+              The all-in-one system that replaces your clipboard, calculator, and shouting across the kitchen. Works offline. Pi hardware included.
             </p>
-            <div className="flex flex-wrap gap-4">
-              <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-2xl text-lg transition active:scale-95 flex items-center gap-2">
+            <div className="flex flex-wrap gap-4 mb-8">
+              <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-2xl text-lg transition active:scale-95 flex items-center gap-2 shadow-lg shadow-orange-500/20">
                 Get Started <ArrowRight size={20} />
               </button>
-              <a href="#pricing" className="bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-2xl text-lg transition border border-white/10">
-                See Pricing
+              <a href="#/qr-order" className="bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-2xl text-lg transition border border-white/10 flex items-center gap-2">
+                <QrCode size={18} /> Try Demo
               </a>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Social Proof Bar */}
-      <div className="border-y border-gray-800 bg-gray-900/50">
-        <div className="max-w-6xl mx-auto px-6 py-6 flex flex-wrap items-center justify-center gap-8 text-center">
-          <div>
-            <div className="text-2xl font-black text-orange-400">3s</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest">Order poll speed</div>
-          </div>
-          <div className="w-px h-8 bg-gray-800 hidden md:block" />
-          <div>
-            <div className="text-2xl font-black text-orange-400">282KB</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest">Total bundle</div>
-          </div>
-          <div className="w-px h-8 bg-gray-800 hidden md:block" />
-          <div>
-            <div className="text-2xl font-black text-orange-400">100%</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest">Offline capable</div>
-          </div>
-          <div className="w-px h-8 bg-gray-800 hidden md:block" />
-          <div>
-            <div className="text-2xl font-black text-green-400">Pi included</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest">Hardware shipped to you</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Features */}
-      <div className="max-w-6xl mx-auto px-6 py-20">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-black mb-3">Everything your truck needs</h2>
-          <p className="text-gray-400 max-w-xl mx-auto">No restaurant POS crammed into a truck. No QR tool that doesn't talk to the kitchen. One system, built for how food trucks actually work.</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {features.map((f, i) => (
-            <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-orange-500/30 transition">
-              <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center mb-4">
-                <f.icon size={20} className="text-orange-400" />
-              </div>
-              <h3 className="text-white font-bold mb-2">{f.title}</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">{f.desc}</p>
+            <div className="flex items-center gap-6 text-sm text-gray-500">
+              <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> No contracts</span>
+              <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> Pi included</span>
+              <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> Cancel anytime</span>
             </div>
-          ))}
+          </div>
+
+          {/* Right: 3D Device Mockup */}
+          <div className="hidden lg:block perspective-1000">
+            <div className="relative device-3d">
+              {/* Main device frame */}
+              <div className="relative bg-gray-900 rounded-3xl border border-gray-700 p-3 shadow-2xl shadow-black/50">
+                <div className="bg-gray-950 rounded-2xl overflow-hidden aspect-[9/16] max-h-[500px]">
+                  <img src={IMG.foodTruck} alt="Food truck ordering" className="w-full h-full object-cover opacity-80" />
+                  <div className="absolute inset-3 flex flex-col justify-end p-6">
+                    <div className="bg-black/60 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                      <div className="flex items-center gap-2 mb-2">
+                        <QrCode size={16} className="text-orange-400" />
+                        <span className="text-white text-sm font-bold">Scan to Order</span>
+                      </div>
+                      <div className="text-gray-400 text-xs">Customers order from their phone. No app needed.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {/* Floating elements */}
+              <div className="absolute -top-6 -right-8 bg-green-500/90 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg animate-float">
+                Order #47 Ready!
+              </div>
+              <div className="absolute -bottom-4 -left-8 bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-xl text-sm shadow-lg animate-float-slow flex items-center gap-2">
+                <CreditCard size={14} className="text-orange-400" /> Tap to pay
+              </div>
+              <div className="absolute top-1/3 -right-12 bg-orange-500/90 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg animate-float-delayed">
+                +$24.50
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-gray-600 animate-pulse-slow">
+          <span className="text-xs uppercase tracking-widest">Scroll</span>
+          <ChevronDown size={16} />
         </div>
       </div>
 
-      {/* How it works */}
-      <div className="bg-gray-900/50 border-y border-gray-800">
-        <div className="max-w-6xl mx-auto px-6 py-20">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-black mb-3">How it works</h2>
-            <p className="text-gray-400">Up and running in days, not weeks.</p>
+      {/* ─── Social Proof Bar ───────────────────────────────────── */}
+      <Section className="border-y border-gray-800 bg-gray-900/50">
+        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-center gap-10 text-center">
+          <div>
+            <div className="text-3xl font-black text-orange-400"><Counter end={500} suffix="+" /></div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Orders processed</div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {steps.map((s, i) => (
-              <div key={i} className="text-center">
-                <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-white font-black text-xl mx-auto mb-4">{s.num}</div>
+          <div className="w-px h-10 bg-gray-800 hidden md:block" />
+          <div>
+            <div className="text-3xl font-black text-orange-400"><Counter end={3} />s</div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Order to kitchen</div>
+          </div>
+          <div className="w-px h-10 bg-gray-800 hidden md:block" />
+          <div>
+            <div className="text-3xl font-black text-orange-400">100%</div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Offline capable</div>
+          </div>
+          <div className="w-px h-10 bg-gray-800 hidden md:block" />
+          <div>
+            <div className="text-3xl font-black text-green-400 flex items-center gap-2"><Package size={24} /> Included</div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Pi hardware shipped</div>
+          </div>
+        </div>
+      </Section>
+
+      {/* ─── Problem vs Solution ────────────────────────────────── */}
+      <Section className="max-w-6xl mx-auto px-6 py-24">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-5xl font-black mb-4">While you're using clipboards,<br /><span className="text-orange-400">competitors are using QR.</span></h2>
+          <p className="text-gray-400 max-w-2xl mx-auto text-lg">Every missed order, every walkoff, every festival with no signal — it all costs you money.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* The Old Way */}
+          <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-8 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-[60px]" />
+            <h3 className="text-red-400 font-black text-lg uppercase tracking-widest mb-6 flex items-center gap-2"><XCircle size={20} /> The old way</h3>
+            <ul className="space-y-4">
+              {[
+                'Handwritten orders — illegible, lost, wrong',
+                'Shouting across the truck over the fryer',
+                'Customers walk off when the queue is too long',
+                'Festival with no signal = no payments',
+                'No idea how many orders you did today',
+              ].map((p, i) => (
+                <li key={i} className="flex items-start gap-3 text-gray-400">
+                  <XCircle size={16} className="text-red-400 mt-0.5 shrink-0" />
+                  <span className="line-through decoration-red-400/40">{p}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* The ChowNow Way */}
+          <div className="bg-green-500/5 border border-green-500/20 rounded-2xl p-8 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-[60px]" />
+            <h3 className="text-green-400 font-black text-lg uppercase tracking-widest mb-6 flex items-center gap-2"><CheckCircle size={20} /> The ChowNow way</h3>
+            <ul className="space-y-4">
+              {[
+                'Digital orders — accurate, instant, tracked',
+                'Kitchen display shows every order in real time',
+                'QR ordering: customers order from the queue',
+                'Pi creates its own WiFi — works with zero signal',
+                'Full dashboard: orders, revenue, peak times',
+              ].map((p, i) => (
+                <li key={i} className="flex items-start gap-3 text-gray-300">
+                  <CheckCircle size={16} className="text-green-400 mt-0.5 shrink-0" />
+                  <span>{p}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </Section>
+
+      {/* ─── Features ───────────────────────────────────────────── */}
+      <Section id="features" className="bg-gray-900/30 border-y border-gray-800">
+        <div className="max-w-6xl mx-auto px-6 py-24">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-black mb-4">Everything your truck needs</h2>
+            <p className="text-gray-400 max-w-xl mx-auto text-lg">One system. Built for how food trucks actually work.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 perspective-1000 stagger-children">
+            {[
+              { icon: QrCode, title: 'QR Ordering', desc: 'Customers scan, browse, and order from their phone. No app download. No queue.', img: IMG.qr },
+              { icon: Monitor, title: 'Kitchen Display', desc: 'Orders appear instantly. Tap to advance: New, Cooking, Ready. Auto-notifies customers.', img: IMG.kitchen },
+              { icon: Smartphone, title: 'FOH Tablet POS', desc: 'Take walk-up orders on any device. Menu grid, cart, name — hits kitchen instantly.', img: IMG.tablet },
+              { icon: Bell, title: 'SMS Notifications', desc: 'Customers get a text when cooking starts and when food is ready. No shouting names.', img: IMG.burger },
+              { icon: WifiOff, title: 'Works Offline', desc: 'Pi creates a WiFi hotspot. Orders queue locally and sync when internet returns.', img: IMG.foodTruck },
+              { icon: CreditCard, title: 'Tap to Pay', desc: 'Stripe Terminal for contactless payments. Apple Pay, Google Pay, or good old cash.', img: IMG.tacos },
+              { icon: Globe, title: 'Cloud Native', desc: 'Runs on Cloudflare\'s edge. Fast from anywhere — markets, events, festivals.', img: IMG.foodTruck },
+              { icon: Shield, title: 'No Lock-in', desc: 'Month-to-month. No contracts. No proprietary hardware. Your data is always yours.', img: IMG.burger },
+            ].map((f, i) => (
+              <div key={i} className="card-3d bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden group">
+                <div className="h-32 overflow-hidden relative">
+                  <img src={f.img} alt={f.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 opacity-60" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent" />
+                  <div className="absolute bottom-3 left-4">
+                    <div className="w-10 h-10 bg-orange-500/20 backdrop-blur-sm rounded-xl flex items-center justify-center border border-orange-500/30">
+                      <f.icon size={20} className="text-orange-400" />
+                    </div>
+                  </div>
+                </div>
+                <div className="p-5">
+                  <h3 className="text-white font-bold mb-1.5">{f.title}</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed">{f.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      {/* ─── How It Works ───────────────────────────────────────── */}
+      <Section className="max-w-6xl mx-auto px-6 py-24">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-5xl font-black mb-4">Up and running in days</h2>
+          <p className="text-gray-400 text-lg">Not weeks. Not months. Days.</p>
+        </div>
+        <div className="relative">
+          {/* Connection line */}
+          <div className="hidden md:block absolute top-12 left-[12.5%] right-[12.5%] h-0.5 bg-gradient-to-r from-orange-500 via-orange-400 to-orange-500 opacity-30" />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            {[
+              { num: '1', title: 'Sign Up', desc: 'Pick your plan, enter your details, and pay. Takes 2 minutes.', icon: Zap },
+              { num: '2', title: 'Get Your Pi', desc: 'We build and ship your pre-configured Pi hardware kit.', icon: Package },
+              { num: '3', title: 'Set Up Menu', desc: 'Log into admin, add items, set prices. Print your QR code.', icon: ClipboardList },
+              { num: '4', title: 'Start Serving', desc: 'Customers scan, kitchen cooks, everyone\'s happy.', icon: ChefHat },
+            ].map((s, i) => (
+              <div key={i} className="text-center relative">
+                <div className="w-16 h-16 bg-orange-500 rounded-2xl flex items-center justify-center text-white font-black text-2xl mx-auto mb-5 shadow-lg shadow-orange-500/30 rotate-3 hover:rotate-0 transition-transform">
+                  <s.icon size={28} />
+                </div>
                 <h3 className="text-white font-bold text-lg mb-2">{s.title}</h3>
                 <p className="text-gray-400 text-sm">{s.desc}</p>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      </Section>
 
-      {/* The Loop Diagram */}
-      <div className="max-w-6xl mx-auto px-6 py-20">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl md:text-4xl font-black mb-3">The full loop</h2>
-          <p className="text-gray-400">Every order follows the same flow, whether walk-up or QR.</p>
+      {/* ─── Live Demo Preview ──────────────────────────────────── */}
+      <Section className="bg-gray-900/30 border-y border-gray-800">
+        <div className="max-w-6xl mx-auto px-6 py-24">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-black mb-4">See it in action</h2>
+            <p className="text-gray-400 text-lg">Three screens. One system. Zero chaos.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 perspective-1000">
+            {[
+              { title: 'Customer QR Order', desc: 'Scan → browse → order → pay', link: '#/qr-order', color: 'from-blue-500/20 to-blue-600/5' },
+              { title: 'Kitchen Display', desc: 'Real-time orders with bump workflow', link: '#/boh', color: 'from-orange-500/20 to-orange-600/5' },
+              { title: 'Front of House POS', desc: 'Walk-up orders + payment tracking', link: '#/foh', color: 'from-green-500/20 to-green-600/5' },
+            ].map((screen, i) => (
+              <a key={i} href={screen.link} className={`card-3d bg-gradient-to-b ${screen.color} border border-gray-800 rounded-2xl p-6 text-center hover:border-orange-500/30 transition block`}>
+                <div className="bg-gray-950 rounded-xl h-48 mb-4 flex items-center justify-center border border-gray-800">
+                  <Monitor size={48} className="text-gray-700" />
+                </div>
+                <h3 className="text-white font-bold text-lg mb-1">{screen.title}</h3>
+                <p className="text-gray-400 text-sm mb-3">{screen.desc}</p>
+                <span className="text-orange-400 text-sm font-bold flex items-center justify-center gap-1">Try it live <ArrowRight size={14} /></span>
+              </a>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-0">
-          {[
-            { label: 'Customer orders', sub: 'QR scan or FOH tablet', color: 'bg-blue-500' },
-            { label: 'Hits kitchen', sub: 'BOH sees it instantly', color: 'bg-yellow-500' },
-            { label: 'Start cooking', sub: 'SMS: "Being prepared"', color: 'bg-orange-500' },
-            { label: 'Mark ready', sub: 'SMS + FOH chime', color: 'bg-green-500' },
-            { label: 'Collected', sub: 'Order complete', color: 'bg-gray-500' },
-          ].map((step, i) => (
-            <React.Fragment key={i}>
-              <div className="flex flex-col items-center text-center min-w-[120px]">
-                <div className={`w-4 h-4 ${step.color} rounded-full mb-2`} />
-                <div className="text-white font-bold text-sm">{step.label}</div>
-                <div className="text-gray-500 text-xs">{step.sub}</div>
-              </div>
-              {i < 4 && <ArrowRight size={16} className="text-gray-700 hidden md:block mx-2 shrink-0" />}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
+      </Section>
 
-      {/* Pricing */}
-      <div id="pricing" className="bg-gray-900/50 border-y border-gray-800">
-        <div className="max-w-4xl mx-auto px-6 py-20">
+      {/* ─── The Full Loop ──────────────────────────────────────── */}
+      <Section className="max-w-6xl mx-auto px-6 py-24">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-5xl font-black mb-4">The full loop</h2>
+          <p className="text-gray-400 text-lg">Every order. Same flow. Walk-up or QR.</p>
+        </div>
+        <div className="relative bg-gray-900/50 border border-gray-800 rounded-2xl p-8 md:p-12">
+          {/* Animated connecting line */}
+          <div className="hidden md:block absolute top-1/2 left-[10%] right-[10%] h-1 -translate-y-1/2">
+            <div className="h-full bg-gradient-to-r from-blue-500 via-orange-500 to-green-500 rounded-full opacity-20" />
+            <div className="absolute inset-0 h-full bg-gradient-to-r from-blue-500 via-orange-500 to-green-500 rounded-full opacity-60 blur-sm" />
+          </div>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative">
+            {[
+              { label: 'Customer orders', sub: 'QR scan or tablet', color: 'bg-blue-500', glow: 'shadow-blue-500/30' },
+              { label: 'Hits kitchen', sub: 'Instant display', color: 'bg-yellow-500', glow: 'shadow-yellow-500/30' },
+              { label: 'Cooking', sub: 'SMS: "Being prepared"', color: 'bg-orange-500', glow: 'shadow-orange-500/30' },
+              { label: 'Ready', sub: 'SMS + FOH chime', color: 'bg-green-500', glow: 'shadow-green-500/30' },
+              { label: 'Collected', sub: 'Order complete', color: 'bg-gray-400', glow: 'shadow-gray-400/30' },
+            ].map((step, i) => (
+              <React.Fragment key={i}>
+                <div className="flex flex-col items-center text-center z-10">
+                  <div className={`w-12 h-12 ${step.color} rounded-full flex items-center justify-center shadow-lg ${step.glow} mb-3`}>
+                    <span className="text-white font-black text-sm">{i + 1}</span>
+                  </div>
+                  <div className="text-white font-bold text-sm">{step.label}</div>
+                  <div className="text-gray-500 text-xs mt-0.5">{step.sub}</div>
+                </div>
+                {i < 4 && <ArrowRight size={20} className="text-gray-700 hidden md:block shrink-0" />}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      {/* ─── Testimonials ───────────────────────────────────────── */}
+      <Section className="bg-gray-900/30 border-y border-gray-800">
+        <div className="max-w-4xl mx-auto px-6 py-24">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-black mb-3">Simple pricing</h2>
-            <p className="text-gray-400">No hidden fees. No per-transaction charges. No contracts. Pi hardware included.</p>
+            <h2 className="text-3xl md:text-4xl font-black mb-4">Loved by truck owners</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
-              <div className="text-orange-400 font-bold text-sm uppercase tracking-widest mb-2">Starter</div>
-              <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-4xl font-black text-white">$49</span>
-                <span className="text-gray-500">/month</span>
+          <div className="relative h-[220px]">
+            {testimonials.map((t, i) => (
+              <div key={i} className={`absolute inset-0 transition-all duration-500 ${i === activeTestimonial ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+                  <Quote size={32} className="text-orange-400/30 mx-auto mb-4" />
+                  <p className="text-white text-lg md:text-xl font-medium mb-6 italic leading-relaxed">"{t.quote}"</p>
+                  <div className="flex items-center justify-center gap-4">
+                    <img src={t.img} alt={t.name} className="w-12 h-12 rounded-full object-cover border-2 border-orange-500/30" />
+                    <div className="text-left">
+                      <div className="text-white font-bold">{t.name}</div>
+                      <div className="text-gray-400 text-sm">{t.biz} — {t.loc}</div>
+                    </div>
+                    <div className="flex gap-0.5 ml-4">
+                      {Array.from({ length: t.stars }).map((_, s) => <Star key={s} size={14} className="text-orange-400 fill-orange-400" />)}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p className="text-gray-600 text-xs mb-4">+ one-time Pi hardware fee</p>
-              <ul className="space-y-3 mb-8">
-                {['FOH + BOH + QR ordering', 'Unlimited orders', 'SMS notifications (BYO Twilio)', 'Offline mode + Pi hardware', 'Up to 2 devices', '31-item menu'].map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-gray-300 text-sm">
-                    <CheckCircle size={16} className="text-green-400 shrink-0" /> {f}
-                  </li>
-                ))}
-              </ul>
-              <button
-                onClick={() => setSignupPlan('starter')}
-                className="block w-full text-center bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-xl border border-white/10 transition"
-              >
-                Get Started
-              </button>
-            </div>
-            <div className="bg-gray-900 border-2 border-orange-500 rounded-2xl p-8 relative">
-              <div className="absolute -top-3 right-6 bg-orange-500 text-white text-xs font-black px-3 py-1 rounded-full">POPULAR</div>
-              <div className="text-orange-400 font-bold text-sm uppercase tracking-widest mb-2">Pro</div>
-              <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-4xl font-black text-white">$99</span>
-                <span className="text-gray-500">/month</span>
-              </div>
-              <p className="text-gray-600 text-xs mb-4">+ one-time Pi hardware fee</p>
-              <ul className="space-y-3 mb-8">
-                {['Everything in Starter', 'Unlimited devices', 'Unlimited menu items', 'Stripe Terminal payments', 'Catering & event management', 'Custom branding', 'Priority support'].map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-gray-300 text-sm">
-                    <CheckCircle size={16} className="text-green-400 shrink-0" /> {f}
-                  </li>
-                ))}
-              </ul>
-              <button
-                onClick={() => setSignupPlan('pro')}
-                className="block w-full text-center bg-orange-500 hover:bg-orange-400 text-white font-black py-3 rounded-xl transition"
-              >
-                Get Started
-              </button>
-            </div>
+            ))}
+          </div>
+          {/* Dots */}
+          <div className="flex justify-center gap-2 mt-6">
+            {testimonials.map((_, i) => (
+              <button key={i} onClick={() => setActiveTestimonial(i)} className={`w-2 h-2 rounded-full transition ${i === activeTestimonial ? 'bg-orange-400 w-6' : 'bg-gray-700'}`} />
+            ))}
           </div>
         </div>
-      </div>
+      </Section>
 
-      {/* FAQ */}
-      <div className="max-w-3xl mx-auto px-6 py-20">
-        <h2 className="text-3xl font-black text-center mb-10">Frequently asked questions</h2>
-        <div className="space-y-3">
-          {faqs.map((faq, i) => (
-            <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-              <button
-                onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                className="w-full flex items-center justify-between px-6 py-4 text-left"
-              >
-                <span className="text-white font-bold">{faq.q}</span>
-                <ChevronDown size={18} className={`text-gray-500 transition ${openFaq === i ? 'rotate-180' : ''}`} />
-              </button>
-              {openFaq === i && (
-                <div className="px-6 pb-4 text-gray-400 text-sm leading-relaxed">{faq.a}</div>
-              )}
-            </div>
-          ))}
+      {/* ─── Pricing ────────────────────────────────────────────── */}
+      <Section id="pricing" className="max-w-5xl mx-auto px-6 py-24">
+        <div className="text-center mb-6">
+          <h2 className="text-3xl md:text-5xl font-black mb-4">Simple, honest pricing</h2>
+          <p className="text-gray-400 text-lg max-w-xl mx-auto">No hidden fees. No per-transaction charges. Pi hardware included in every plan.</p>
         </div>
-      </div>
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 bg-green-500/10 text-green-400 px-4 py-2 rounded-full text-sm font-bold border border-green-500/20">
+            <Timer size={14} /> Save 10+ hours/week on order management
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 perspective-1000">
+          {/* Starter */}
+          <div className="card-3d bg-gray-900 border border-gray-800 rounded-2xl p-8">
+            <div className="text-orange-400 font-bold text-sm uppercase tracking-widest mb-2">Starter</div>
+            <div className="flex items-baseline gap-1 mb-1">
+              <span className="text-5xl font-black text-white">$49</span>
+              <span className="text-gray-500 text-lg">/month</span>
+            </div>
+            <p className="text-gray-600 text-sm mb-6">+ one-time Pi hardware fee</p>
+            <ul className="space-y-3 mb-8">
+              {['FOH + BOH + QR ordering', 'Unlimited orders', 'SMS notifications (BYO Twilio)', 'Offline mode + Pi hardware', 'Up to 2 devices', '31-item menu'].map((f, i) => (
+                <li key={i} className="flex items-center gap-3 text-gray-300 text-sm"><CheckCircle size={16} className="text-green-400 shrink-0" /> {f}</li>
+              ))}
+            </ul>
+            <button onClick={() => setSignupPlan('starter')} className="block w-full text-center bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 rounded-xl border border-white/10 transition text-lg">Get Started</button>
+          </div>
 
-      {/* CTA */}
-      <div className="border-t border-gray-800 bg-gradient-to-b from-gray-900 to-gray-950">
-        <div className="max-w-3xl mx-auto px-6 py-20 text-center">
-          <h2 className="text-3xl md:text-4xl font-black mb-4">Ready to ditch the clipboard?</h2>
-          <p className="text-gray-400 mb-8 max-w-xl mx-auto">Sign up, get your Pi, and start serving smarter. No setup calls, no onboarding hassle.</p>
-          <button
-            onClick={() => setSignupPlan('pro')}
-            className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-2xl text-lg transition active:scale-95"
-          >
-            Get Started <ArrowRight size={20} />
+          {/* Pro */}
+          <div className="card-3d relative bg-gray-900 rounded-2xl p-8 glow-border">
+            <div className="absolute -top-3 right-6 bg-orange-500 text-white text-xs font-black px-4 py-1 rounded-full">MOST POPULAR</div>
+            <div className="text-orange-400 font-bold text-sm uppercase tracking-widest mb-2">Pro</div>
+            <div className="flex items-baseline gap-1 mb-1">
+              <span className="text-5xl font-black text-white">$99</span>
+              <span className="text-gray-500 text-lg">/month</span>
+            </div>
+            <p className="text-gray-600 text-sm mb-6">+ one-time Pi hardware fee</p>
+            <ul className="space-y-3 mb-8">
+              {['Everything in Starter', 'Unlimited devices', 'Unlimited menu items', 'Stripe Terminal payments', 'Catering & event management', 'Custom branding', 'Priority support'].map((f, i) => (
+                <li key={i} className="flex items-center gap-3 text-gray-300 text-sm"><CheckCircle size={16} className="text-green-400 shrink-0" /> {f}</li>
+              ))}
+            </ul>
+            <button onClick={() => setSignupPlan('pro')} className="block w-full text-center bg-orange-500 hover:bg-orange-400 text-white font-black py-3.5 rounded-xl transition text-lg shadow-lg shadow-orange-500/20">Get Started</button>
+          </div>
+        </div>
+      </Section>
+
+      {/* ─── FAQ ─────────────────────────────────────────────────── */}
+      <Section id="faq" className="bg-gray-900/30 border-y border-gray-800">
+        <div className="max-w-3xl mx-auto px-6 py-24">
+          <h2 className="text-3xl md:text-4xl font-black text-center mb-12">Got questions?</h2>
+          <div className="space-y-3">
+            {faqs.map((faq, i) => (
+              <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden transition-all">
+                <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="w-full flex items-center justify-between px-6 py-5 text-left">
+                  <span className="text-white font-bold">{faq.q}</span>
+                  <ChevronDown size={18} className={`text-gray-500 transition-transform duration-300 ${openFaq === i ? 'rotate-180' : ''}`} />
+                </button>
+                <div className={`overflow-hidden transition-all duration-300 ${openFaq === i ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
+                  <div className="px-6 pb-5 text-gray-400 text-sm leading-relaxed">{faq.a}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      {/* ─── Final CTA ──────────────────────────────────────────── */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-gray-950 via-orange-950/20 to-gray-950" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-orange-500/10 rounded-full blur-[150px]" />
+        <Section className="relative max-w-3xl mx-auto px-6 py-24 text-center">
+          <div className="inline-flex items-center gap-2 bg-orange-500/10 text-orange-400 px-4 py-2 rounded-full text-sm font-bold mb-6 border border-orange-500/20">
+            <Cpu size={14} /> Limited Pi builds each month
+          </div>
+          <h2 className="text-4xl md:text-5xl font-black mb-4">Get your Pi.<br />Start serving smarter.</h2>
+          <p className="text-gray-400 text-lg mb-8 max-w-xl mx-auto">Sign up today, get your hardware shipped, and be live in days. No setup calls. No onboarding hassle.</p>
+          <button onClick={() => setSignupPlan('pro')} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white font-black px-10 py-5 rounded-2xl text-xl transition active:scale-95 shadow-lg shadow-orange-500/20">
+            Get Started <ArrowRight size={22} />
           </button>
-        </div>
+          <div className="flex items-center justify-center gap-6 mt-6 text-sm text-gray-500">
+            <span className="flex items-center gap-1"><Shield size={14} className="text-gray-600" /> No contracts</span>
+            <span className="flex items-center gap-1"><CreditCard size={14} className="text-gray-600" /> Cancel anytime</span>
+          </div>
+        </Section>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-800 py-8 px-6">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-          <img src="/logo-horizontal.png" alt="ChowNow" className="h-8 object-contain" />
-          <div>Built in Australia. Powered by Cloudflare.</div>
+      {/* ─── Footer ─────────────────────────────────────────────── */}
+      <footer className="border-t border-gray-800 bg-gray-950">
+        <div className="max-w-6xl mx-auto px-6 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div className="md:col-span-2">
+              <img src="/logo-horizontal.png" alt="ChowNow" className="h-10 object-contain mb-4" />
+              <p className="text-gray-500 text-sm max-w-sm leading-relaxed">Food truck workflow, sorted. QR ordering, kitchen display, front-of-house POS, and offline mode — all in one box.</p>
+            </div>
+            <div>
+              <h4 className="text-white font-bold text-sm uppercase tracking-widest mb-4">Product</h4>
+              <ul className="space-y-2 text-gray-400 text-sm">
+                <li><a href="#features" className="hover:text-white transition">Features</a></li>
+                <li><a href="#pricing" className="hover:text-white transition">Pricing</a></li>
+                <li><a href="#/qr-order" className="hover:text-white transition">Demo</a></li>
+                <li><a href="#faq" className="hover:text-white transition">FAQ</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-white font-bold text-sm uppercase tracking-widest mb-4">Company</h4>
+              <ul className="space-y-2 text-gray-400 text-sm">
+                <li><a href="mailto:hello@chownow.au" className="hover:text-white transition">Contact</a></li>
+                <li><span className="flex items-center gap-1">Built in Australia <span className="text-base">🇦🇺</span></span></li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-600">
+            <span>&copy; {new Date().getFullYear()} ChowNow. All rights reserved.</span>
+            <span>Powered by Cloudflare</span>
+          </div>
         </div>
       </footer>
     </div>
