@@ -221,7 +221,7 @@ const Landing: React.FC = () => {
             <a href="#features" className="text-sm text-gray-400 hover:text-white transition font-medium">Features</a>
             <a href="#pricing" className="text-sm text-gray-400 hover:text-white transition font-medium">Pricing</a>
             <a href="#faq" className="text-sm text-gray-400 hover:text-white transition font-medium">FAQ</a>
-            <a href="/#/qr-order" className="text-sm text-gray-400 hover:text-white transition font-medium">Demo</a>
+            <a href="/#/demo" className="text-sm text-gray-400 hover:text-white transition font-medium">Demo</a>
           </div>
           <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-bold px-5 py-2 rounded-full text-sm transition active:scale-95">
             Get Started
@@ -250,7 +250,7 @@ const Landing: React.FC = () => {
             <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-full text-lg transition active:scale-95 flex items-center gap-2 shadow-lg shadow-orange-500/20">
               Get Started <ArrowRight size={20} />
             </button>
-            <a href="#/qr-order" className="bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-full text-lg transition border border-white/10 flex items-center gap-2">
+            <a href="/#/demo" className="bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-full text-lg transition border border-white/10 flex items-center gap-2">
               Try Demo
             </a>
           </div>
@@ -370,7 +370,7 @@ const Landing: React.FC = () => {
           <div className="text-center mt-16">
             <p className="text-gray-400 text-lg mb-6">Want to see it for yourself?</p>
             <div className="flex flex-wrap gap-4 justify-center">
-              <a href="/#/qr-order" className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-full text-lg transition active:scale-95 flex items-center gap-2">
+              <a href="/#/demo" className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-full text-lg transition active:scale-95 flex items-center gap-2">
                 Try the Live Demo <ArrowRight size={20} />
               </a>
               <button onClick={() => setSignupPlan('pro')} className="bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-full text-lg transition border border-white/10">
@@ -525,7 +525,7 @@ const Landing: React.FC = () => {
               {
                 title: 'Customer QR Order',
                 desc: 'Your customers scan the QR code on your truck, browse your full menu with photos, add items to cart, and place their order — all from their phone. No app to download.',
-                link: '/#/qr-order',
+                link: '/#/demo',
                 icon: QrCode,
                 gradient: 'from-blue-600 to-blue-900',
                 features: ['Scan & order in 30 seconds', 'Full menu with photos', 'Cart + checkout', 'SMS when ready'],
@@ -761,7 +761,7 @@ const Landing: React.FC = () => {
               <ul className="space-y-2 text-gray-400 text-sm">
                 <li><a href="#features" className="hover:text-white transition">Features</a></li>
                 <li><a href="#pricing" className="hover:text-white transition">Pricing</a></li>
-                <li><a href="/#/qr-order" className="hover:text-white transition">Demo</a></li>
+                <li><a href="/#/demo" className="hover:text-white transition">Demo</a></li>
                 <li><a href="#faq" className="hover:text-white transition">FAQ</a></li>
               </ul>
             </div>
