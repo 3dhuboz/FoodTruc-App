@@ -775,7 +775,7 @@ const Landing: React.FC = () => {
           </div>
           <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-600">
             <span>&copy; {new Date().getFullYear()} ChowNow. All rights reserved.</span>
-            <a href="/#/login" className="text-gray-700 hover:text-gray-500 transition text-xs">Admin</a>
+            <a href="/#/super-admin" className="text-gray-700 hover:text-gray-500 transition text-xs">Admin</a>
             <span>Powered by Cloudflare</span>
           </div>
         </div>
