@@ -43,10 +43,8 @@ const RotatingWords: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
   return (
-    <span className="inline-block relative">
-      {words.map((w, i) => (
-        <span key={i} className={`text-orange-400 transition-all duration-500 ${i === idx ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}>{w}</span>
-      ))}
+    <span className="inline-block">
+      <span className="text-orange-400 transition-opacity duration-500">{words[idx]}</span>
     </span>
   );
 };
@@ -216,38 +214,22 @@ const Landing: React.FC = () => {
 
       {/* ─── Hero ───────────────────────────────────────────────── */}
       <div className="relative min-h-screen flex items-center overflow-hidden">
-        {/* Background: scrolling image mosaic */}
-        <div className="absolute inset-0 overflow-hidden">
-          {/* Row 1 — scrolls left */}
-          <div className="absolute top-0 left-0 right-0 h-1/3 flex animate-marquee" style={{ width: '200%' }}>
-            {[IMG.qr, IMG.foodTruck, IMG.burger, IMG.kitchen, IMG.tacos, IMG.tablet, IMG.qr, IMG.foodTruck, IMG.burger, IMG.kitchen, IMG.tacos, IMG.tablet].map((src, i) => (
-              <div key={i} className="h-full flex-shrink-0 w-[300px]">
-                <img src={src} alt="" className="w-full h-full object-cover" />
-              </div>
-            ))}
-          </div>
-          {/* Row 2 — scrolls right (reversed) */}
-          <div className="absolute top-1/3 left-0 right-0 h-1/3 flex" style={{ width: '200%', animation: 'marquee 50s linear infinite reverse' }}>
-            {[IMG.tablet, IMG.tacos, IMG.owner, IMG.burger, IMG.qr, IMG.kitchen, IMG.tablet, IMG.tacos, IMG.owner, IMG.burger, IMG.qr, IMG.kitchen].map((src, i) => (
-              <div key={i} className="h-full flex-shrink-0 w-[300px]">
-                <img src={src} alt="" className="w-full h-full object-cover" />
-              </div>
-            ))}
-          </div>
-          {/* Row 3 — scrolls left slower */}
-          <div className="absolute top-2/3 left-0 right-0 h-1/3 flex" style={{ width: '200%', animation: 'marquee 55s linear infinite' }}>
-            {[IMG.kitchen, IMG.foodTruck, IMG.tacos, IMG.qr, IMG.burger, IMG.tablet, IMG.kitchen, IMG.foodTruck, IMG.tacos, IMG.qr, IMG.burger, IMG.tablet].map((src, i) => (
-              <div key={i} className="h-full flex-shrink-0 w-[300px]">
-                <img src={src} alt="" className="w-full h-full object-cover" />
-              </div>
-            ))}
-          </div>
-          {/* Heavy gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-b from-gray-950/90 via-gray-950/85 to-gray-950/95" />
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-transparent to-gray-950" />
+        {/* Background: looping food truck video */}
+        <div className="absolute inset-0">
+          <video
+            autoPlay muted loop playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+            poster={IMG.foodTruck}
+          >
+            <source src="https://videos.pexels.com/video-files/3298572/3298572-uhd_2560_1440_30fps.mp4" type="video/mp4" />
+          </video>
+          {/* Dark gradient overlays for text readability */}
+          <div className="absolute inset-0 bg-gray-950/75" />
+          <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-gray-950/60 to-gray-950/40" />
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-gray-950/50" />
         </div>
-        {/* Glow orbs on top */}
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-orange-500/10 rounded-full blur-[120px]" />
+        {/* Glow orbs */}
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-orange-500/8 rounded-full blur-[120px]" />
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-orange-600/5 rounded-full blur-[100px]" />
 
         <div className="relative max-w-6xl mx-auto px-6 pt-28 pb-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -282,16 +264,20 @@ const Landing: React.FC = () => {
           <div className="hidden lg:block perspective-1000">
             <div className="relative device-3d">
               {/* Main device frame */}
-              <div className="relative bg-gray-900 rounded-3xl border border-gray-700 p-3 shadow-2xl shadow-black/50">
-                <div className="bg-gray-950 rounded-2xl overflow-hidden aspect-[9/16] max-h-[500px]">
-                  <img src={IMG.foodTruck} alt="Food truck ordering" className="w-full h-full object-cover opacity-80" />
-                  <div className="absolute inset-3 flex flex-col justify-end p-6">
-                    <div className="bg-black/60 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                      <div className="flex items-center gap-2 mb-2">
-                        <QrCode size={16} className="text-orange-400" />
-                        <span className="text-white text-sm font-bold">Scan to Order</span>
+              <div className="relative bg-gray-900/80 backdrop-blur-sm rounded-3xl border border-gray-700/50 p-3 shadow-2xl shadow-black/50">
+                <div className="bg-gray-950 rounded-2xl overflow-hidden aspect-[9/16] max-h-[500px] relative">
+                  <img src={IMG.burger} alt="Food truck menu" className="w-full h-full object-cover opacity-90" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-5 space-y-3">
+                    <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/10">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-white text-sm font-bold">Smash Burger</span>
+                        <span className="text-orange-400 text-sm font-bold">$16.50</span>
                       </div>
-                      <div className="text-gray-400 text-xs">Customers order from their phone. No app needed.</div>
+                      <div className="text-gray-400 text-xs">Double patty, cheese, pickles, special sauce</div>
+                    </div>
+                    <div className="bg-orange-500 rounded-xl p-3 text-center">
+                      <span className="text-white text-sm font-bold flex items-center justify-center gap-2"><QrCode size={14} /> Add to Order</span>
                     </div>
                   </div>
                 </div>
