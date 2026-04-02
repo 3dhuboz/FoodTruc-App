@@ -28,6 +28,7 @@ const PaymentSuccess = React.lazy(() => import('./pages/PaymentSuccess'));
 const Landing = React.lazy(() => import('./pages/Landing'));
 const SignupSuccess = React.lazy(() => import('./pages/SignupSuccess'));
 const Demo = React.lazy(() => import('./pages/Demo'));
+const SuperAdmin = React.lazy(() => import('./pages/SuperAdmin'));
 const BOH = React.lazy(() => import('./pages/BOH'));
 const FOH = React.lazy(() => import('./pages/FOH'));
 const QROrder = React.lazy(() => import('./pages/QROrder'));
@@ -165,6 +166,7 @@ const TenantGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <Routes>
             <Route path="/signup-success" element={<SignupSuccess />} />
             <Route path="/demo" element={<Demo />} />
+            <Route path="/super-admin" element={<SuperAdmin />} />
             <Route path="/qr-order" element={<AppProvider><QROrder /></AppProvider>} />
             <Route path="/boh" element={<AppProvider><BOH /></AppProvider>} />
             <Route path="/foh" element={<AppProvider><FOH /></AppProvider>} />
