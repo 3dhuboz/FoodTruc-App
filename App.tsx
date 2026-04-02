@@ -26,6 +26,7 @@ const PitmasterAI = React.lazy(() => import('./pages/PitmasterAI'));
 const Gallery = React.lazy(() => import('./pages/Gallery'));
 const PaymentSuccess = React.lazy(() => import('./pages/PaymentSuccess'));
 const Landing = React.lazy(() => import('./pages/Landing'));
+const SignupSuccess = React.lazy(() => import('./pages/SignupSuccess'));
 const BOH = React.lazy(() => import('./pages/BOH'));
 const FOH = React.lazy(() => import('./pages/FOH'));
 const QROrder = React.lazy(() => import('./pages/QROrder'));
@@ -92,8 +93,9 @@ const AppRoutes = () => {
         {/* Customer QR Ordering - No auth required */}
         <Route path="/qr-order" element={<Suspense fallback={<PageLoader />}><QROrder /></Suspense>} />
         <Route path="/order-status/:orderId" element={<Suspense fallback={<PageLoader />}><OrderStatus /></Suspense>} />
-        {/* Landing Page - Street Eats SaaS product page */}
+        {/* Landing Page - ChowNow SaaS product page */}
         <Route path="/landing" element={<Suspense fallback={<PageLoader />}><Landing /></Suspense>} />
+        <Route path="/signup-success" element={<Suspense fallback={<PageLoader />}><SignupSuccess /></Suspense>} />
         
         {/* Main App Routes */}
         <Route path="*" element={

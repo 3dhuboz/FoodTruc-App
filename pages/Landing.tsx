@@ -1,12 +1,161 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ShoppingCart, CreditCard, Bell, Smartphone, Globe, Shield, Zap, Star,
   CheckCircle, ArrowRight, ChefHat, Clock, WifiOff, QrCode, Monitor,
-  Users, ChevronDown, TrendingUp, DollarSign
+  Users, ChevronDown, TrendingUp, DollarSign, X, Loader2
 } from 'lucide-react';
 
+// ─── Signup Modal ───────────────────────────────────────────────
+interface SignupModalProps {
+  plan: 'starter' | 'pro';
+  onClose: () => void;
+}
+
+const SignupModal: React.FC<SignupModalProps> = ({ plan, onClose }) => {
+  const [businessName, setBusinessName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+  const [slugChecking, setSlugChecking] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const slugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-generate slug from business name
+  useEffect(() => {
+    if (!slug || slug === toSlug(businessName.slice(0, -1))) {
+      setSlug(toSlug(businessName));
+    }
+  }, [businessName]);
+
+  // Debounced slug availability check
+  useEffect(() => {
+    setSlugAvailable(null);
+    if (slug.length < 3) return;
+    if (slugTimer.current) clearTimeout(slugTimer.current);
+    slugTimer.current = setTimeout(async () => {
+      setSlugChecking(true);
+      try {
+        const res = await fetch(`/api/v1/signup/check?slug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        setSlugAvailable(data.available);
+      } catch { setSlugAvailable(null); }
+      setSlugChecking(false);
+    }, 500);
+  }, [slug]);
+
+  const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!businessName || !email || !slug) { setError('Please fill in all required fields.'); return; }
+    if (slugAvailable === false) { setError('That subdomain is taken. Try another.'); return; }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/v1/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessName, email, phone, slug, plan }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Signup failed');
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
+    } catch (err: any) {
+      setError(err.message);
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-8 relative" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20} /></button>
+
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center gap-2 bg-orange-500/10 text-orange-400 px-3 py-1 rounded-full text-xs font-bold mb-3 border border-orange-500/20">
+            {plan === 'pro' ? 'PRO' : 'STARTER'} PLAN
+          </div>
+          <h2 className="text-2xl font-black text-white">Get started with ChowNow</h2>
+          <p className="text-gray-400 text-sm mt-1">
+            {plan === 'pro' ? '$99/month + Pi hardware' : '$49/month + Pi hardware'}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs text-gray-400 font-bold uppercase tracking-widest">Business Name *</label>
+            <input
+              type="text" value={businessName} onChange={e => setBusinessName(e.target.value)}
+              placeholder="Smoky Joe's BBQ"
+              className="w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-orange-500 focus:outline-none transition"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-400 font-bold uppercase tracking-widest">Email *</label>
+            <input
+              type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="joe@smokyjoes.com.au"
+              className="w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-orange-500 focus:outline-none transition"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-400 font-bold uppercase tracking-widest">Phone</label>
+            <input
+              type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+              placeholder="0412 345 678"
+              className="w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-orange-500 focus:outline-none transition"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-400 font-bold uppercase tracking-widest">Your Subdomain *</label>
+            <div className="flex items-center mt-1 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden focus-within:border-orange-500 transition">
+              <input
+                type="text" value={slug} onChange={e => setSlug(toSlug(e.target.value))}
+                placeholder="smokyjoes"
+                className="flex-1 bg-transparent px-4 py-3 text-white placeholder-gray-600 focus:outline-none"
+                required
+              />
+              <span className="text-gray-500 text-sm pr-4 whitespace-nowrap">.chownow.au</span>
+            </div>
+            <div className="mt-1 h-5 text-xs">
+              {slugChecking && <span className="text-gray-500">Checking...</span>}
+              {!slugChecking && slugAvailable === true && slug.length >= 3 && <span className="text-green-400">Available!</span>}
+              {!slugChecking && slugAvailable === false && <span className="text-red-400">Taken — try another</span>}
+            </div>
+          </div>
+
+          {error && <div className="text-red-400 text-sm bg-red-500/10 px-4 py-2 rounded-xl">{error}</div>}
+
+          <button
+            type="submit"
+            disabled={submitting || slugAvailable === false}
+            className="w-full bg-orange-500 hover:bg-orange-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-black py-3.5 rounded-xl transition flex items-center justify-center gap-2"
+          >
+            {submitting ? <><Loader2 size={18} className="animate-spin" /> Processing...</> : <>Continue to Payment <ArrowRight size={18} /></>}
+          </button>
+
+          <p className="text-center text-gray-600 text-xs">
+            Includes ChowNow Pi hardware kit. Secure payment via Stripe.
+          </p>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ─── Landing Page ───────────────────────────────────────────────
 const Landing: React.FC = () => {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [signupPlan, setSignupPlan] = useState<'starter' | 'pro' | null>(null);
 
   const features = [
     { icon: QrCode, title: 'QR Skip-the-Queue', desc: 'Customers scan a QR code, order from their phone, and get an SMS when food is ready. No app download needed.' },
@@ -20,23 +169,26 @@ const Landing: React.FC = () => {
   ];
 
   const steps = [
-    { num: '1', title: 'Open FOH + BOH', desc: 'Open Front of House on your order tablet, Kitchen Display on your kitchen screen.' },
-    { num: '2', title: 'Print Your QR Code', desc: 'Generate a QR code from the admin panel. Display it on your truck for customers.' },
-    { num: '3', title: 'Take Orders', desc: 'Walk-up orders via FOH tablet. Queue orders via customer QR scan. Both hit the same kitchen queue.' },
-    { num: '4', title: 'Cook + Notify', desc: 'Kitchen taps orders to advance. Customer gets SMS when ready. FOH gets a chime.' },
+    { num: '1', title: 'Sign Up & Pay', desc: 'Choose your plan, enter your business details, and complete payment.' },
+    { num: '2', title: 'Get Your Pi', desc: 'We build and ship your ChowNow Pi — plug it in and you\'re live.' },
+    { num: '3', title: 'Set Up Your Menu', desc: 'Log into your admin dashboard, add your menu items, and print your QR code.' },
+    { num: '4', title: 'Start Serving', desc: 'Customers scan, order, and pay. Kitchen sees it all. You focus on cooking.' },
   ];
 
   const faqs = [
-    { q: 'Do I need special hardware?', a: 'No. ChowNow runs in any web browser. Use an iPad, Android tablet, old laptop — whatever you have. For payments, plug in a Stripe Terminal reader or use Tap to Pay on your phone.' },
-    { q: 'Does it work without internet?', a: 'Yes. ChowNow has a full offline mode. Orders are saved locally in IndexedDB and sync automatically when connectivity returns. Menu stays cached so customers can still browse.' },
+    { q: 'Do I need special hardware?', a: 'Your subscription includes a ChowNow Pi — a small device that runs the whole system. Beyond that, use any tablet, phone, or laptop with a browser for your FOH and kitchen displays.' },
+    { q: 'Does it work without internet?', a: 'Yes. ChowNow has a full offline mode. The Pi creates its own WiFi hotspot, so customers can order even when there\'s no mobile coverage at events.' },
     { q: 'How do customers order?', a: 'They scan a QR code displayed on your truck. This opens a mobile-friendly menu in their browser — no app download. They add items, enter their name and phone, and place the order. They get an SMS when food is ready.' },
-    { q: 'What about payments?', a: 'Currently supports pay-at-counter (cash or card via your existing terminal). Stripe Terminal integration for in-app tap-to-pay is coming soon.' },
-    { q: 'Can I use it for events and festivals?', a: 'Absolutely. The QR ordering is perfect for high-volume events — customers order from the queue instead of waiting at the window. The kitchen display handles the volume.' },
+    { q: 'What about payments?', a: 'Supports pay-at-counter (cash or card via your existing terminal), plus Stripe Terminal for in-app tap-to-pay on Pro plans.' },
+    { q: 'Can I use it for events and festivals?', a: 'Absolutely. The QR ordering is perfect for high-volume events — customers order from the queue instead of waiting at the window. The kitchen display handles the volume. The Pi means no internet needed.' },
     { q: 'Is there a contract or lock-in?', a: 'No. Month-to-month. Cancel anytime. Your data is yours.' },
   ];
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
+      {/* Signup Modal */}
+      {signupPlan && <SignupModal plan={signupPlan} onClose={() => setSignupPlan(null)} />}
+
       {/* Hero */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-orange-900/30 via-gray-950 to-gray-950" />
@@ -54,9 +206,9 @@ const Landing: React.FC = () => {
               Everything a food truck needs — nothing it doesn't.
             </p>
             <div className="flex flex-wrap gap-4">
-              <a href="#/qr-order" className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-2xl text-lg transition active:scale-95 flex items-center gap-2">
-                Try the Demo <ArrowRight size={20} />
-              </a>
+              <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-2xl text-lg transition active:scale-95 flex items-center gap-2">
+                Get Started <ArrowRight size={20} />
+              </button>
               <a href="#pricing" className="bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-2xl text-lg transition border border-white/10">
                 See Pricing
               </a>
@@ -84,8 +236,8 @@ const Landing: React.FC = () => {
           </div>
           <div className="w-px h-8 bg-gray-800 hidden md:block" />
           <div>
-            <div className="text-2xl font-black text-green-400">$0</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest">Hardware required</div>
+            <div className="text-2xl font-black text-green-400">Pi included</div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest">Hardware shipped to you</div>
           </div>
         </div>
       </div>
@@ -114,7 +266,7 @@ const Landing: React.FC = () => {
         <div className="max-w-6xl mx-auto px-6 py-20">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-black mb-3">How it works</h2>
-            <p className="text-gray-400">Set up in minutes. No onboarding call needed.</p>
+            <p className="text-gray-400">Up and running in days, not weeks.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {steps.map((s, i) => (
@@ -159,33 +311,38 @@ const Landing: React.FC = () => {
         <div className="max-w-4xl mx-auto px-6 py-20">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-black mb-3">Simple pricing</h2>
-            <p className="text-gray-400">No hidden fees. No per-transaction charges. No contracts.</p>
+            <p className="text-gray-400">No hidden fees. No per-transaction charges. No contracts. Pi hardware included.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
               <div className="text-orange-400 font-bold text-sm uppercase tracking-widest mb-2">Starter</div>
-              <div className="flex items-baseline gap-1 mb-4">
+              <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-4xl font-black text-white">$49</span>
                 <span className="text-gray-500">/month</span>
               </div>
+              <p className="text-gray-600 text-xs mb-4">+ one-time Pi hardware fee</p>
               <ul className="space-y-3 mb-8">
-                {['FOH + BOH + QR ordering', 'Unlimited orders', 'SMS notifications (BYO Twilio)', 'Offline mode', 'Up to 2 devices', '31-item menu'].map((f, i) => (
+                {['FOH + BOH + QR ordering', 'Unlimited orders', 'SMS notifications (BYO Twilio)', 'Offline mode + Pi hardware', 'Up to 2 devices', '31-item menu'].map((f, i) => (
                   <li key={i} className="flex items-center gap-2 text-gray-300 text-sm">
                     <CheckCircle size={16} className="text-green-400 shrink-0" /> {f}
                   </li>
                 ))}
               </ul>
-              <a href="mailto:hello@streeteats.com.au" className="block text-center bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-xl border border-white/10 transition">
+              <button
+                onClick={() => setSignupPlan('starter')}
+                className="block w-full text-center bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-xl border border-white/10 transition"
+              >
                 Get Started
-              </a>
+              </button>
             </div>
             <div className="bg-gray-900 border-2 border-orange-500 rounded-2xl p-8 relative">
               <div className="absolute -top-3 right-6 bg-orange-500 text-white text-xs font-black px-3 py-1 rounded-full">POPULAR</div>
               <div className="text-orange-400 font-bold text-sm uppercase tracking-widest mb-2">Pro</div>
-              <div className="flex items-baseline gap-1 mb-4">
+              <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-4xl font-black text-white">$99</span>
                 <span className="text-gray-500">/month</span>
               </div>
+              <p className="text-gray-600 text-xs mb-4">+ one-time Pi hardware fee</p>
               <ul className="space-y-3 mb-8">
                 {['Everything in Starter', 'Unlimited devices', 'Unlimited menu items', 'Stripe Terminal payments', 'Catering & event management', 'Custom branding', 'Priority support'].map((f, i) => (
                   <li key={i} className="flex items-center gap-2 text-gray-300 text-sm">
@@ -193,9 +350,12 @@ const Landing: React.FC = () => {
                   </li>
                 ))}
               </ul>
-              <a href="mailto:hello@streeteats.com.au" className="block text-center bg-orange-500 hover:bg-orange-400 text-white font-black py-3 rounded-xl transition">
+              <button
+                onClick={() => setSignupPlan('pro')}
+                className="block w-full text-center bg-orange-500 hover:bg-orange-400 text-white font-black py-3 rounded-xl transition"
+              >
                 Get Started
-              </a>
+              </button>
             </div>
           </div>
         </div>
@@ -226,20 +386,20 @@ const Landing: React.FC = () => {
       <div className="border-t border-gray-800 bg-gradient-to-b from-gray-900 to-gray-950">
         <div className="max-w-3xl mx-auto px-6 py-20 text-center">
           <h2 className="text-3xl md:text-4xl font-black mb-4">Ready to ditch the clipboard?</h2>
-          <p className="text-gray-400 mb-8 max-w-xl mx-auto">Set up ChowNow in minutes. No hardware, no contracts, no onboarding calls. Just a better way to run your truck.</p>
-          <a href="#/qr-order" className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-2xl text-lg transition active:scale-95">
-            Try the Demo <ArrowRight size={20} />
-          </a>
+          <p className="text-gray-400 mb-8 max-w-xl mx-auto">Sign up, get your Pi, and start serving smarter. No setup calls, no onboarding hassle.</p>
+          <button
+            onClick={() => setSignupPlan('pro')}
+            className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-2xl text-lg transition active:scale-95"
+          >
+            Get Started <ArrowRight size={20} />
+          </button>
         </div>
       </div>
 
       {/* Footer */}
       <footer className="border-t border-gray-800 py-8 px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-          <div className="flex items-center gap-2">
-            <ChefHat size={18} className="text-orange-400" />
-            <span className="font-bold text-white">ChowNow</span>
-          </div>
+          <img src="/logo-horizontal.png" alt="ChowNow" className="h-8 object-contain" />
           <div>Built in Australia. Powered by Cloudflare.</div>
         </div>
       </footer>

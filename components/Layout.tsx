@@ -41,19 +41,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Desktop Header */}
       <header className={`hidden md:flex items-center justify-between px-8 py-4 fixed top-0 left-0 right-0 z-50 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/50 transition-all ${connectionError ? 'mt-8' : ''}`}>
-        <Link to="/" className="flex items-center gap-3 group">
-          {logoUrl ? (
-            <div className="w-12 h-12 flex items-center justify-center overflow-visible">
-              <img src={logoUrl} alt={businessName} className="w-full h-full object-contain" />
-            </div>
-          ) : (
-            <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center border border-orange-500/20">
-              <ChefHat className="text-orange-400" size={22} />
-            </div>
-          )}
-          <div className="flex flex-col">
-            <h1 className="text-xl font-black text-white uppercase tracking-wide leading-none group-hover:text-orange-400 transition-colors">{businessName}</h1>
-          </div>
+        <Link to="/" className="flex items-center group">
+          <img src="/logo-horizontal.png" alt={businessName} className="h-10 object-contain" />
         </Link>
 
         <nav className="flex items-center gap-6 bg-gray-900/60 px-6 py-2.5 rounded-full border border-gray-800">
@@ -103,17 +92,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Mobile Header */}
       <header className={`md:hidden flex items-center justify-between p-4 fixed top-0 w-full z-50 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/50 ${connectionError ? 'mt-8' : ''}`}>
-        <Link to="/" className="flex items-center gap-2">
-          {logoUrl ? (
-            <div className="w-9 h-9 flex items-center justify-center overflow-visible">
-              <img src={logoUrl} alt={businessName} className="w-full h-full object-contain" />
-            </div>
-          ) : (
-            <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center border border-orange-500/20">
-              <ChefHat className="text-orange-400" size={18} />
-            </div>
-          )}
-          <h1 className="text-lg font-black text-white uppercase tracking-tight">{businessName}</h1>
+        <Link to="/" className="flex items-center">
+          <img src="/logo-horizontal.png" alt={businessName} className="h-8 object-contain" />
         </Link>
         <div className="flex items-center gap-3">
           {!isOnline && <WifiOff size={16} className="text-yellow-400" />}
@@ -138,13 +118,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="max-w-7xl mx-auto px-8 grid grid-cols-1 md:grid-cols-3 gap-10">
           {/* Brand */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              {logoUrl ? (
-                <img src={logoUrl} alt={businessName} className="h-10 object-contain" />
-              ) : (
-                <ChefHat size={24} className="text-orange-400" />
-              )}
-              <h3 className="font-black text-xl uppercase text-white">{businessName}</h3>
+            <div>
+              <img src="/logo-horizontal.png" alt={businessName} className="h-10 object-contain" />
             </div>
             {settings.businessAddress && (
               <p className="text-gray-500 text-sm flex items-center gap-2">

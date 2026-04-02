@@ -91,6 +91,17 @@ const MIGRATIONS: { version: number; name: string; sql: string }[] = [
       UPDATE settings SET data = REPLACE(data, '"Street Eats"', '"ChowNow"') WHERE tenant_id = 'default' AND key = 'general';
     `
   },
+  {
+    version: 5,
+    name: 'add_subscription_fields',
+    sql: `
+      ALTER TABLE tenants ADD COLUMN stripe_subscription_id TEXT;
+      ALTER TABLE tenants ADD COLUMN billing_status TEXT DEFAULT 'active';
+      ALTER TABLE tenants ADD COLUMN owner_email TEXT;
+      ALTER TABLE tenants ADD COLUMN owner_phone TEXT;
+      ALTER TABLE tenants ADD COLUMN trial_ends_at TEXT;
+    `
+  },
 ];
 
 export const onRequest = async (context: any) => {
