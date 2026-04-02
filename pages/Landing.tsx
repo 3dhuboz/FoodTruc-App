@@ -215,7 +215,7 @@ const Landing: React.FC = () => {
             <a href="#features" className="text-sm text-gray-400 hover:text-white transition font-medium">Features</a>
             <a href="#pricing" className="text-sm text-gray-400 hover:text-white transition font-medium">Pricing</a>
             <a href="#faq" className="text-sm text-gray-400 hover:text-white transition font-medium">FAQ</a>
-            <a href="#/qr-order" className="text-sm text-gray-400 hover:text-white transition font-medium">Demo</a>
+            <a href="/#/qr-order" className="text-sm text-gray-400 hover:text-white transition font-medium">Demo</a>
           </div>
           <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-bold px-5 py-2 rounded-full text-sm transition active:scale-95">
             Get Started
@@ -271,74 +271,60 @@ const Landing: React.FC = () => {
 
             {[
               {
-                step: 1,
-                title: 'The scene: lunch rush',
-                desc: 'Your customer arrives at a food truck market. The truck next door has a 15-person queue. People are leaving. Sound familiar?',
+                step: 1, title: 'The scene: lunch rush', side: 'left',
+                desc: 'Your customer arrives at a food truck market. The truck next door has a 15-person queue. People are leaving.',
                 detail: 'Long queues = lost customers. Every person who walks away is $20+ gone.',
-                icon: Users,
-                color: 'text-red-400',
-                bg: 'bg-red-500/10 border-red-500/20',
-                side: 'left',
+                icon: Users, color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20',
+                gradient: 'from-red-900/30 to-red-950/50',
+                visual: '🚛 👤👤👤👤👤👤👤👤👤👤👤👤 😤💨',
               },
               {
-                step: 2,
-                title: 'They spot your QR code',
-                desc: 'No queue at your window — just a sign: "Scan to Order." They pull out their phone and scan the QR code in 2 seconds.',
-                detail: 'No app to download. No signup. The menu opens instantly in their browser.',
-                icon: QrCode,
-                color: 'text-orange-400',
-                bg: 'bg-orange-500/10 border-orange-500/20',
-                side: 'right',
+                step: 2, title: 'They spot your QR code', side: 'right',
+                desc: 'No queue at your window — just a sign: "Scan to Order." They pull out their phone and scan in 2 seconds.',
+                detail: 'No app to download. No signup. Menu opens instantly in their browser.',
+                icon: QrCode, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20',
+                gradient: 'from-orange-900/30 to-orange-950/50',
+                visual: '📱 ← 📷 ← [QR] ← 🚛',
               },
               {
-                step: 3,
-                title: 'They browse your full menu',
-                desc: 'Photos, descriptions, prices — all on their phone. They add a Smash Burger, Loaded Fries, and a Drink to their cart.',
-                detail: 'Customers spend 30% more when they can browse visually without queue pressure.',
-                icon: ShoppingCart,
-                color: 'text-orange-400',
-                bg: 'bg-orange-500/10 border-orange-500/20',
-                side: 'left',
+                step: 3, title: 'They browse your full menu', side: 'left',
+                desc: 'Photos, descriptions, prices — all on their phone. They add a Smash Burger, Loaded Fries, and a Drink.',
+                detail: 'Customers spend 30% more when they browse visually without queue pressure.',
+                icon: ShoppingCart, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20',
+                gradient: 'from-orange-900/30 to-orange-950/50',
+                visual: '🍔 $16  |  🍟 $12  |  🥤 $5  →  🛒',
               },
               {
-                step: 4,
-                title: 'They place their order',
-                desc: 'Name, phone number, tap "Place Order." Done. They can sit down, chat with friends, or check out other stalls.',
+                step: 4, title: 'Order placed — they relax', side: 'right',
+                desc: 'Name, phone number, tap "Place Order." Done. They sit down, chat with friends, check out other stalls.',
                 detail: 'Your kitchen screen shows the order instantly. No handwriting. No errors.',
-                icon: CheckCircle,
-                color: 'text-blue-400',
-                bg: 'bg-blue-500/10 border-blue-500/20',
-                side: 'right',
+                icon: CheckCircle, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20',
+                gradient: 'from-blue-900/30 to-blue-950/50',
+                visual: '✅ Order #47 confirmed → 🖥️ Kitchen',
               },
               {
-                step: 5,
-                title: 'Kitchen starts cooking',
-                desc: 'Your cook taps "Start" on the kitchen display. The customer instantly gets an SMS: "Your order is being prepared!"',
-                detail: 'No shouting names. No confusion. The customer knows exactly what\'s happening.',
-                icon: ChefHat,
-                color: 'text-orange-400',
-                bg: 'bg-orange-500/10 border-orange-500/20',
-                side: 'left',
+                step: 5, title: 'Kitchen starts cooking', side: 'left',
+                desc: 'Cook taps "Start" on the kitchen display. Customer gets an SMS: "Your order is being prepared!"',
+                detail: 'No shouting names. No confusion. Customer knows exactly what\'s happening.',
+                icon: ChefHat, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20',
+                gradient: 'from-orange-900/30 to-orange-950/50',
+                visual: '👨‍🍳 🔥 → 📱 "Being prepared!"',
               },
               {
-                step: 6,
-                title: 'Food is ready',
-                desc: 'Cook taps "Ready." Customer gets another SMS: "Your order is ready for pickup!" They walk straight to the window.',
-                detail: 'No waiting. No guessing. No missed pickups. They collect and go.',
-                icon: Bell,
-                color: 'text-green-400',
-                bg: 'bg-green-500/10 border-green-500/20',
-                side: 'right',
+                step: 6, title: 'Food is ready — SMS sent', side: 'right',
+                desc: 'Cook taps "Ready." Customer gets SMS: "Your order is ready!" They walk straight to the window.',
+                detail: 'No waiting. No guessing. No missed pickups. Collect and go.',
+                icon: Bell, color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20',
+                gradient: 'from-green-900/30 to-green-950/50',
+                visual: '📱 "Ready for pickup!" → 🏃 → 🍔🍟🥤',
               },
               {
-                step: 7,
-                title: 'Meanwhile, the queue next door...',
-                desc: 'The competitor\'s queue is still 12 deep. Three people just walked away. You\'ve served 8 QR orders in the same time.',
+                step: 7, title: 'Meanwhile, next door...', side: 'left',
+                desc: 'Competitor\'s queue is still 12 deep. Three people walked away. You\'ve served 8 QR orders in the same time.',
                 detail: 'More orders. Happier customers. Zero extra staff. That\'s ChowNow.',
-                icon: Zap,
-                color: 'text-orange-400',
-                bg: 'bg-orange-500/10 border-orange-500/20',
-                side: 'left',
+                icon: Zap, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20',
+                gradient: 'from-orange-900/30 to-orange-950/50',
+                visual: '❌ 12 in queue  vs  ✅ 8 served + 😊',
               },
             ].map((scene, i) => {
               const isLeft = scene.side === 'left';
@@ -354,13 +340,18 @@ const Landing: React.FC = () => {
 
                     {/* Content card */}
                     <div className={`ml-16 md:ml-0 md:w-[calc(50%-3rem)] ${isLeft ? 'md:pr-0' : 'md:pl-0 md:ml-auto'}`}>
-                      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition">
-                        <div className="flex items-center gap-3 mb-3">
-                          <span className={`text-xs font-black ${scene.color} uppercase tracking-widest`}>Step {scene.step}</span>
+                      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-700 transition">
+                        {/* Visual scene */}
+                        <div className={`bg-gradient-to-br ${scene.gradient} px-6 py-5 border-b border-gray-800`}>
+                          <div className="text-2xl md:text-3xl tracking-wider select-none">{scene.visual}</div>
                         </div>
-                        <h3 className="text-white font-bold text-xl mb-2">{scene.title}</h3>
-                        <p className="text-gray-300 text-sm leading-relaxed mb-3">{scene.desc}</p>
-                        <p className="text-gray-500 text-xs leading-relaxed italic">{scene.detail}</p>
+                        {/* Text */}
+                        <div className="p-6">
+                          <span className={`text-xs font-black ${scene.color} uppercase tracking-widest`}>Step {scene.step}</span>
+                          <h3 className="text-white font-bold text-xl mt-2 mb-2">{scene.title}</h3>
+                          <p className="text-gray-300 text-sm leading-relaxed mb-3">{scene.desc}</p>
+                          <p className="text-gray-500 text-xs leading-relaxed italic">{scene.detail}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -764,7 +755,7 @@ const Landing: React.FC = () => {
               <ul className="space-y-2 text-gray-400 text-sm">
                 <li><a href="#features" className="hover:text-white transition">Features</a></li>
                 <li><a href="#pricing" className="hover:text-white transition">Pricing</a></li>
-                <li><a href="#/qr-order" className="hover:text-white transition">Demo</a></li>
+                <li><a href="/#/qr-order" className="hover:text-white transition">Demo</a></li>
                 <li><a href="#faq" className="hover:text-white transition">FAQ</a></li>
               </ul>
             </div>
@@ -778,6 +769,7 @@ const Landing: React.FC = () => {
           </div>
           <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-600">
             <span>&copy; {new Date().getFullYear()} ChowNow. All rights reserved.</span>
+            <a href="/#/login" className="text-gray-700 hover:text-gray-500 transition text-xs">Admin</a>
             <span>Powered by Cloudflare</span>
           </div>
         </div>
