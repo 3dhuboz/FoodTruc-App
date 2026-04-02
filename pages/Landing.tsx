@@ -216,8 +216,37 @@ const Landing: React.FC = () => {
 
       {/* ─── Hero ───────────────────────────────────────────────── */}
       <div className="relative min-h-screen flex items-center overflow-hidden">
-        {/* Background layers */}
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-950/40 via-gray-950 to-gray-950" />
+        {/* Background: scrolling image mosaic */}
+        <div className="absolute inset-0 overflow-hidden">
+          {/* Row 1 — scrolls left */}
+          <div className="absolute top-0 left-0 right-0 h-1/3 flex animate-marquee" style={{ width: '200%' }}>
+            {[IMG.qr, IMG.foodTruck, IMG.burger, IMG.kitchen, IMG.tacos, IMG.tablet, IMG.qr, IMG.foodTruck, IMG.burger, IMG.kitchen, IMG.tacos, IMG.tablet].map((src, i) => (
+              <div key={i} className="h-full flex-shrink-0 w-[300px]">
+                <img src={src} alt="" className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </div>
+          {/* Row 2 — scrolls right (reversed) */}
+          <div className="absolute top-1/3 left-0 right-0 h-1/3 flex" style={{ width: '200%', animation: 'marquee 50s linear infinite reverse' }}>
+            {[IMG.tablet, IMG.tacos, IMG.owner, IMG.burger, IMG.qr, IMG.kitchen, IMG.tablet, IMG.tacos, IMG.owner, IMG.burger, IMG.qr, IMG.kitchen].map((src, i) => (
+              <div key={i} className="h-full flex-shrink-0 w-[300px]">
+                <img src={src} alt="" className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </div>
+          {/* Row 3 — scrolls left slower */}
+          <div className="absolute top-2/3 left-0 right-0 h-1/3 flex" style={{ width: '200%', animation: 'marquee 55s linear infinite' }}>
+            {[IMG.kitchen, IMG.foodTruck, IMG.tacos, IMG.qr, IMG.burger, IMG.tablet, IMG.kitchen, IMG.foodTruck, IMG.tacos, IMG.qr, IMG.burger, IMG.tablet].map((src, i) => (
+              <div key={i} className="h-full flex-shrink-0 w-[300px]">
+                <img src={src} alt="" className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </div>
+          {/* Heavy gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-gray-950/90 via-gray-950/85 to-gray-950/95" />
+          <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-transparent to-gray-950" />
+        </div>
+        {/* Glow orbs on top */}
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-orange-500/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-orange-600/5 rounded-full blur-[100px]" />
 
