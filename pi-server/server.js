@@ -250,6 +250,50 @@ async function handleApi(req, url) {
     return json({ ok: true, mode: 'local', service: 'street-eats-pi', printer: isPrinterAvailable() });
   }
 
+  // ── Admin Diagnostics ──
+  if (path === '/admin/status' && method === 'GET') {
+    const today = new Date().toISOString().split('T')[0];
+    const orderCount = db.prepare('SELECT COUNT(*) as count FROM orders').get();
+    const todayOrders = db.prepare('SELECT COUNT(*) as count FROM orders WHERE created_at >= ?').bind(today).get();
+    const lastOrder = db.prepare('SELECT created_at FROM orders ORDER BY created_at DESC LIMIT 1').first();
+    const queuePending = db.prepare('SELECT COUNT(*) as count FROM sync_queue WHERE synced = 0').get();
+    const queueTotal = db.prepare('SELECT COUNT(*) as count FROM sync_queue').get();
+    const queueFailed = db.prepare("SELECT COUNT(*) as count FROM sync_queue WHERE synced = 0 AND created_at < datetime('now', '-5 minutes')").get();
+
+    return json({
+      system: {
+        online: isOnline,
+        cloudUrl: CLOUD_URL,
+        port: PORT,
+        uptime: Math.floor(process.uptime()),
+        nodeVersion: process.version,
+        memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        pid: process.pid,
+      },
+      printer: {
+        available: isPrinterAvailable(),
+      },
+      orders: {
+        total: orderCount?.count || 0,
+        today: todayOrders?.count || 0,
+        lastOrderAt: lastOrder?.created_at || null,
+      },
+      sync: {
+        pending: queuePending?.count || 0,
+        total: queueTotal?.count || 0,
+        stale: queueFailed?.count || 0,
+      },
+    });
+  }
+  if (path === '/admin/sync-flush' && method === 'POST') {
+    flushSyncQueue();
+    return json({ triggered: true });
+  }
+  if (path === '/admin/sync-clear' && method === 'POST') {
+    db.prepare("DELETE FROM sync_queue WHERE synced = 0 AND created_at < datetime('now', '-10 minutes')").run();
+    return json({ cleared: true });
+  }
+
   // ── SMS stubs (no-op locally, synced to cloud later) ──
   if (path.startsWith('/sms/') || path.startsWith('/email/')) {
     if (method === 'POST') {
@@ -477,6 +521,17 @@ const server = createServer(async (req, res) => {
       res.writeHead(302, { Location: `http://${req.headers.host}/#/qr-order` });
       res.end();
       return;
+    }
+
+    // ChowBox Admin Page — served from pi-server directory
+    if (url.pathname === '/admin' || url.pathname === '/admin/') {
+      const adminPath = join(__dirname, 'admin.html');
+      if (existsSync(adminPath)) {
+        const html = readFileSync(adminPath, 'utf-8');
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' });
+        res.end(html);
+        return;
+      }
     }
 
     // Static files
