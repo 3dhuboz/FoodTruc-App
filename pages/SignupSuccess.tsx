@@ -36,8 +36,8 @@ const SignupSuccess: React.FC = () => {
                 <Package size={20} className="text-orange-400" />
               </div>
               <div>
-                <p className="text-white font-bold">Your Pi is being built</p>
-                <p className="text-gray-400 text-sm">We're preparing your ChowNow Pi hardware kit. It will be shipped to you with everything pre-configured and ready to plug in.</p>
+                <p className="text-white font-bold">Your ChowBox is being built</p>
+                <p className="text-gray-400 text-sm">We're preparing your ChowBox — the brains of your operation. It will be shipped to you pre-configured and ready to plug in.</p>
               </div>
             </div>
 

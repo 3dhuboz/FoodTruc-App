@@ -36,12 +36,17 @@ const Counter: React.FC<{ end: number; suffix?: string; duration?: number }> = (
 
 // ─── Rotating Words ─────────────────────────────────────────────
 const RotatingWords: React.FC = () => {
-  const words = ['QR ordering', 'Kitchen display', 'Tap-to-pay', 'Offline mode', 'QR ordering'];
+  const words = ['QR ordering.', 'Kitchen display.', 'Tap-to-pay.', 'Offline mode.'];
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setIdx(p => (p + 1) % words.length), 2500);
+    return () => clearInterval(timer);
+  }, []);
   return (
-    <span className="inline-block h-[1.15em] overflow-hidden align-bottom">
-      <span className="inline-flex flex-col animate-rotate-words">
-        {words.map((w, i) => <span key={i} className="text-orange-400">{w}</span>)}
-      </span>
+    <span className="inline-block relative">
+      {words.map((w, i) => (
+        <span key={i} className={`text-orange-400 transition-all duration-500 ${i === idx ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}>{w}</span>
+      ))}
     </span>
   );
 };
@@ -99,7 +104,7 @@ const SignupModal: React.FC<SignupModalProps> = ({ plan, onClose }) => {
             {plan === 'pro' ? 'PRO' : 'STARTER'} PLAN
           </div>
           <h2 className="text-2xl font-black text-white">Get started with ChowNow</h2>
-          <p className="text-gray-400 text-sm mt-1">{plan === 'pro' ? '$99/month' : '$49/month'} + Pi hardware</p>
+          <p className="text-gray-400 text-sm mt-1">{plan === 'pro' ? '$99/month' : '$49/month'} + ChowBox</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -130,7 +135,7 @@ const SignupModal: React.FC<SignupModalProps> = ({ plan, onClose }) => {
           <button type="submit" disabled={submitting || slugAvailable === false} className="w-full bg-orange-500 hover:bg-orange-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-black py-3.5 rounded-xl transition flex items-center justify-center gap-2">
             {submitting ? <><Loader2 size={18} className="animate-spin" /> Processing...</> : <>Continue to Payment <ArrowRight size={18} /></>}
           </button>
-          <p className="text-center text-gray-600 text-xs">Includes ChowNow Pi hardware kit. Secure payment via Stripe.</p>
+          <p className="text-center text-gray-600 text-xs">Includes ChowBox hardware kit. Secure payment via Stripe.</p>
         </form>
       </div>
     </div>
@@ -176,16 +181,16 @@ const Landing: React.FC = () => {
 
   const testimonials = [
     { name: 'Jake M.', biz: 'Smoky Jake\'s BBQ', loc: 'Gold Coast, QLD', quote: 'We cut our order wait time in half. Customers love scanning the QR instead of queuing at the window.', stars: 5, img: IMG.owner },
-    { name: 'Sarah L.', biz: 'Taco Madre', loc: 'Melbourne, VIC', quote: 'The Pi saved us at a festival with zero phone signal. Every other truck was dead — we kept serving.', stars: 5, img: IMG.owner3 },
+    { name: 'Sarah L.', biz: 'Taco Madre', loc: 'Melbourne, VIC', quote: 'The ChowBox saved us at a festival with zero phone signal. Every other truck was dead — we kept serving.', stars: 5, img: IMG.owner3 },
     { name: 'Dave R.', biz: 'The Burger Co', loc: 'Sydney, NSW', quote: 'Kitchen display changed everything. No more shouting orders. My team just watches the screen and cooks.', stars: 5, img: IMG.owner2 },
   ];
 
   const faqs = [
-    { q: 'Do I need special hardware?', a: 'Your subscription includes a ChowNow Pi — a small device that runs the whole system. Beyond that, use any tablet, phone, or laptop with a browser for your FOH and kitchen displays.' },
-    { q: 'Does it work without internet?', a: 'Yes. The Pi creates its own WiFi hotspot, so customers can order even at events with zero mobile coverage. Orders sync to the cloud when connectivity returns.' },
+    { q: 'Do I need special hardware?', a: 'Your subscription includes a ChowBox — the brains of your operation. It\'s a small, pre-configured device that runs everything: ordering, kitchen display, payments, and offline mode. Beyond that, use any tablet or phone with a browser.' },
+    { q: 'Does it work without internet?', a: 'Yes. The ChowBox creates its own WiFi hotspot — it\'s the brains of your truck. Customers order even at events with zero coverage. Orders sync when connectivity returns.' },
     { q: 'How do customers order?', a: 'They scan a QR code on your truck. A mobile-friendly menu opens in their browser — no app download. They order, pay, and get an SMS when food is ready.' },
     { q: 'What payment methods are supported?', a: 'Cash at counter, card via your existing terminal, plus Stripe Terminal for in-app tap-to-pay on Pro plans. Apple Pay and Google Pay supported.' },
-    { q: 'Can I use it for events and festivals?', a: 'Absolutely. The Pi means no internet needed. QR ordering handles high volume without extra staff. The kitchen display keeps everything flowing.' },
+    { q: 'Can I use it for events and festivals?', a: 'Absolutely. The ChowBox means no internet needed — it runs the whole show. QR ordering handles high volume without extra staff. The kitchen display keeps everything flowing.' },
     { q: 'Is there a contract?', a: 'No. Month-to-month. Cancel anytime. Your data is yours. We even help you export if you leave.' },
   ];
 
@@ -196,7 +201,7 @@ const Landing: React.FC = () => {
       {/* ─── Sticky Navbar ──────────────────────────────────────── */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/50 py-3' : 'bg-transparent py-5'}`}>
         <div className="max-w-6xl mx-auto px-6 flex items-center justify-between">
-          <img src="/logo-horizontal.png" alt="ChowNow" className="h-8 object-contain" />
+          <img src="/logo-horizontal.png" alt="ChowNow" className="h-12 object-contain" />
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-sm text-gray-400 hover:text-white transition font-medium">Features</a>
             <a href="#pricing" className="text-sm text-gray-400 hover:text-white transition font-medium">Pricing</a>
@@ -227,7 +232,7 @@ const Landing: React.FC = () => {
               <RotatingWords />
             </h1>
             <p className="text-lg md:text-xl text-gray-400 max-w-lg mb-8 leading-relaxed">
-              The all-in-one system that replaces your clipboard, calculator, and shouting across the kitchen. Works offline. Pi hardware included.
+              The all-in-one system that replaces your clipboard, calculator, and shouting across the kitchen. Works offline. ChowBox included — the brains of your truck.
             </p>
             <div className="flex flex-wrap gap-4 mb-8">
               <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-4 rounded-2xl text-lg transition active:scale-95 flex items-center gap-2 shadow-lg shadow-orange-500/20">
@@ -239,7 +244,7 @@ const Landing: React.FC = () => {
             </div>
             <div className="flex items-center gap-6 text-sm text-gray-500">
               <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> No contracts</span>
-              <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> Pi included</span>
+              <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> ChowBox included</span>
               <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> Cancel anytime</span>
             </div>
           </div>
@@ -303,7 +308,7 @@ const Landing: React.FC = () => {
           <div className="w-px h-10 bg-gray-800 hidden md:block" />
           <div>
             <div className="text-3xl font-black text-green-400 flex items-center gap-2"><Package size={24} /> Included</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Pi hardware shipped</div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">ChowBox shipped to you</div>
           </div>
         </div>
       </Section>
@@ -344,7 +349,7 @@ const Landing: React.FC = () => {
                 'Digital orders — accurate, instant, tracked',
                 'Kitchen display shows every order in real time',
                 'QR ordering: customers order from the queue',
-                'Pi creates its own WiFi — works with zero signal',
+                'ChowBox creates its own WiFi — zero signal, no problem',
                 'Full dashboard: orders, revenue, peak times',
               ].map((p, i) => (
                 <li key={i} className="flex items-start gap-3 text-gray-300">
@@ -370,7 +375,7 @@ const Landing: React.FC = () => {
               { icon: Monitor, title: 'Kitchen Display', desc: 'Orders appear instantly. Tap to advance: New, Cooking, Ready. Auto-notifies customers.', img: IMG.kitchen },
               { icon: Smartphone, title: 'FOH Tablet POS', desc: 'Take walk-up orders on any device. Menu grid, cart, name — hits kitchen instantly.', img: IMG.tablet },
               { icon: Bell, title: 'SMS Notifications', desc: 'Customers get a text when cooking starts and when food is ready. No shouting names.', img: IMG.burger },
-              { icon: WifiOff, title: 'Works Offline', desc: 'Pi creates a WiFi hotspot. Orders queue locally and sync when internet returns.', img: IMG.foodTruck },
+              { icon: WifiOff, title: 'Works Offline', desc: 'ChowBox creates a WiFi hotspot — the brains of your truck. Orders queue locally and sync when internet returns.', img: IMG.foodTruck },
               { icon: CreditCard, title: 'Tap to Pay', desc: 'Stripe Terminal for contactless payments. Apple Pay, Google Pay, or good old cash.', img: IMG.tacos },
               { icon: Globe, title: 'Cloud Native', desc: 'Runs on Cloudflare\'s edge. Fast from anywhere — markets, events, festivals.', img: IMG.foodTruck },
               { icon: Shield, title: 'No Lock-in', desc: 'Month-to-month. No contracts. No proprietary hardware. Your data is always yours.', img: IMG.burger },
@@ -407,7 +412,7 @@ const Landing: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {[
               { num: '1', title: 'Sign Up', desc: 'Pick your plan, enter your details, and pay. Takes 2 minutes.', icon: Zap },
-              { num: '2', title: 'Get Your Pi', desc: 'We build and ship your pre-configured Pi hardware kit.', icon: Package },
+              { num: '2', title: 'Get Your ChowBox', desc: 'We build and ship your ChowBox — the brains of your operation. Plug in and go.', icon: Package },
               { num: '3', title: 'Set Up Menu', desc: 'Log into admin, add items, set prices. Print your QR code.', icon: ClipboardList },
               { num: '4', title: 'Start Serving', desc: 'Customers scan, kitchen cooks, everyone\'s happy.', icon: ChefHat },
             ].map((s, i) => (
@@ -432,17 +437,25 @@ const Landing: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 perspective-1000">
             {[
-              { title: 'Customer QR Order', desc: 'Scan → browse → order → pay', link: '#/qr-order', color: 'from-blue-500/20 to-blue-600/5' },
-              { title: 'Kitchen Display', desc: 'Real-time orders with bump workflow', link: '#/boh', color: 'from-orange-500/20 to-orange-600/5' },
-              { title: 'Front of House POS', desc: 'Walk-up orders + payment tracking', link: '#/foh', color: 'from-green-500/20 to-green-600/5' },
+              { title: 'Customer QR Order', desc: 'Scan → browse → order → pay', link: '#/qr-order', color: 'from-blue-500/20 to-blue-600/5', img: IMG.qr, icon: QrCode },
+              { title: 'Kitchen Display', desc: 'Real-time orders with bump workflow', link: '#/boh', color: 'from-orange-500/20 to-orange-600/5', img: IMG.kitchen, icon: Monitor },
+              { title: 'Front of House POS', desc: 'Walk-up orders + payment tracking', link: '#/foh', color: 'from-green-500/20 to-green-600/5', img: IMG.tablet, icon: Smartphone },
             ].map((screen, i) => (
-              <a key={i} href={screen.link} className={`card-3d bg-gradient-to-b ${screen.color} border border-gray-800 rounded-2xl p-6 text-center hover:border-orange-500/30 transition block`}>
-                <div className="bg-gray-950 rounded-xl h-48 mb-4 flex items-center justify-center border border-gray-800">
-                  <Monitor size={48} className="text-gray-700" />
+              <a key={i} href={screen.link} className={`card-3d bg-gradient-to-b ${screen.color} border border-gray-800 rounded-2xl overflow-hidden text-center hover:border-orange-500/30 transition block group`}>
+                <div className="relative h-52 overflow-hidden">
+                  <img src={screen.img} alt={screen.title} className="w-full h-full object-cover opacity-50 group-hover:opacity-70 group-hover:scale-105 transition-all duration-500" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent" />
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                    <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
+                      <screen.icon size={24} className="text-white" />
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-white font-bold text-lg mb-1">{screen.title}</h3>
-                <p className="text-gray-400 text-sm mb-3">{screen.desc}</p>
-                <span className="text-orange-400 text-sm font-bold flex items-center justify-center gap-1">Try it live <ArrowRight size={14} /></span>
+                <div className="p-5">
+                  <h3 className="text-white font-bold text-lg mb-1">{screen.title}</h3>
+                  <p className="text-gray-400 text-sm mb-3">{screen.desc}</p>
+                  <span className="text-orange-400 text-sm font-bold flex items-center justify-center gap-1">Try it live <ArrowRight size={14} /></span>
+                </div>
               </a>
             ))}
           </div>
@@ -523,7 +536,7 @@ const Landing: React.FC = () => {
       <Section id="pricing" className="max-w-5xl mx-auto px-6 py-24">
         <div className="text-center mb-6">
           <h2 className="text-3xl md:text-5xl font-black mb-4">Simple, honest pricing</h2>
-          <p className="text-gray-400 text-lg max-w-xl mx-auto">No hidden fees. No per-transaction charges. Pi hardware included in every plan.</p>
+          <p className="text-gray-400 text-lg max-w-xl mx-auto">No hidden fees. No per-transaction charges. ChowBox hardware included in every plan.</p>
         </div>
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 bg-green-500/10 text-green-400 px-4 py-2 rounded-full text-sm font-bold border border-green-500/20">
@@ -538,9 +551,9 @@ const Landing: React.FC = () => {
               <span className="text-5xl font-black text-white">$49</span>
               <span className="text-gray-500 text-lg">/month</span>
             </div>
-            <p className="text-gray-600 text-sm mb-6">+ one-time Pi hardware fee</p>
+            <p className="text-gray-600 text-sm mb-6">+ one-time ChowBox fee</p>
             <ul className="space-y-3 mb-8">
-              {['FOH + BOH + QR ordering', 'Unlimited orders', 'SMS notifications (BYO Twilio)', 'Offline mode + Pi hardware', 'Up to 2 devices', '31-item menu'].map((f, i) => (
+              {['FOH + BOH + QR ordering', 'Unlimited orders', 'SMS notifications (BYO Twilio)', 'Offline mode + ChowBox', 'Up to 2 devices', '31-item menu'].map((f, i) => (
                 <li key={i} className="flex items-center gap-3 text-gray-300 text-sm"><CheckCircle size={16} className="text-green-400 shrink-0" /> {f}</li>
               ))}
             </ul>
@@ -555,7 +568,7 @@ const Landing: React.FC = () => {
               <span className="text-5xl font-black text-white">$99</span>
               <span className="text-gray-500 text-lg">/month</span>
             </div>
-            <p className="text-gray-600 text-sm mb-6">+ one-time Pi hardware fee</p>
+            <p className="text-gray-600 text-sm mb-6">+ one-time ChowBox fee</p>
             <ul className="space-y-3 mb-8">
               {['Everything in Starter', 'Unlimited devices', 'Unlimited menu items', 'Stripe Terminal payments', 'Catering & event management', 'Custom branding', 'Priority support'].map((f, i) => (
                 <li key={i} className="flex items-center gap-3 text-gray-300 text-sm"><CheckCircle size={16} className="text-green-400 shrink-0" /> {f}</li>
@@ -592,9 +605,9 @@ const Landing: React.FC = () => {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-orange-500/10 rounded-full blur-[150px]" />
         <Section className="relative max-w-3xl mx-auto px-6 py-24 text-center">
           <div className="inline-flex items-center gap-2 bg-orange-500/10 text-orange-400 px-4 py-2 rounded-full text-sm font-bold mb-6 border border-orange-500/20">
-            <Cpu size={14} /> Limited Pi builds each month
+            <Cpu size={14} /> Limited ChowBox builds each month
           </div>
-          <h2 className="text-4xl md:text-5xl font-black mb-4">Get your Pi.<br />Start serving smarter.</h2>
+          <h2 className="text-4xl md:text-5xl font-black mb-4">Get your ChowBox.<br />Start serving smarter.</h2>
           <p className="text-gray-400 text-lg mb-8 max-w-xl mx-auto">Sign up today, get your hardware shipped, and be live in days. No setup calls. No onboarding hassle.</p>
           <button onClick={() => setSignupPlan('pro')} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white font-black px-10 py-5 rounded-2xl text-xl transition active:scale-95 shadow-lg shadow-orange-500/20">
             Get Started <ArrowRight size={22} />
