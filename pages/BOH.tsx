@@ -110,20 +110,31 @@ const BOH: React.FC = () => {
     } catch {}
   };
 
-  // BUMP = mark Ready, notify FOH + customer
+  // BUMP = advance order status: Confirmed → Cooking (+ print label) → Ready (+ notify customer)
   const handleBump = async (order: Order) => {
     setBumping(order.id);
-    setBumped(order.id);
 
-    // Auto-advance: if Confirmed, go to Cooking first then Ready
-    // If already Cooking, go straight to Ready
-    const targetStatus = 'Ready';
+    // Determine target status based on current status
+    const targetStatus = order.status === 'Confirmed' ? 'Cooking' : 'Ready';
+
+    // Only animate out if going to Ready (leaving the board)
+    if (targetStatus === 'Ready') setBumped(order.id);
 
     try {
       await updateOrderStatus(order.id, targetStatus);
 
-      // Trigger SMS + email notification
-      if (order.customerPhone && settings.smsSettings?.enabled) {
+      // When moving to COOKING → print order label for the pass
+      if (targetStatus === 'Cooking') {
+        // Fire and forget — don't block the UI if printer is unavailable
+        fetch('/api/v1/print/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order),
+        }).catch(() => {}); // Silently fail if no printer or not on Pi
+      }
+
+      // When moving to READY → notify customer via SMS + email
+      if (targetStatus === 'Ready' && order.customerPhone && settings.smsSettings?.enabled) {
         const payload = { ...order, status: 'Ready', pickupLocation: order.pickupLocation || settings.businessAddress };
         await Promise.allSettled([
           fetch('/api/v1/sms/order-ready', {
@@ -138,8 +149,7 @@ const BOH: React.FC = () => {
       }
     } finally {
       setBumping(null);
-      // Clear bumped animation after card slides out
-      setTimeout(() => setBumped(null), 600);
+      if (targetStatus === 'Ready') setTimeout(() => setBumped(null), 600);
     }
   };
 
@@ -219,14 +229,18 @@ const BOH: React.FC = () => {
                     </div>
                   )}
 
-                  {/* BUMP Button */}
+                  {/* BUMP Button — changes based on status */}
                   <div className="p-4 pt-2">
                     <button
                       onClick={() => handleBump(order)}
                       disabled={isBumping}
-                      className="w-full py-5 rounded-xl font-black text-xl tracking-wide transition active:scale-95 bg-green-500 hover:bg-green-400 text-black disabled:opacity-50"
+                      className={`w-full py-5 rounded-xl font-black text-xl tracking-wide transition active:scale-95 disabled:opacity-50 ${
+                        order.status === 'Confirmed'
+                          ? 'bg-orange-500 hover:bg-orange-400 text-black'
+                          : 'bg-green-500 hover:bg-green-400 text-black'
+                      }`}
                     >
-                      {isBumping ? '...' : 'BUMP'}
+                      {isBumping ? '...' : order.status === 'Confirmed' ? 'START COOKING' : 'READY'}
                     </button>
                   </div>
                 </div>

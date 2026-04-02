@@ -23,6 +23,7 @@ import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 import { networkInterfaces } from 'os';
+import { initPrinter, isPrinterAvailable, printOrderLabel, printTestLabel } from './printer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '80');
@@ -228,9 +229,25 @@ async function handleApi(req, url) {
     return json({ success: true, results });
   }
 
+  // ── Print ──
+  if (path === '/print/order' && method === 'POST') {
+    const body = await readBody(req);
+    if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
+    const success = printOrderLabel(body);
+    return json({ printed: success });
+  }
+  if (path === '/print/test' && method === 'POST') {
+    if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
+    const success = printTestLabel();
+    return json({ printed: success });
+  }
+  if (path === '/print/status' && method === 'GET') {
+    return json({ available: isPrinterAvailable() });
+  }
+
   // ── Health ──
   if (path === '/health') {
-    return json({ ok: true, mode: 'local', service: 'street-eats-pi' });
+    return json({ ok: true, mode: 'local', service: 'street-eats-pi', printer: isPrinterAvailable() });
   }
 
   // ── SMS stubs (no-op locally, synced to cloud later) ──
@@ -482,6 +499,9 @@ const server = createServer(async (req, res) => {
     res.end('Internal Server Error');
   }
 });
+
+// ─── Printer Init ────────────────────────────────────────────
+initPrinter();
 
 // ─── Start ───────────────────────────────────────────────────
 
