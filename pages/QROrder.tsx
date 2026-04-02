@@ -319,6 +319,26 @@ const QROrder: React.FC = () => {
         </div>
       )}
 
+      {/* Demo Banner — shows when accessed from landing page */}
+      {window.location.search.includes('cancelled') || window.location.pathname === '/' ? null : (
+        <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-5 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                <ChefHat size={16} className="text-white" />
+              </div>
+              <div>
+                <p className="text-white text-sm font-bold">You're viewing the customer demo</p>
+                <p className="text-white/70 text-xs">This is exactly what your customers see when they scan your QR code</p>
+              </div>
+            </div>
+            <a href="/" className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-4 py-2 rounded-lg transition whitespace-nowrap">
+              Get ChowNow
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-gray-950 border-b border-gray-800 px-5 pt-6 pb-4">
         <div className="flex items-center justify-between mb-1">
