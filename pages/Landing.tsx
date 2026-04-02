@@ -167,15 +167,15 @@ const Landing: React.FC = () => {
 
   const IMG = {
     foodTruck: 'https://images.unsplash.com/photo-1565123409695-7b5ef63a2efb?auto=format&fit=crop&w=800&q=80',
-    // Feature-specific images
-    qrScan: 'https://images.unsplash.com/photo-1614680376593-902f74cf0d41?auto=format&fit=crop&w=800&q=80', // person scanning QR on phone
-    kitchenScreen: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=800&q=80', // screen/display tech
-    tabletPos: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=800&q=80', // person using tablet
-    smsPhone: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=80', // phone notification
-    wifiSignal: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=80', // connectivity/signal
-    contactless: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=800&q=80', // contactless card payment
-    cloudServer: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80', // globe/network
-    handshake: 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=800&q=80', // team/freedom
+    // Feature-specific images — food truck context
+    qrScan: 'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=800&q=80', // person holding phone scanning
+    kitchenScreen: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80', // food being prepared/plated
+    tabletPos: 'https://images.unsplash.com/photo-1513639776629-7b43c5ca3b12?auto=format&fit=crop&w=800&q=80', // food truck window serving customer
+    smsPhone: 'https://images.unsplash.com/photo-1523966211575-eb4a01e7dd51?auto=format&fit=crop&w=800&q=80', // person checking phone
+    wifiSignal: 'https://images.unsplash.com/photo-1569937756447-1d44f657dc69?auto=format&fit=crop&w=800&q=80', // outdoor festival/event
+    contactless: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=800&q=80', // contactless tap payment
+    cloudServer: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=800&q=80', // food market/festival crowd
+    handshake: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=800&q=80', // restaurant/food service
     // General
     kitchen: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=800&q=80',
     burger: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
@@ -248,7 +248,7 @@ const Landing: React.FC = () => {
               Try Demo
             </a>
           </div>
-          <p className="text-sm text-gray-500 mb-12">No contracts. ChowBox included. Cancel anytime.</p>
+          <p className="text-sm text-gray-500 mb-12">No contracts. No lock-in. Cancel anytime.</p>
         </div>
 
         {/* Product showcase: 3 screens side by side */}
@@ -259,7 +259,7 @@ const Landing: React.FC = () => {
             <div className="relative grid grid-cols-3 gap-3 md:gap-4">
               {/* Screen 1: QR Order */}
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
-                <img src={IMG.qr} alt="Customer scanning QR code" className="w-full h-full object-cover" />
+                <img src={IMG.qrScan} alt="Customer scanning QR code" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                 <div className="absolute bottom-3 left-3 right-3">
                   <div className="flex items-center gap-2 text-white">
@@ -273,7 +273,7 @@ const Landing: React.FC = () => {
               </div>
               {/* Screen 2: Kitchen Display */}
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
-                <img src={IMG.kitchen} alt="Kitchen display system" className="w-full h-full object-cover" />
+                <img src={IMG.kitchenScreen} alt="Kitchen display system" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                 <div className="absolute bottom-3 left-3 right-3">
                   <div className="flex items-center gap-2 text-white">
@@ -287,7 +287,7 @@ const Landing: React.FC = () => {
               </div>
               {/* Screen 3: FOH POS */}
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
-                <img src={IMG.tablet} alt="Front of house POS" className="w-full h-full object-cover" />
+                <img src={IMG.tabletPos} alt="Front of house POS" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                 <div className="absolute bottom-3 left-3 right-3">
                   <div className="flex items-center gap-2 text-white">
@@ -308,23 +308,23 @@ const Landing: React.FC = () => {
       <Section className="border-y border-gray-800 bg-gray-900/50">
         <div className="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-center gap-10 text-center">
           <div>
-            <div className="text-3xl font-black text-orange-400"><Counter end={500} suffix="+" /></div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Orders processed</div>
+            <div className="text-3xl font-black text-orange-400"><Counter end={2} /> min</div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Setup time</div>
           </div>
           <div className="w-px h-10 bg-gray-800 hidden md:block" />
           <div>
-            <div className="text-3xl font-black text-orange-400"><Counter end={3} />s</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Order to kitchen</div>
+            <div className="text-3xl font-black text-orange-400">$0</div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Per-transaction fees</div>
           </div>
           <div className="w-px h-10 bg-gray-800 hidden md:block" />
           <div>
-            <div className="text-3xl font-black text-orange-400">100%</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Offline capable</div>
+            <div className="text-3xl font-black text-orange-400">Zero signal?</div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">No problem — works offline</div>
           </div>
           <div className="w-px h-10 bg-gray-800 hidden md:block" />
           <div>
-            <div className="text-3xl font-black text-green-400 flex items-center gap-2"><Package size={24} /> Included</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">ChowBox shipped to you</div>
+            <div className="text-3xl font-black text-green-400 flex items-center gap-2"><Package size={24} /> ChowBox</div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Hardware shipped to you</div>
           </div>
         </div>
       </Section>
@@ -451,26 +451,54 @@ const Landing: React.FC = () => {
             <h2 className="text-3xl md:text-5xl font-black mb-4">See it in action</h2>
             <p className="text-gray-400 text-lg">Three screens. One system. Zero chaos.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 perspective-1000">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
-              { title: 'Customer QR Order', desc: 'Scan → browse → order → pay', link: '#/qr-order', color: 'from-blue-500/20 to-blue-600/5', img: IMG.qr, icon: QrCode },
-              { title: 'Kitchen Display', desc: 'Real-time orders with bump workflow', link: '#/boh', color: 'from-orange-500/20 to-orange-600/5', img: IMG.kitchen, icon: Monitor },
-              { title: 'Front of House POS', desc: 'Walk-up orders + payment tracking', link: '#/foh', color: 'from-green-500/20 to-green-600/5', img: IMG.tablet, icon: Smartphone },
+              {
+                title: 'Customer QR Order',
+                desc: 'Your customers scan the QR code on your truck, browse your full menu with photos, add items to cart, and place their order — all from their phone. No app to download.',
+                link: '/#/qr-order',
+                icon: QrCode,
+                gradient: 'from-blue-600 to-blue-900',
+                features: ['Scan & order in 30 seconds', 'Full menu with photos', 'Cart + checkout', 'SMS when ready'],
+              },
+              {
+                title: 'Kitchen Display',
+                desc: 'Every order appears on your kitchen screen the moment it\'s placed. Tap to advance through stages: New, Cooking, Ready. Customer gets notified automatically.',
+                link: '/#/boh',
+                icon: Monitor,
+                gradient: 'from-orange-600 to-orange-900',
+                features: ['Real-time order queue', 'Tap to bump', 'Auto SMS notifications', 'Audio chime alerts'],
+              },
+              {
+                title: 'Front of House POS',
+                desc: 'Take walk-up orders on any tablet. Full menu grid, customer name, cart — order hits the kitchen instantly. Track payments and manage the queue.',
+                link: '/#/foh',
+                icon: Smartphone,
+                gradient: 'from-green-600 to-green-900',
+                features: ['Walk-up ordering', 'Payment tracking', 'Order queue management', 'Works on any device'],
+              },
             ].map((screen, i) => (
-              <a key={i} href={screen.link} className={`card-3d bg-gradient-to-b ${screen.color} border border-gray-800 rounded-2xl overflow-hidden text-center hover:border-orange-500/30 transition block group`}>
-                <div className="relative h-52 overflow-hidden">
-                  <img src={screen.img} alt={screen.title} className="w-full h-full object-cover opacity-50 group-hover:opacity-70 group-hover:scale-105 transition-all duration-500" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent" />
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-                    <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
-                      <screen.icon size={24} className="text-white" />
-                    </div>
+              <a key={i} href={screen.link} className="group block bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-orange-500/30 transition-all hover:-translate-y-1">
+                {/* Icon header */}
+                <div className={`bg-gradient-to-br ${screen.gradient} p-8 flex items-center justify-center`}>
+                  <div className="w-20 h-20 bg-white/15 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/20 group-hover:scale-110 transition-transform">
+                    <screen.icon size={36} className="text-white" />
                   </div>
                 </div>
-                <div className="p-5">
-                  <h3 className="text-white font-bold text-lg mb-1">{screen.title}</h3>
-                  <p className="text-gray-400 text-sm mb-3">{screen.desc}</p>
-                  <span className="text-orange-400 text-sm font-bold flex items-center justify-center gap-1">Try it live <ArrowRight size={14} /></span>
+                {/* Content */}
+                <div className="p-6">
+                  <h3 className="text-white font-bold text-xl mb-2">{screen.title}</h3>
+                  <p className="text-gray-400 text-sm mb-4 leading-relaxed">{screen.desc}</p>
+                  <ul className="space-y-1.5 mb-5">
+                    {screen.features.map((f, j) => (
+                      <li key={j} className="flex items-center gap-2 text-gray-300 text-xs">
+                        <CheckCircle size={12} className="text-green-400 shrink-0" /> {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <span className="text-orange-400 text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">
+                    Try it live <ArrowRight size={14} />
+                  </span>
                 </div>
               </a>
             ))}
