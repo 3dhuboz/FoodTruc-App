@@ -470,16 +470,17 @@ function serveStatic(pathname) {
     const ext = extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-    return new Response(content, {
+    return {
       status: 200,
       headers: {
         'Content-Type': contentType,
         'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=86400',
         ...CORS,
       },
-    });
+      body: content,
+    };
   } catch {
-    return new Response('Not Found', { status: 404 });
+    return { status: 404, headers: { 'Content-Type': 'text/plain' }, body: 'Not Found' };
   }
 }
 
@@ -548,18 +549,8 @@ const server = createServer(async (req, res) => {
 
     // Static files
     const result = serveStatic(url.pathname);
-    const headers = {};
-    result.headers.forEach?.((v, k) => headers[k] = v) || Object.assign(headers, result.headers);
-    res.writeHead(result.status, headers);
-
-    if (result.body instanceof Buffer || typeof result.body === 'string') {
-      res.end(result.body);
-    } else if (result.body?.arrayBuffer) {
-      const buffer = Buffer.from(await result.body.arrayBuffer());
-      res.end(buffer);
-    } else {
-      res.end(result.body);
-    }
+    res.writeHead(result.status, result.headers);
+    res.end(result.body);
   } catch (err) {
     console.error('[Server] Error:', err);
     res.writeHead(500, { 'Content-Type': 'text/plain' });
