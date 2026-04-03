@@ -277,7 +277,7 @@ async function handleApi(req, url) {
     const today = new Date().toISOString().split('T')[0];
     const orderCount = db.prepare('SELECT COUNT(*) as count FROM orders').get();
     const todayOrders = db.prepare('SELECT COUNT(*) as count FROM orders WHERE created_at >= ?').bind(today).get();
-    const lastOrder = db.prepare('SELECT created_at FROM orders ORDER BY created_at DESC LIMIT 1').first();
+    const lastOrder = db.prepare('SELECT created_at FROM orders ORDER BY created_at DESC LIMIT 1').get();
     const queuePending = db.prepare('SELECT COUNT(*) as count FROM sync_queue WHERE synced = 0').get();
     const queueTotal = db.prepare('SELECT COUNT(*) as count FROM sync_queue').get();
     const queueFailed = db.prepare("SELECT COUNT(*) as count FROM sync_queue WHERE synced = 0 AND created_at < datetime('now', '-5 minutes')").get();
