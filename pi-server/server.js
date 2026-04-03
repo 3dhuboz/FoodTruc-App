@@ -21,6 +21,7 @@ import { createServer } from 'http';
 import { readFileSync, existsSync, statSync, writeFileSync } from 'fs';
 import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
 import Database from 'better-sqlite3';
 import { networkInterfaces } from 'os';
 import { initPrinter, isPrinterAvailable, printOrderLabel, printTestLabel } from './printer.js';
@@ -56,6 +57,15 @@ function generateId() {
 function parseJson(val, fallback) {
   if (!val) return fallback;
   try { return JSON.parse(val); } catch { return fallback; }
+}
+
+function execCommand(cmd, timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { timeout }, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr?.trim() || err.message));
+      else resolve(stdout);
+    });
+  });
 }
 
 function rowToMenuItem(r) {
@@ -304,6 +314,100 @@ async function handleApi(req, url) {
   if (path === '/admin/sync-clear' && method === 'POST') {
     db.prepare("DELETE FROM sync_queue WHERE synced = 0 AND created_at < datetime('now', '-10 minutes')").run();
     return json({ cleared: true });
+  }
+
+  // ── Network / WiFi Management ──
+  if (path === '/network/status' && method === 'GET') {
+    try {
+      const deviceStatus = await execCommand('nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status');
+      const lines = deviceStatus.trim().split('\n').filter(l => l.includes('wifi'));
+      let connected = null;
+      for (const line of lines) {
+        const [device, type, state, connection] = line.split(':');
+        if (state === 'connected' && connection) {
+          const ipOut = await execCommand(`nmcli -t -f IP4.ADDRESS device show ${device}`).catch(() => '');
+          const ip = ipOut.match(/IP4\.ADDRESS\[1\]:(.+?)\//)?.[ 1] || '';
+          const signalOut = await execCommand(`nmcli -t -f IN-USE,SIGNAL device wifi list ifname ${device}`).catch(() => '');
+          const signalLine = signalOut.split('\n').find(l => l.startsWith('*'));
+          const signal = signalLine ? parseInt(signalLine.split(':')[1]) : 0;
+          connected = { device, ssid: connection, ip, signal, state: 'connected' };
+          break;
+        }
+      }
+      return json({ connected, online: isOnline, interfaces: lines.map(l => l.split(':')[0]) });
+    } catch (err) {
+      return json({ error: err.message, connected: null, online: isOnline }, 500);
+    }
+  }
+
+  if (path === '/network/scan' && method === 'GET') {
+    try {
+      const out = await execCommand('nmcli -t -f SSID,SIGNAL,SECURITY device wifi list --rescan yes');
+      const seen = new Set();
+      const networks = out.trim().split('\n')
+        .map(line => {
+          const parts = line.split(':');
+          const ssid = parts[0]?.trim();
+          const signal = parseInt(parts[1]) || 0;
+          const security = parts.slice(2).join(':').trim();
+          return { ssid, signal, security };
+        })
+        .filter(n => {
+          if (!n.ssid || seen.has(n.ssid)) return false;
+          seen.add(n.ssid);
+          return true;
+        })
+        .sort((a, b) => b.signal - a.signal);
+      return json({ networks });
+    } catch (err) {
+      return json({ error: err.message, networks: [] }, 500);
+    }
+  }
+
+  if (path === '/network/connect' && method === 'POST') {
+    const body = await readBody(req);
+    const { ssid, password } = body;
+    if (!ssid) return json({ error: 'SSID is required' }, 400);
+    if (/[;|`$\\]/.test(ssid) || (password && /[;|`$\\]/.test(password))) {
+      return json({ error: 'Invalid characters in SSID or password' }, 400);
+    }
+    try {
+      const cmd = password
+        ? `nmcli device wifi connect '${ssid.replace(/'/g, "'\\''")}' password '${password.replace(/'/g, "'\\''")}'`
+        : `nmcli device wifi connect '${ssid.replace(/'/g, "'\\''")}'`;
+      await execCommand(cmd, 30000);
+      // Check if we got internet
+      setTimeout(() => checkConnectivity(), 3000);
+      return json({ success: true, ssid });
+    } catch (err) {
+      return json({ error: err.message || 'Connection failed', success: false }, 400);
+    }
+  }
+
+  if (path === '/network/saved' && method === 'GET') {
+    try {
+      const out = await execCommand('nmcli -t -f NAME,TYPE connection show');
+      const networks = out.trim().split('\n')
+        .filter(l => l.includes('wireless') || l.includes('wifi') || l.includes('802-11'))
+        .map(l => l.split(':')[0])
+        .filter(Boolean);
+      return json({ networks });
+    } catch (err) {
+      return json({ error: err.message, networks: [] }, 500);
+    }
+  }
+
+  if (path === '/network/forget' && method === 'POST') {
+    const body = await readBody(req);
+    const { ssid } = body;
+    if (!ssid) return json({ error: 'SSID is required' }, 400);
+    if (/[;|`$\\]/.test(ssid)) return json({ error: 'Invalid characters' }, 400);
+    try {
+      await execCommand(`nmcli connection delete '${ssid.replace(/'/g, "'\\''")}'`);
+      return json({ success: true });
+    } catch (err) {
+      return json({ error: err.message, success: false }, 400);
+    }
   }
 
   // ── SMS stubs (no-op locally, synced to cloud later) ──

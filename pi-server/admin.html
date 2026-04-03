@@ -41,6 +41,30 @@
   .log-entry { padding: 2px 0; border-bottom: 1px solid #111827; }
   .toast { position: fixed; bottom: 24px; right: 24px; background: #065f46; color: #34d399; padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity 0.3s; z-index: 100; }
   .toast.show { opacity: 1; }
+  .toast.error { background: #7f1d1d; color: #f87171; }
+  .wifi-card { grid-column: 1 / -1; }
+  .wifi-list { max-height: 300px; overflow-y: auto; margin-top: 12px; }
+  .wifi-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.15s; border: 1px solid transparent; }
+  .wifi-item:hover { background: #1f2937; }
+  .wifi-item.active { border-color: #34d39940; background: #065f4615; }
+  .wifi-item .wifi-info { display: flex; align-items: center; gap: 10px; }
+  .wifi-item .wifi-name { font-weight: 600; font-size: 14px; color: #f3f4f6; }
+  .wifi-item .wifi-meta { font-size: 11px; color: #6b7280; }
+  .wifi-signal { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
+  .wifi-signal .bar { width: 3px; background: #374151; border-radius: 1px; }
+  .wifi-signal .bar.on { background: #34d399; }
+  .wifi-connect-form { margin-top: 12px; padding: 16px; background: #0a0f1a; border-radius: 12px; border: 1px solid #1f2937; }
+  .wifi-connect-form h3 { font-size: 14px; font-weight: 700; color: #f3f4f6; margin-bottom: 12px; }
+  .wifi-connect-form input { width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #374151; background: #111827; color: #f3f4f6; font-size: 14px; outline: none; margin-bottom: 10px; }
+  .wifi-connect-form input:focus { border-color: #f97316; }
+  .wifi-connect-form .form-row { display: flex; gap: 8px; }
+  .saved-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #1f293750; }
+  .saved-item:last-child { border-bottom: none; }
+  .saved-item .name { color: #d1d5db; font-size: 13px; }
+  .saved-item button { background: none; border: none; color: #6b7280; cursor: pointer; font-size: 11px; padding: 4px 8px; border-radius: 6px; }
+  .saved-item button:hover { color: #f87171; background: #7f1d1d20; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #37415180; border-top-color: #f97316; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -95,6 +119,45 @@
     <div class="actions">
       <button class="btn btn-green" onclick="forceSync()">Force Sync</button>
       <button class="btn btn-red" onclick="clearStale()">Clear Stale</button>
+    </div>
+  </div>
+
+  <!-- WiFi Management -->
+  <div class="card wifi-card">
+    <h2>WiFi Setup</h2>
+
+    <!-- Current connection -->
+    <div class="stat"><span class="label">Connected to</span><span class="value" id="wifi-ssid">--</span></div>
+    <div class="stat"><span class="label">IP Address</span><span class="value" id="wifi-ip">--</span></div>
+    <div class="stat"><span class="label">Signal</span><span class="value" id="wifi-signal">--</span></div>
+    <div class="stat"><span class="label">Internet</span><span class="value" id="wifi-internet">--</span></div>
+
+    <!-- Scan + connect -->
+    <div style="margin-top: 16px; display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="margin-bottom: 0;">Available Networks</h2>
+      <button class="btn btn-orange" style="width: auto; margin-top: 0; padding: 8px 16px;" onclick="scanWifi()" id="scan-btn">Scan</button>
+    </div>
+    <div id="wifi-list" class="wifi-list">
+      <div style="text-align: center; color: #6b7280; padding: 20px; font-size: 13px;">Tap Scan to find networks</div>
+    </div>
+
+    <!-- Connect form (hidden until network selected) -->
+    <div id="wifi-connect-form" class="wifi-connect-form" style="display: none;">
+      <h3>Connect to <span id="connect-ssid-label"></span></h3>
+      <input type="password" id="connect-password" placeholder="WiFi password" autocomplete="off">
+      <div class="form-row">
+        <button class="btn btn-orange" onclick="connectWifi()" id="connect-btn" style="flex: 2;">Connect</button>
+        <button class="btn btn-gray" onclick="cancelConnect()" style="flex: 1;">Cancel</button>
+      </div>
+      <div id="connect-status" style="margin-top: 8px; font-size: 12px; color: #6b7280;"></div>
+    </div>
+
+    <!-- Saved networks -->
+    <div style="margin-top: 16px;">
+      <h2>Saved Networks</h2>
+      <div id="saved-networks">
+        <div style="color: #6b7280; font-size: 13px; padding: 8px 0;">Loading...</div>
+      </div>
     </div>
   </div>
 </div>
@@ -212,9 +275,168 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
+// ── WiFi Management ──
+let selectedSSID = '';
+
+async function fetchWifiStatus() {
+  try {
+    const res = await fetch('/api/v1/network/status');
+    const d = await res.json();
+    if (d.connected) {
+      document.getElementById('wifi-ssid').textContent = d.connected.ssid;
+      document.getElementById('wifi-ssid').className = 'value green';
+      document.getElementById('wifi-ip').textContent = d.connected.ip || '--';
+      document.getElementById('wifi-signal').textContent = d.connected.signal + '%';
+      document.getElementById('wifi-signal').className = 'value ' + (d.connected.signal > 50 ? 'green' : d.connected.signal > 25 ? 'yellow' : 'red');
+    } else {
+      document.getElementById('wifi-ssid').textContent = 'Not connected';
+      document.getElementById('wifi-ssid').className = 'value red';
+      document.getElementById('wifi-ip').textContent = '--';
+      document.getElementById('wifi-signal').textContent = '--';
+    }
+    document.getElementById('wifi-internet').textContent = d.online ? 'Connected' : 'No internet';
+    document.getElementById('wifi-internet').className = 'value ' + (d.online ? 'green' : 'red');
+  } catch {
+    document.getElementById('wifi-ssid').textContent = 'Error';
+    document.getElementById('wifi-ssid').className = 'value red';
+  }
+}
+
+function signalBars(signal) {
+  const levels = [signal > 10, signal > 30, signal > 55, signal > 75];
+  return '<div class="wifi-signal">' +
+    levels.map((on, i) => '<div class="bar' + (on ? ' on' : '') + '" style="height:' + (4 + i * 4) + 'px"></div>').join('') +
+    '</div>';
+}
+
+async function scanWifi() {
+  const btn = document.getElementById('scan-btn');
+  const list = document.getElementById('wifi-list');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  list.innerHTML = '<div style="text-align:center;color:#6b7280;padding:20px;font-size:13px;">Scanning...</div>';
+  try {
+    const res = await fetch('/api/v1/network/scan');
+    const d = await res.json();
+    if (!d.networks || d.networks.length === 0) {
+      list.innerHTML = '<div style="text-align:center;color:#6b7280;padding:20px;font-size:13px;">No networks found</div>';
+    } else {
+      list.innerHTML = d.networks.map(n =>
+        '<div class="wifi-item" onclick="selectNetwork(\'' + n.ssid.replace(/'/g, "\\'") + '\', ' + (n.security ? 'true' : 'false') + ')">' +
+          '<div class="wifi-info">' +
+            signalBars(n.signal) +
+            '<div><div class="wifi-name">' + escHtml(n.ssid) + '</div>' +
+            '<div class="wifi-meta">' + (n.security || 'Open') + ' · ' + n.signal + '%</div></div>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+    }
+  } catch (e) {
+    list.innerHTML = '<div style="text-align:center;color:#f87171;padding:20px;font-size:13px;">Scan failed: ' + e.message + '</div>';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Scan';
+}
+
+function selectNetwork(ssid, secured) {
+  selectedSSID = ssid;
+  const form = document.getElementById('wifi-connect-form');
+  document.getElementById('connect-ssid-label').textContent = ssid;
+  document.getElementById('connect-password').value = '';
+  document.getElementById('connect-status').textContent = '';
+  form.style.display = 'block';
+  if (secured) {
+    document.getElementById('connect-password').style.display = 'block';
+    document.getElementById('connect-password').focus();
+  } else {
+    document.getElementById('connect-password').style.display = 'none';
+  }
+}
+
+function cancelConnect() {
+  document.getElementById('wifi-connect-form').style.display = 'none';
+  selectedSSID = '';
+}
+
+async function connectWifi() {
+  if (!selectedSSID) return;
+  const btn = document.getElementById('connect-btn');
+  const status = document.getElementById('connect-status');
+  const password = document.getElementById('connect-password').value;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Connecting...';
+  status.textContent = '';
+  status.style.color = '#6b7280';
+  try {
+    const res = await fetch('/api/v1/network/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid: selectedSSID, password: password || undefined }),
+    });
+    const d = await res.json();
+    if (d.success) {
+      status.textContent = 'Connected to ' + selectedSSID + '!';
+      status.style.color = '#34d399';
+      showToast('Connected to ' + selectedSSID);
+      setTimeout(() => {
+        cancelConnect();
+        fetchWifiStatus();
+        loadSavedNetworks();
+      }, 2000);
+    } else {
+      status.textContent = d.error || 'Connection failed';
+      status.style.color = '#f87171';
+    }
+  } catch (e) {
+    status.textContent = 'Request failed: ' + e.message;
+    status.style.color = '#f87171';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Connect';
+}
+
+async function loadSavedNetworks() {
+  try {
+    const res = await fetch('/api/v1/network/saved');
+    const d = await res.json();
+    const el = document.getElementById('saved-networks');
+    if (!d.networks || d.networks.length === 0) {
+      el.innerHTML = '<div style="color:#6b7280;font-size:13px;padding:8px 0;">No saved networks</div>';
+    } else {
+      el.innerHTML = d.networks.map(n =>
+        '<div class="saved-item"><span class="name">' + escHtml(n) + '</span>' +
+        '<button onclick="forgetNetwork(\'' + n.replace(/'/g, "\\'") + '\')">Forget</button></div>'
+      ).join('');
+    }
+  } catch {
+    document.getElementById('saved-networks').innerHTML = '<div style="color:#6b7280;font-size:13px;padding:8px 0;">Could not load</div>';
+  }
+}
+
+async function forgetNetwork(ssid) {
+  if (!confirm('Forget network "' + ssid + '"?')) return;
+  try {
+    await fetch('/api/v1/network/forget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid }),
+    });
+    showToast('Forgot ' + ssid);
+    loadSavedNetworks();
+  } catch { showToast('Failed to forget network'); }
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
 // Auto-refresh
 fetchStatus();
-refreshInterval = setInterval(fetchStatus, 5000);
+fetchWifiStatus();
+loadSavedNetworks();
+refreshInterval = setInterval(() => { fetchStatus(); fetchWifiStatus(); }, 5000);
 
 // Countdown display
 let countdown = 5;
