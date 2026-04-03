@@ -336,17 +336,41 @@ async function handleApi(req, url) {
       return json({ error: 'Invalid characters' }, 400);
     }
     try {
+      const escapedSsid = ssid.replace(/'/g, "'\\''");
+      const escapedPass = password ? password.replace(/'/g, "'\\''") : '';
+
       // Save config
       const configPath = join(__dirname, '.phone-hotspot.json');
       writeFileSync(configPath, JSON.stringify({ ssid, password: password || '' }));
-      // Pre-save the connection in NetworkManager so it auto-connects
-      const cmd = password
-        ? `nmcli connection add type wifi con-name 'ChowBox-Phone' ifname wlan0 ssid '${ssid.replace(/'/g, "'\\''")}' wifi-sec.key-mgmt wpa-psk wifi-sec.psk '${password.replace(/'/g, "'\\''")}'  connection.autoconnect yes connection.autoconnect-priority 100`
-        : `nmcli connection add type wifi con-name 'ChowBox-Phone' ifname wlan0 ssid '${ssid.replace(/'/g, "'\\''")}' connection.autoconnect yes connection.autoconnect-priority 100`;
-      // Remove old config first
+
+      // Remove old NM connection
       await execCommand("nmcli connection delete 'ChowBox-Phone' 2>/dev/null || true");
-      await execCommand(cmd, 15000);
-      return json({ success: true, ssid });
+
+      // Create NM connection with auto-connect
+      const addCmd = password
+        ? `nmcli connection add type wifi con-name 'ChowBox-Phone' ifname wlan0 ssid '${escapedSsid}' wifi-sec.key-mgmt wpa-psk wifi-sec.psk '${escapedPass}' connection.autoconnect yes connection.autoconnect-priority 100`
+        : `nmcli connection add type wifi con-name 'ChowBox-Phone' ifname wlan0 ssid '${escapedSsid}' connection.autoconnect yes connection.autoconnect-priority 100`;
+      await execCommand(addCmd, 15000);
+
+      // Now try to connect immediately
+      try {
+        await execCommand("nmcli connection up 'ChowBox-Phone'", 30000);
+      } catch {
+        // Connection failed — hotspot might not be broadcasting yet, that's OK
+        // It's saved and will auto-connect when in range
+        return json({ success: true, ssid, connected: false, message: 'Saved. Turn on your phone hotspot — ChowBox will connect automatically.' });
+      }
+
+      // Verify internet
+      let hasInternet = false;
+      try {
+        await execCommand(`curl -s --max-time 5 -o /dev/null -w "%{http_code}" https://chownow.au/api/v1/health`, 8000);
+        hasInternet = true;
+        isOnline = true;
+      } catch {}
+
+      return json({ success: true, ssid, connected: true, internet: hasInternet,
+        message: hasInternet ? 'Connected to ' + ssid + ' with internet!' : 'Connected to ' + ssid + ' but no internet detected yet.' });
     } catch (err) {
       return json({ error: err.message, success: false }, 400);
     }
