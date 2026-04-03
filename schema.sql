@@ -191,6 +191,7 @@ CREATE TABLE IF NOT EXISTS chowbox_devices (
   memory_mb INTEGER DEFAULT 0,
   node_version TEXT,
   last_heartbeat TEXT,
+  pending_commands TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 

@@ -6,6 +6,7 @@
  * - Provides the same /api/v1/* endpoints as Cloudflare Pages Functions
  * - Stores data in local SQLite (same schema as D1)
  * - Syncs to cloud D1 when internet is available
+ * - Cluster mode: forks workers per CPU core for concurrent QR orders
  *
  * Usage:
  *   node setup-db.js    # First time only
@@ -17,11 +18,30 @@
  *   SYNC_INTERVAL=30000 # Cloud sync interval in ms (default 30s)
  */
 
+import cluster from 'cluster';
+import { availableParallelism } from 'os';
+
+// ─── Cluster Primary ────────────────────────────────────────
+if (cluster.isPrimary) {
+  const numWorkers = Math.min(availableParallelism(), 4);
+  console.log(`[ChowBox] Starting ${numWorkers} workers on ${availableParallelism()} cores`);
+  for (let i = 0; i < numWorkers; i++) cluster.fork();
+  cluster.on('exit', (worker, code) => {
+    console.log(`[ChowBox] Worker ${worker.process.pid} exited (code ${code}), restarting...`);
+    cluster.fork();
+  });
+  // Primary does nothing else — workers handle all requests + sync
+  // Only worker 0 (first spawned) runs sync loops to avoid duplicates
+} else {
+
+// ─── Worker Process ─────────────────────────────────────────
+
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync, writeFileSync } from 'fs';
 import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
+import { gzipSync } from 'zlib';
 import Database from 'better-sqlite3';
 import { networkInterfaces } from 'os';
 import { initPrinter, isPrinterAvailable, printOrderLabel, printTestLabel } from './printer.js';
@@ -645,11 +665,17 @@ function serveStatic(pathname) {
     const ext = extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
+    // Hashed assets (e.g. index-3-qJAEoE.js) get aggressive caching
+    const isHashed = /[-\.][a-zA-Z0-9]{6,}\.(js|css|woff2?)$/.test(filePath);
+    const cacheControl = ext === '.html' ? 'no-cache'
+      : isHashed ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=86400';
+
     return {
       status: 200,
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=86400',
+        'Cache-Control': cacheControl,
         ...CORS,
       },
       body: content,
@@ -681,6 +707,24 @@ async function readBody(req) {
   });
 }
 
+// Gzip-compressible content types
+const COMPRESSIBLE = new Set(['text/html', 'text/css', 'application/javascript', 'application/json', 'text/plain', 'image/svg+xml']);
+
+function sendResponse(req, res, status, headers, body) {
+  const contentType = headers['Content-Type'] || '';
+  const acceptEncoding = req.headers['accept-encoding'] || '';
+  const isCompressible = COMPRESSIBLE.has(contentType.split(';')[0]) && body && body.length > 512;
+
+  if (isCompressible && acceptEncoding.includes('gzip')) {
+    const compressed = gzipSync(body);
+    res.writeHead(status, { ...headers, 'Content-Encoding': 'gzip', 'Content-Length': compressed.length });
+    res.end(compressed);
+  } else {
+    res.writeHead(status, headers);
+    res.end(body);
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
@@ -688,13 +732,12 @@ const server = createServer(async (req, res) => {
     // API routes
     if (url.pathname.startsWith('/api/v1')) {
       const result = await handleApi(req, url);
-      res.writeHead(result.status, result.headers);
-      res.end(result.body);
+      await sendResponse(req, res, result.status, result.headers, result.body);
       return;
     }
 
-    // Captive portal detection — redirect to ordering page
-    // These are URLs that phones/OS check to detect captive portals
+    // Captive portal detection — redirect to QR ordering page
+    // These URLs are checked by phones/OS to detect captive portals
     const captiveUrls = [
       '/generate_204',           // Android
       '/hotspot-detect.html',    // Apple
@@ -705,9 +748,14 @@ const server = createServer(async (req, res) => {
       '/success.txt',            // Various
     ];
     if (captiveUrls.some(u => url.pathname === u)) {
-      // Return a redirect to the ordering page
-      res.writeHead(302, { Location: `http://${req.headers.host}/#/qr-order` });
-      res.end();
+      // Redirect to ordering page on the AP interface
+      const host = req.headers.host?.split(':')[0] || '10.0.0.1';
+      const orderUrl = `http://${host}/#/qr-order`;
+      // Some phones need a non-redirect response to trigger the captive portal popup
+      // Return a small HTML page that also redirects via meta + JS
+      const html = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${orderUrl}"><title>ChowBox</title></head><body style="background:#030712;color:#f97316;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h1 style="font-size:28px;margin-bottom:16px;">ChowBox</h1><p style="color:#9ca3af;">Loading menu...</p><a href="${orderUrl}" style="display:inline-block;margin-top:20px;background:#f97316;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">Tap to Order</a></div><script>location.href="${orderUrl}"</script></body></html>`;
+      res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
+      res.end(html);
       return;
     }
 
@@ -716,16 +764,14 @@ const server = createServer(async (req, res) => {
       const adminPath = join(__dirname, 'admin.html');
       if (existsSync(adminPath)) {
         const html = readFileSync(adminPath, 'utf-8');
-        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' });
-        res.end(html);
+        await sendResponse(req, res, 200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' }, html);
         return;
       }
     }
 
     // Static files
     const result = serveStatic(url.pathname);
-    res.writeHead(result.status, result.headers);
-    res.end(result.body);
+    await sendResponse(req, res, result.status, result.headers, result.body);
   } catch (err) {
     console.error('[Server] Error:', err);
     res.writeHead(500, { 'Content-Type': 'text/plain' });
@@ -768,7 +814,7 @@ async function sendHeartbeat() {
     const hostname = (await import('os')).hostname();
     const localIPs = getLocalIPs();
 
-    await fetch(`${CLOUD_URL}/api/v1/heartbeat`, {
+    const hbRes = await fetch(`${CLOUD_URL}/api/v1/heartbeat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -786,39 +832,77 @@ async function sendHeartbeat() {
       }),
       signal: AbortSignal.timeout(5000),
     });
+
+    // Process remote commands from cloud super-admin
+    const hbData = await hbRes.json();
+    if (hbData.commands && Array.isArray(hbData.commands)) {
+      for (const cmd of hbData.commands) {
+        console.log(`[Command] Received: ${cmd}`);
+        if (cmd === 'pause_qr_orders') {
+          const existing = db.prepare("SELECT data FROM settings WHERE key = 'general'").get();
+          const settings = parseJson(existing?.data, {});
+          settings.qrOrdersPaused = true;
+          db.prepare("INSERT OR REPLACE INTO settings (key, data) VALUES ('general', ?)").run(JSON.stringify(settings));
+          console.log('[Command] QR orders PAUSED');
+        } else if (cmd === 'resume_qr_orders') {
+          const existing = db.prepare("SELECT data FROM settings WHERE key = 'general'").get();
+          const settings = parseJson(existing?.data, {});
+          settings.qrOrdersPaused = false;
+          db.prepare("INSERT OR REPLACE INTO settings (key, data) VALUES ('general', ?)").run(JSON.stringify(settings));
+          console.log('[Command] QR orders RESUMED');
+        } else if (cmd === 'reload_menu') {
+          console.log('[Command] Reloading menu from cloud...');
+          await pullFromCloud();
+        } else if (cmd === 'restart') {
+          console.log('[Command] Restarting server...');
+          process.exit(0); // systemd will restart
+        } else if (cmd === 'update') {
+          console.log('[Command] Updating from git...');
+          await execCommand('cd /opt/chowbox && git pull', 30000);
+          process.exit(0); // systemd will restart with new code
+        }
+      }
+    }
   } catch (e) {
     // Silent fail — heartbeat is best-effort
   }
 }
 
-// ─── Sync Loops ──────────────────────────────────────────────
+// ─── Sync Loops (worker 0 only — avoids duplicate heartbeats) ──
 
-// Fast loop: check connectivity + flush queue + heartbeat (every 30s)
-setInterval(async () => {
-  await checkConnectivity();
-  if (isOnline) {
-    await flushSyncQueue();
-    await sendHeartbeat();
-  }
-}, SYNC_INTERVAL);
+const isFirstWorker = cluster.worker?.id === 1;
 
-// Slow loop: pull menu/settings from cloud (every 5 min)
-setInterval(async () => {
-  if (isOnline) await pullFromCloud();
-}, 300000);
+if (isFirstWorker) {
+  // Fast loop: check connectivity + flush queue + heartbeat (every 30s)
+  setInterval(async () => {
+    await checkConnectivity();
+    if (isOnline) {
+      await flushSyncQueue();
+      await sendHeartbeat();
+    }
+  }, SYNC_INTERVAL);
 
-// Initial sync
-checkConnectivity();
-setTimeout(() => { if (isOnline) pullFromCloud(); }, 3000);
+  // Slow loop: pull menu/settings from cloud (every 5 min)
+  setInterval(async () => {
+    if (isOnline) await pullFromCloud();
+  }, 300000);
 
-// Log queue status every 60s
-setInterval(() => {
-  const pending = db.prepare('SELECT COUNT(*) as count FROM sync_queue WHERE synced = 0').get();
-  const total = db.prepare('SELECT COUNT(*) as count FROM orders').get();
-  if (pending.count > 0 || !isOnline) {
-    console.log(`[Status] Orders: ${total.count} | Queue: ${pending.count} pending | Internet: ${isOnline ? '✅' : '❌'}`);
-  }
-}, 60000);
+  // Initial sync
+  checkConnectivity();
+  setTimeout(() => { if (isOnline) pullFromCloud(); }, 3000);
+
+  // Log queue status every 60s
+  setInterval(() => {
+    const pending = db.prepare('SELECT COUNT(*) as count FROM sync_queue WHERE synced = 0').get();
+    const total = db.prepare('SELECT COUNT(*) as count FROM orders').get();
+    if (pending.count > 0 || !isOnline) {
+      console.log(`[Status] Orders: ${total.count} | Queue: ${pending.count} pending | Internet: ${isOnline ? '✅' : '❌'}`);
+    }
+  }, 60000);
+} else {
+  // Non-primary workers still need connectivity state for API responses
+  setInterval(checkConnectivity, SYNC_INTERVAL);
+}
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -832,3 +916,5 @@ function getLocalIPs() {
   }
   return ips;
 }
+
+} // end cluster worker block

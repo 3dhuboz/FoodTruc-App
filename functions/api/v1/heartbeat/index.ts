@@ -40,7 +40,18 @@ export const onRequestPost: PagesFunction<{ DB: D1Database }> = async ({ request
       uptimeSeconds || 0, memoryMb || 0, nodeVersion || '', now, now
     ).run();
 
-    return Response.json({ ok: true }, { headers: { 'Access-Control-Allow-Origin': '*' } });
+    // Check for pending commands and return them
+    const device = await db.prepare('SELECT pending_commands FROM chowbox_devices WHERE id = ?').bind(deviceId).first<{ pending_commands: string | null }>();
+    let commands: string[] = [];
+    if (device?.pending_commands) {
+      try { commands = JSON.parse(device.pending_commands); } catch {}
+      // Clear commands after delivery
+      if (commands.length > 0) {
+        await db.prepare('UPDATE chowbox_devices SET pending_commands = NULL WHERE id = ?').bind(deviceId).run();
+      }
+    }
+
+    return Response.json({ ok: true, commands }, { headers: { 'Access-Control-Allow-Origin': '*' } });
   } catch (err: any) {
     return Response.json({ error: err.message }, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
   }

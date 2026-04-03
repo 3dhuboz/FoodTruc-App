@@ -3,7 +3,8 @@ import {
   Users, ShoppingCart, Cpu, Printer, Wifi, WifiOff, RefreshCw,
   ExternalLink, ChefHat, BarChart3, Clock, Package, CreditCard,
   Search, Filter, ArrowRight, CheckCircle, XCircle, AlertTriangle,
-  X, Save, Eye, Edit2, Copy, ChevronLeft, ChevronRight
+  X, Save, Eye, Edit2, Copy, ChevronLeft, ChevronRight,
+  Pause, Play, RotateCcw, Download
 } from 'lucide-react';
 
 interface Tenant {
@@ -422,6 +423,18 @@ const SelectField: React.FC<{
   </div>
 );
 
+// ─── Fleet Command Helper ────────────────────────────────────
+async function sendDeviceCommand(deviceId: string, command: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/v1/admin/fleet/${deviceId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command }),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
 // ─── Main Super Admin ────────────────────────────────────────
 const SuperAdmin: React.FC = () => {
   const [tab, setTab] = useState<'tenants' | 'fleet' | 'overview'>('overview');
@@ -633,6 +646,27 @@ const SuperAdmin: React.FC = () => {
                           <div><span className="text-gray-500">Sync:</span> <span className={d.sync_pending > 0 ? 'text-yellow-400' : 'text-green-400'}>{d.sync_pending || 'OK'}</span></div>
                           <div><span className="text-gray-500">Mem:</span> <span className="text-white">{d.memory_mb}MB</span></div>
                         </div>
+                        {/* Action buttons */}
+                        {online && (
+                          <div className="grid grid-cols-2 gap-2 mb-3">
+                            <button onClick={async () => { if (await sendDeviceCommand(d.id, 'pause_qr_orders')) alert('Pause command queued'); }}
+                              className="flex items-center justify-center gap-1 text-[10px] font-bold bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 py-1.5 rounded-lg transition">
+                              <Pause size={10} /> Pause Orders
+                            </button>
+                            <button onClick={async () => { if (await sendDeviceCommand(d.id, 'resume_qr_orders')) alert('Resume command queued'); }}
+                              className="flex items-center justify-center gap-1 text-[10px] font-bold bg-green-500/10 hover:bg-green-500/20 text-green-400 py-1.5 rounded-lg transition">
+                              <Play size={10} /> Resume Orders
+                            </button>
+                            <button onClick={async () => { if (await sendDeviceCommand(d.id, 'reload_menu')) alert('Menu reload queued'); }}
+                              className="flex items-center justify-center gap-1 text-[10px] font-bold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 py-1.5 rounded-lg transition">
+                              <Download size={10} /> Push Menu
+                            </button>
+                            <button onClick={async () => { if (confirm('Restart this ChowBox?') && await sendDeviceCommand(d.id, 'restart')) alert('Restart command queued'); }}
+                              className="flex items-center justify-center gap-1 text-[10px] font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded-lg transition">
+                              <RotateCcw size={10} /> Restart
+                            </button>
+                          </div>
+                        )}
                         {d.tunnel_url && (
                           <a href={`${d.tunnel_url}/admin`} target="_blank" className="block bg-orange-500 hover:bg-orange-400 text-white text-xs font-bold py-2 rounded-lg text-center transition">
                             Connect <ExternalLink size={10} className="inline ml-1" />
