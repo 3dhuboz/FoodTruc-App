@@ -316,6 +316,53 @@ async function handleApi(req, url) {
     return json({ cleared: true });
   }
 
+  // ── Phone Hotspot (auto-connect) ──
+  if (path === '/network/phone-hotspot' && method === 'GET') {
+    try {
+      const configPath = join(__dirname, '.phone-hotspot.json');
+      if (existsSync(configPath)) {
+        const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+        return json({ configured: true, ssid: config.ssid });
+      }
+      return json({ configured: false });
+    } catch { return json({ configured: false }); }
+  }
+
+  if (path === '/network/phone-hotspot' && method === 'POST') {
+    const body = await readBody(req);
+    const { ssid, password } = body;
+    if (!ssid) return json({ error: 'Phone hotspot name is required' }, 400);
+    if (/[;|`$\\]/.test(ssid) || (password && /[;|`$\\]/.test(password))) {
+      return json({ error: 'Invalid characters' }, 400);
+    }
+    try {
+      // Save config
+      const configPath = join(__dirname, '.phone-hotspot.json');
+      writeFileSync(configPath, JSON.stringify({ ssid, password: password || '' }));
+      // Pre-save the connection in NetworkManager so it auto-connects
+      const cmd = password
+        ? `nmcli connection add type wifi con-name 'ChowBox-Phone' ifname wlan0 ssid '${ssid.replace(/'/g, "'\\''")}' wifi-sec.key-mgmt wpa-psk wifi-sec.psk '${password.replace(/'/g, "'\\''")}'  connection.autoconnect yes connection.autoconnect-priority 100`
+        : `nmcli connection add type wifi con-name 'ChowBox-Phone' ifname wlan0 ssid '${ssid.replace(/'/g, "'\\''")}' connection.autoconnect yes connection.autoconnect-priority 100`;
+      // Remove old config first
+      await execCommand("nmcli connection delete 'ChowBox-Phone' 2>/dev/null || true");
+      await execCommand(cmd, 15000);
+      return json({ success: true, ssid });
+    } catch (err) {
+      return json({ error: err.message, success: false }, 400);
+    }
+  }
+
+  if (path === '/network/phone-hotspot' && method === 'DELETE') {
+    try {
+      const configPath = join(__dirname, '.phone-hotspot.json');
+      if (existsSync(configPath)) writeFileSync(configPath, '{}');
+      await execCommand("nmcli connection delete 'ChowBox-Phone' 2>/dev/null || true");
+      return json({ success: true });
+    } catch (err) {
+      return json({ error: err.message, success: false }, 400);
+    }
+  }
+
   // ── Network / WiFi Management ──
   if (path === '/network/status' && method === 'GET') {
     try {

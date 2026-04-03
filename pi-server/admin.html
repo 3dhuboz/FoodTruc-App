@@ -122,6 +122,24 @@
     </div>
   </div>
 
+  <!-- Phone Internet -->
+  <div class="card wifi-card">
+    <h2>Phone Internet</h2>
+    <p style="color: #6b7280; font-size: 13px; margin-bottom: 12px;">
+      Enter your phone's hotspot name and password. ChowBox will auto-connect whenever it's in range.
+    </p>
+    <div id="phone-hotspot-status" style="margin-bottom: 12px;"></div>
+    <div id="phone-hotspot-form">
+      <input type="text" id="phone-ssid" placeholder="Phone hotspot name (e.g. Steve's iPhone)" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #374151;background:#111827;color:#f3f4f6;font-size:14px;outline:none;margin-bottom:8px;">
+      <input type="password" id="phone-password" placeholder="Hotspot password" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #374151;background:#111827;color:#f3f4f6;font-size:14px;outline:none;margin-bottom:10px;">
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-orange" onclick="savePhoneHotspot()" id="phone-save-btn" style="flex:2;">Save &amp; Connect</button>
+        <button class="btn btn-red" onclick="removePhoneHotspot()" id="phone-remove-btn" style="flex:1;display:none;">Remove</button>
+      </div>
+      <div id="phone-status-msg" style="margin-top:8px;font-size:12px;color:#6b7280;"></div>
+    </div>
+  </div>
+
   <!-- WiFi Management -->
   <div class="card wifi-card">
     <h2>WiFi Setup</h2>
@@ -273,6 +291,73 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Phone Hotspot ──
+async function loadPhoneHotspot() {
+  try {
+    const res = await fetch('/api/v1/network/phone-hotspot');
+    const d = await res.json();
+    const statusEl = document.getElementById('phone-hotspot-status');
+    const removeBtn = document.getElementById('phone-remove-btn');
+    if (d.configured && d.ssid) {
+      statusEl.innerHTML = '<div style="background:#065f4615;border:1px solid #34d39930;border-radius:10px;padding:12px;display:flex;align-items:center;justify-content:space-between;">' +
+        '<div><span style="color:#34d399;font-weight:700;font-size:14px;">&#10003; Configured</span>' +
+        '<div style="color:#9ca3af;font-size:12px;margin-top:2px;">Auto-connects to: <strong style="color:#f3f4f6;">' + escHtml(d.ssid) + '</strong></div></div></div>';
+      document.getElementById('phone-ssid').value = d.ssid;
+      removeBtn.style.display = 'block';
+    } else {
+      statusEl.innerHTML = '<div style="background:#7f1d1d15;border:1px solid #f8717130;border-radius:10px;padding:12px;">' +
+        '<span style="color:#f87171;font-weight:700;font-size:13px;">Not configured</span>' +
+        '<div style="color:#6b7280;font-size:12px;margin-top:2px;">Set up your phone hotspot so ChowBox can get internet at events.</div></div>';
+      removeBtn.style.display = 'none';
+    }
+  } catch {}
+}
+
+async function savePhoneHotspot() {
+  const ssid = document.getElementById('phone-ssid').value.trim();
+  const password = document.getElementById('phone-password').value;
+  const msg = document.getElementById('phone-status-msg');
+  const btn = document.getElementById('phone-save-btn');
+  if (!ssid) { msg.textContent = 'Enter your hotspot name'; msg.style.color = '#f87171'; return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Saving...';
+  msg.textContent = '';
+  try {
+    const res = await fetch('/api/v1/network/phone-hotspot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid, password: password || undefined }),
+    });
+    const d = await res.json();
+    if (d.success) {
+      msg.textContent = 'Saved! ChowBox will auto-connect to "' + ssid + '" when in range.';
+      msg.style.color = '#34d399';
+      showToast('Phone hotspot saved');
+      document.getElementById('phone-password').value = '';
+      loadPhoneHotspot();
+    } else {
+      msg.textContent = d.error || 'Failed to save';
+      msg.style.color = '#f87171';
+    }
+  } catch (e) {
+    msg.textContent = 'Request failed';
+    msg.style.color = '#f87171';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Save & Connect';
+}
+
+async function removePhoneHotspot() {
+  if (!confirm('Remove phone hotspot config? ChowBox will no longer auto-connect.')) return;
+  try {
+    await fetch('/api/v1/network/phone-hotspot', { method: 'DELETE' });
+    document.getElementById('phone-ssid').value = '';
+    document.getElementById('phone-password').value = '';
+    showToast('Phone hotspot removed');
+    loadPhoneHotspot();
+  } catch { showToast('Failed to remove'); }
 }
 
 // ── WiFi Management ──
@@ -436,6 +521,7 @@ function escHtml(s) {
 fetchStatus();
 fetchWifiStatus();
 loadSavedNetworks();
+loadPhoneHotspot();
 refreshInterval = setInterval(() => { fetchStatus(); fetchWifiStatus(); }, 5000);
 
 // Countdown display
