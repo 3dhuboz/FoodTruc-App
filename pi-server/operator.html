@@ -101,9 +101,20 @@
 
   <!-- Step 3: Phone Number -->
   <div class="wizard-step" id="step-3" style="display:none;">
-    <h1>Your Phone Number</h1>
-    <p>We'll text you when ChowBox comes online, goes offline, or needs attention. No spam — only important alerts.</p>
-    <label style="color:#6b7280;font-size:12px;font-weight:600;">Mobile Number</label>
+    <h1>Get Alerts</h1>
+    <p>Get instant push notifications when ChowBox comes online, goes offline, or needs attention.</p>
+    <div style="background:#0a0f1a;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:14px;font-weight:700;color:#f3f4f6;margin-bottom:8px;">Setup (one time):</div>
+      <div style="color:#9ca3af;font-size:13px;line-height:1.6;">
+        1. Install <strong style="color:#f97316;">ntfy</strong> app on your phone<br>
+        2. Open the app → Subscribe → Enter topic below<br>
+        3. Done! You'll get push alerts from ChowBox.
+      </div>
+    </div>
+    <label style="color:#6b7280;font-size:12px;font-weight:600;">Notification Topic</label>
+    <input type="text" id="w-ntfy" placeholder="chowbox-your-name" value="">
+    <div style="color:#6b7280;font-size:11px;margin-bottom:8px;">Use the same topic name in the ntfy app on your phone.</div>
+    <label style="color:#6b7280;font-size:12px;font-weight:600;">Mobile Number (optional — for SMS when available)</label>
     <input type="tel" id="w-phone" placeholder="0412 345 678">
     <button class="btn btn-orange" onclick="wizardNext(4)">Next</button>
     <button class="btn btn-gray" onclick="wizardNext(4)">Skip for now</button>
@@ -229,12 +240,14 @@ async function saveWizard() {
 
   try {
     // Save operator settings
+    const ntfyTopic = document.getElementById('w-ntfy').value.trim();
     await fetch('/api/v1/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         businessName: name || 'ChowBox',
         operatorPhone: phone || '',
+        ntfyTopic: ntfyTopic || '',
         setupComplete: true,
       }),
     });
@@ -258,17 +271,18 @@ async function saveWizard() {
       await new Promise(r => setTimeout(r, 1500));
     }
 
-    // Send test SMS if phone provided
-    if (phone) {
-      msg.innerHTML = '<span class="yellow">Sending test SMS...</span>';
+    // Send test notification
+    if (ntfyTopic || phone) {
+      msg.innerHTML = '<span class="yellow">Sending test notification...</span>';
       try {
         await fetch('/api/v1/admin/test-sms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, message: 'ChowBox setup complete! You\'ll receive alerts when ChowBox goes online/offline at events. - ' + (name || 'ChowBox') }),
+          body: JSON.stringify({ phone: phone || '', message: 'ChowBox setup complete! You\'ll receive alerts when ChowBox goes online/offline at events. - ' + (name || 'ChowBox') }),
         });
+        msg.innerHTML = '<span class="green">Notification sent! Check your ntfy app.</span>';
       } catch {}
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 1500));
     }
 
     wizardNext(5);

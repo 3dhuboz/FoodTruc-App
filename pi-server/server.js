@@ -518,7 +518,7 @@ async function handleApi(req, url) {
     const body = await readBody(req);
     const { phone, message } = body;
     if (!phone || !message) return json({ error: 'phone and message required' }, 400);
-    const result = await sendOperatorSms(phone, message);
+    const result = await sendOperatorAlert(phone, message);
     return json(result);
   }
 
@@ -903,36 +903,51 @@ async function sendHeartbeat() {
 
 // ─── Operator SMS Alerts ─────────────────────────────────────
 
-async function sendOperatorSms(phone, message) {
+async function sendOperatorAlert(phone, message) {
   try {
-    // Get Twilio settings from local DB
     const row = db.prepare("SELECT data FROM settings WHERE key = 'general'").get();
     const settings = parseJson(row?.data, {});
+
+    // Method 1: Push notification via ntfy.sh (free, instant, no auth)
+    const ntfyTopic = settings.ntfyTopic || `chowbox-${DEVICE_ID}`;
+    try {
+      await fetch(`https://ntfy.sh/${ntfyTopic}`, {
+        method: 'POST',
+        headers: { 'Title': 'ChowBox Alert', 'Priority': 'high', 'Tags': 'food,truck' },
+        body: message,
+        signal: AbortSignal.timeout(5000),
+      });
+      console.log(`[Alert] Sent push notification to ntfy.sh/${ntfyTopic}`);
+      return { sent: true, via: 'ntfy' };
+    } catch {}
+
+    // Method 2: Twilio SMS (if configured)
     const sms = settings.smsSettings || {};
-    if (!sms.accountSid || !sms.authToken || !sms.fromNumber) {
-      // No Twilio config — try sending via cloud relay
-      if (isOnline) {
-        await fetch(`${CLOUD_URL}/api/v1/sms/operator-alert`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, message, tenantId: TENANT_ID }),
-          signal: AbortSignal.timeout(10000),
-        });
-        return { sent: true, via: 'cloud' };
-      }
-      return { sent: false, error: 'No SMS config and no internet' };
+    if (sms.accountSid && sms.authToken && sms.fromNumber && phone) {
+      const auth = Buffer.from(`${sms.accountSid}:${sms.authToken}`).toString('base64');
+      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sms.accountSid}/Messages.json`, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `To=${encodeURIComponent(phone)}&From=${encodeURIComponent(sms.fromNumber)}&Body=${encodeURIComponent(message)}`,
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) return { sent: true, via: 'twilio' };
     }
-    // Send directly via Twilio
-    const auth = Buffer.from(`${sms.accountSid}:${sms.authToken}`).toString('base64');
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sms.accountSid}/Messages.json`, {
-      method: 'POST',
-      headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `To=${encodeURIComponent(phone)}&From=${encodeURIComponent(sms.fromNumber)}&Body=${encodeURIComponent(message)}`,
-      signal: AbortSignal.timeout(10000),
-    });
-    return { sent: res.ok, via: 'twilio' };
+
+    // Method 3: Cloud relay
+    if (isOnline && phone) {
+      await fetch(`${CLOUD_URL}/api/v1/sms/operator-alert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, message, tenantId: TENANT_ID }),
+        signal: AbortSignal.timeout(10000),
+      });
+      return { sent: true, via: 'cloud' };
+    }
+
+    return { sent: false, error: 'No notification method available' };
   } catch (err) {
-    console.error('[SMS] Failed:', err.message);
+    console.error('[Alert] Failed:', err.message);
     return { sent: false, error: err.message };
   }
 }
@@ -954,10 +969,10 @@ async function checkAndNotifyConnectivity() {
         const today = new Date().toISOString().split('T')[0];
         const orderCount = db.prepare('SELECT COUNT(*) as count FROM orders WHERE created_at >= ?').get(today);
         if (isOnline) {
-          await sendOperatorSms(phone, `${name} is ONLINE and ready to serve. ${orderCount?.count || 0} orders today. Cloud sync active.`);
+          await sendOperatorAlert(phone, `${name} is ONLINE and ready to serve. ${orderCount?.count || 0} orders today. Cloud sync active.`);
           console.log('[SMS] Sent online notification to', phone);
         } else {
-          await sendOperatorSms(phone, `${name} lost internet. Orders are being saved locally and will sync when connection returns.`);
+          await sendOperatorAlert(phone, `${name} lost internet. Orders are being saved locally and will sync when connection returns.`);
           console.log('[SMS] Sent offline notification to', phone);
         }
       }
