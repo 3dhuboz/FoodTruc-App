@@ -6,137 +6,319 @@
 <title>ChowBox</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
-  .status-bar { padding: 48px 24px 32px; text-align: center; transition: background 0.5s; }
-  .status-bar.red { background: #dc2626; color: white; }
-  .status-bar.yellow { background: #d97706; color: white; }
-  .status-bar.green { background: #059669; color: white; }
-  .status-bar.connecting { background: #2563eb; color: white; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; background: #030712; color: #f3f4f6; }
 
-  .status-icon { font-size: 64px; margin-bottom: 12px; }
-  .status-text { font-size: 28px; font-weight: 900; margin-bottom: 8px; line-height: 1.2; }
-  .status-sub { font-size: 15px; opacity: 0.9; font-weight: 500; }
+  /* Status Banner */
+  .status-bar { padding: 40px 24px 28px; text-align: center; transition: background 0.5s; }
+  .status-bar.red { background: #dc2626; }
+  .status-bar.yellow { background: #d97706; }
+  .status-bar.green { background: #059669; }
+  .status-icon { font-size: 56px; margin-bottom: 8px; }
+  .status-text { font-size: 26px; font-weight: 900; color: white; line-height: 1.2; }
+  .status-sub { font-size: 14px; color: rgba(255,255,255,0.85); margin-top: 6px; font-weight: 500; }
+  .pulse-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: white; margin-left: 6px; animation: pulse 1.5s infinite; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(0.8); } }
 
-  .pulse-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: white; margin-left: 8px; animation: pulse 1.5s infinite; vertical-align: middle; }
-  @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
-
-  .body { flex: 1; background: #030712; padding: 20px; }
-
-  .card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+  /* Content */
+  .content { padding: 16px; max-width: 500px; margin: 0 auto; }
+  .card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 20px; margin-bottom: 14px; }
   .card h2 { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
-  .stat { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1f293730; }
+  .stat { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #1f293730; }
   .stat:last-child { border-bottom: none; }
-  .stat .label { color: #9ca3af; font-size: 14px; }
-  .stat .value { font-weight: 700; font-size: 14px; }
-  .stat .value.green { color: #34d399; }
-  .stat .value.red { color: #f87171; }
-  .stat .value.yellow { color: #fbbf24; }
-  .stat .value.white { color: #f3f4f6; }
+  .stat .label { color: #9ca3af; font-size: 13px; }
+  .stat .value { font-weight: 700; font-size: 13px; }
+  .green { color: #34d399; } .red { color: #f87171; } .yellow { color: #fbbf24; } .white { color: #f3f4f6; } .orange { color: #f97316; }
 
-  .hotspot-form { margin-top: 12px; }
-  .hotspot-form input { width: 100%; padding: 12px 16px; border-radius: 10px; border: 1px solid #374151; background: #0a0f1a; color: #f3f4f6; font-size: 16px; outline: none; margin-bottom: 8px; }
-  .hotspot-form input:focus { border-color: #f97316; }
-
-  .btn { display: block; width: 100%; padding: 14px; border-radius: 12px; border: none; font-weight: 700; font-size: 15px; cursor: pointer; transition: all 0.2s; text-align: center; }
-  .btn-orange { background: #f97316; color: white; }
-  .btn-orange:hover { background: #ea580c; }
-  .btn-orange:disabled { opacity: 0.5; }
-  .btn-gray { background: #374151; color: #d1d5db; margin-top: 8px; }
-  .btn-red { background: #dc2626; color: white; margin-top: 8px; }
-
-  .orders-big { text-align: center; padding: 20px; }
+  .orders-big { text-align: center; padding: 16px; }
   .orders-big .number { font-size: 48px; font-weight: 900; color: #f97316; }
-  .orders-big .label { font-size: 13px; color: #6b7280; margin-top: 4px; }
+  .orders-big .label { font-size: 12px; color: #6b7280; margin-top: 2px; }
 
-  .footer { text-align: center; padding: 16px; color: #374151; font-size: 11px; }
+  /* Buttons */
+  .btn { display: block; width: 100%; padding: 14px; border-radius: 12px; border: none; font-weight: 700; font-size: 15px; cursor: pointer; transition: all 0.2s; text-align: center; margin-top: 8px; }
+  .btn-orange { background: #f97316; color: white; } .btn-orange:hover { background: #ea580c; } .btn-orange:disabled { opacity: 0.5; }
+  .btn-gray { background: #1f2937; color: #d1d5db; } .btn-gray:hover { background: #374151; }
+  .btn-green { background: #059669; color: white; }
+  .btn-sm { padding: 10px 16px; font-size: 13px; width: auto; display: inline-block; margin-top: 0; }
 
-  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; }
+  /* Form */
+  input, select { width: 100%; padding: 12px 16px; border-radius: 10px; border: 1px solid #374151; background: #0a0f1a; color: #f3f4f6; font-size: 16px; outline: none; margin-bottom: 8px; }
+  input:focus { border-color: #f97316; }
+
+  /* Wizard */
+  .wizard { display: none; }
+  .wizard.active { display: block; }
+  .wizard-step { padding: 24px; max-width: 500px; margin: 0 auto; }
+  .wizard-step h1 { font-size: 24px; font-weight: 900; margin-bottom: 8px; color: white; }
+  .wizard-step p { color: #9ca3af; font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+  .step-indicator { display: flex; gap: 6px; justify-content: center; padding: 16px; }
+  .step-dot { width: 8px; height: 8px; border-radius: 50%; background: #374151; }
+  .step-dot.active { background: #f97316; }
+  .step-dot.done { background: #059669; }
+
+  /* Menu list */
+  .menu-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #1f293730; }
+  .menu-item:last-child { border-bottom: none; }
+  .menu-item .name { font-weight: 600; font-size: 14px; }
+  .menu-item .price { color: #f97316; font-weight: 700; font-size: 14px; }
+  .menu-item .cat { color: #6b7280; font-size: 11px; }
+
+  .msg { margin-top: 10px; font-size: 13px; text-align: center; min-height: 20px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; }
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  .connect-msg { margin-top: 10px; font-size: 13px; text-align: center; min-height: 20px; }
+  .footer { text-align: center; padding: 12px; color: #374151; font-size: 11px; }
 </style>
 </head>
 <body>
 
-<!-- Status Banner -->
-<div class="status-bar red" id="status-bar">
-  <div class="status-icon" id="status-icon">📡</div>
-  <div class="status-text" id="status-text">Checking...</div>
-  <div class="status-sub" id="status-sub">Starting up<span class="pulse-dot"></span></div>
+<!-- ════════ SETUP WIZARD ════════ -->
+<div id="wizard" class="wizard">
+  <div style="background:#111827;padding:20px 24px;text-align:center;border-bottom:1px solid #1f2937;">
+    <div style="font-size:20px;font-weight:900;color:#f97316;">ChowBox Setup</div>
+  </div>
+  <div class="step-indicator" id="step-dots"></div>
+
+  <!-- Step 1: Business Name -->
+  <div class="wizard-step" id="step-1">
+    <h1>Welcome to ChowBox</h1>
+    <p>Let's get your food truck set up. This takes about 2 minutes.</p>
+    <label style="color:#6b7280;font-size:12px;font-weight:600;">Business Name</label>
+    <input type="text" id="w-name" placeholder="e.g. Smoky Joe's BBQ">
+    <button class="btn btn-orange" onclick="wizardNext(2)">Next</button>
+  </div>
+
+  <!-- Step 2: Menu Check -->
+  <div class="wizard-step" id="step-2" style="display:none;">
+    <h1>Your Menu</h1>
+    <p>Check your items and prices are correct. You can edit these later from the admin panel.</p>
+    <div id="w-menu-list" style="max-height:300px;overflow-y:auto;background:#0a0f1a;border-radius:10px;padding:12px;margin-bottom:12px;">
+      <div style="color:#6b7280;text-align:center;padding:20px;">Loading menu...</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-gray" onclick="wizardNext(1)" style="flex:1;">Back</button>
+      <button class="btn btn-orange" onclick="wizardNext(3)" style="flex:2;">Looks Good</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Phone Number -->
+  <div class="wizard-step" id="step-3" style="display:none;">
+    <h1>Your Phone Number</h1>
+    <p>We'll text you when ChowBox comes online, goes offline, or needs attention. No spam — only important alerts.</p>
+    <label style="color:#6b7280;font-size:12px;font-weight:600;">Mobile Number</label>
+    <input type="tel" id="w-phone" placeholder="0412 345 678">
+    <button class="btn btn-orange" onclick="wizardNext(4)">Next</button>
+    <button class="btn btn-gray" onclick="wizardNext(4)">Skip for now</button>
+  </div>
+
+  <!-- Step 4: Phone Hotspot -->
+  <div class="wizard-step" id="step-4" style="display:none;">
+    <h1>Phone Internet</h1>
+    <p>At events, ChowBox uses your phone's hotspot for internet. Enter your hotspot name and password so it auto-connects.</p>
+    <label style="color:#6b7280;font-size:12px;font-weight:600;">Phone Hotspot Name</label>
+    <input type="text" id="w-hotspot" placeholder="e.g. Steve's iPhone">
+    <label style="color:#6b7280;font-size:12px;font-weight:600;">Hotspot Password</label>
+    <input type="password" id="w-hotspot-pass" placeholder="Password">
+    <button class="btn btn-orange" onclick="saveWizard()" id="w-save-btn">Save & Finish</button>
+    <div class="msg" id="w-msg"></div>
+  </div>
+
+  <!-- Step 5: Done -->
+  <div class="wizard-step" id="step-5" style="display:none;">
+    <div style="text-align:center;padding:20px 0;">
+      <div style="font-size:64px;margin-bottom:16px;">🎉</div>
+      <h1>You're All Set!</h1>
+      <p style="color:#34d399;font-weight:600;margin-bottom:20px;">ChowBox is configured and ready.</p>
+      <div style="background:#0a0f1a;border-radius:12px;padding:16px;text-align:left;margin-bottom:20px;">
+        <div style="font-size:13px;color:#6b7280;margin-bottom:8px;font-weight:700;">AT THE EVENT:</div>
+        <div style="color:#f3f4f6;font-size:14px;line-height:1.8;">
+          1. Plug in ChowBox<br>
+          2. Turn on phone hotspot<br>
+          3. Wait for SMS confirmation<br>
+          4. Start serving!
+        </div>
+      </div>
+      <button class="btn btn-green" onclick="finishWizard()">Go to Dashboard</button>
+    </div>
+  </div>
 </div>
 
-<div class="body">
-  <!-- Orders -->
-  <div class="card">
-    <div class="orders-big">
-      <div class="number" id="order-count">-</div>
-      <div class="label">orders today</div>
+<!-- ════════ STATUS DASHBOARD ════════ -->
+<div id="dashboard" style="display:none;">
+  <div class="status-bar red" id="status-bar">
+    <div class="status-icon" id="status-icon">📡</div>
+    <div class="status-text" id="status-text">Checking...</div>
+    <div class="status-sub" id="status-sub">Starting up<span class="pulse-dot"></span></div>
+  </div>
+
+  <div class="content">
+    <div class="card">
+      <div class="orders-big">
+        <div class="number" id="order-count">-</div>
+        <div class="label">orders today</div>
+      </div>
     </div>
-  </div>
 
-  <!-- Connection Details -->
-  <div class="card">
-    <h2>Connection</h2>
-    <div class="stat"><span class="label">WiFi Network</span><span class="value white" id="conn-ssid">--</span></div>
-    <div class="stat"><span class="label">Signal</span><span class="value" id="conn-signal">--</span></div>
-    <div class="stat"><span class="label">IP Address</span><span class="value white" id="conn-ip">--</span></div>
-    <div class="stat"><span class="label">Cloud Sync</span><span class="value" id="conn-sync">--</span></div>
-  </div>
-
-  <!-- Phone Hotspot Setup -->
-  <div class="card" id="hotspot-card">
-    <h2>Phone Internet</h2>
-    <div id="hotspot-status"></div>
-    <div class="hotspot-form" id="hotspot-form">
-      <input type="text" id="hs-ssid" placeholder="Your phone hotspot name">
-      <input type="password" id="hs-pass" placeholder="Hotspot password">
-      <button class="btn btn-orange" onclick="saveHotspot()" id="hs-btn">Save & Connect</button>
-      <div class="connect-msg" id="hs-msg"></div>
+    <div class="card">
+      <h2>Connection</h2>
+      <div class="stat"><span class="label">WiFi</span><span class="value white" id="conn-ssid">--</span></div>
+      <div class="stat"><span class="label">Signal</span><span class="value" id="conn-signal">--</span></div>
+      <div class="stat"><span class="label">Internet</span><span class="value" id="conn-sync">--</span></div>
+      <div class="stat"><span class="label">Printer</span><span class="value" id="conn-printer">--</span></div>
     </div>
-  </div>
 
-  <!-- Quick Actions -->
-  <div class="card">
-    <h2>Quick Actions</h2>
-    <button class="btn btn-gray" onclick="scanAndReconnect()">Reconnect WiFi</button>
-    <button class="btn btn-gray" onclick="location.href='/admin'">Full Admin Panel</button>
-  </div>
+    <div class="card">
+      <h2>Quick Actions</h2>
+      <button class="btn btn-gray" onclick="location.href='/admin'">Full Admin Panel</button>
+      <button class="btn btn-gray" onclick="showWizard()">Run Setup Again</button>
+    </div>
 
-  <div class="footer">ChowBox v1.0 — auto-updates every 2s</div>
+    <div class="footer">Auto-updates every 2s</div>
+  </div>
 </div>
 
 <script>
-// ── State ──
-let lastOnline = null;
+// ── Wizard Logic ──
+let currentStep = 1;
+const totalSteps = 5;
 
-async function refresh() {
+function updateDots() {
+  const dots = document.getElementById('step-dots');
+  dots.innerHTML = '';
+  for (let i = 1; i <= totalSteps; i++) {
+    const cls = i < currentStep ? 'step-dot done' : i === currentStep ? 'step-dot active' : 'step-dot';
+    dots.innerHTML += '<div class="' + cls + '"></div>';
+  }
+}
+
+function wizardNext(step) {
+  document.getElementById('step-' + currentStep).style.display = 'none';
+  currentStep = step;
+  document.getElementById('step-' + step).style.display = 'block';
+  updateDots();
+  if (step === 2) loadMenu();
+}
+
+async function loadMenu() {
   try {
-    // Fetch all status in parallel
-    const [statusRes, wifiRes, hotspotRes] = await Promise.all([
+    const res = await fetch('/api/v1/menu');
+    const items = await res.json();
+    const el = document.getElementById('w-menu-list');
+    if (!items || items.length === 0) {
+      el.innerHTML = '<div style="color:#6b7280;text-align:center;padding:20px;">No menu items yet. Add them from the admin panel.</div>';
+      return;
+    }
+    el.innerHTML = items.map(i =>
+      '<div class="menu-item"><div><div class="name">' + esc(i.name) + '</div><div class="cat">' + esc(i.category) + '</div></div>' +
+      '<div class="price">$' + (i.price || 0).toFixed(2) + '</div></div>'
+    ).join('');
+  } catch {
+    document.getElementById('w-menu-list').innerHTML = '<div style="color:#f87171;text-align:center;padding:20px;">Could not load menu</div>';
+  }
+}
+
+async function saveWizard() {
+  const btn = document.getElementById('w-save-btn');
+  const msg = document.getElementById('w-msg');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Saving...';
+  msg.innerHTML = '';
+
+  const name = document.getElementById('w-name').value.trim();
+  const phone = document.getElementById('w-phone').value.trim();
+  const hotspot = document.getElementById('w-hotspot').value.trim();
+  const hotspotPass = document.getElementById('w-hotspot-pass').value;
+
+  try {
+    // Save operator settings
+    await fetch('/api/v1/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessName: name || 'ChowBox',
+        operatorPhone: phone || '',
+        setupComplete: true,
+      }),
+    });
+
+    // Save hotspot if provided
+    if (hotspot) {
+      msg.innerHTML = '<span class="yellow">Saving hotspot config...</span>';
+      const hsRes = await fetch('/api/v1/network/phone-hotspot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid: hotspot, password: hotspotPass || undefined }),
+      });
+      const hsData = await hsRes.json();
+      if (hsData.connected && hsData.internet) {
+        msg.innerHTML = '<span class="green">Connected with internet!</span>';
+      } else if (hsData.connected) {
+        msg.innerHTML = '<span class="yellow">Connected — no internet yet</span>';
+      } else {
+        msg.innerHTML = '<span class="white">Saved — will auto-connect when hotspot is on</span>';
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    // Send test SMS if phone provided
+    if (phone) {
+      msg.innerHTML = '<span class="yellow">Sending test SMS...</span>';
+      try {
+        await fetch('/api/v1/admin/test-sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, message: 'ChowBox setup complete! You\'ll receive alerts when ChowBox goes online/offline at events. - ' + (name || 'ChowBox') }),
+        });
+      } catch {}
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    wizardNext(5);
+  } catch (e) {
+    msg.innerHTML = '<span class="red">Error saving: ' + e.message + '</span>';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Save & Finish';
+}
+
+function finishWizard() {
+  document.getElementById('wizard').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  startDashboard();
+}
+
+function showWizard() {
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('wizard').style.display = 'block';
+  document.getElementById('wizard').classList.add('active');
+  currentStep = 1;
+  for (let i = 1; i <= totalSteps; i++) document.getElementById('step-' + i).style.display = i === 1 ? 'block' : 'none';
+  updateDots();
+}
+
+// ── Dashboard Logic ──
+async function refreshDashboard() {
+  try {
+    const [statusRes, wifiRes] = await Promise.all([
       fetch('/api/v1/admin/status').then(r => r.json()).catch(() => null),
       fetch('/api/v1/network/status').then(r => r.json()).catch(() => null),
-      fetch('/api/v1/network/phone-hotspot').then(r => r.json()).catch(() => null),
     ]);
 
     const bar = document.getElementById('status-bar');
     const icon = document.getElementById('status-icon');
     const text = document.getElementById('status-text');
     const sub = document.getElementById('status-sub');
-
     const online = statusRes?.system?.online || false;
     const connected = wifiRes?.connected;
 
-    // ── Big Status Banner ──
     if (online) {
       bar.className = 'status-bar green';
       icon.textContent = '✅';
-      text.textContent = 'ChowBox is Online';
-      sub.innerHTML = 'Connected to ' + esc(connected?.ssid || 'WiFi') + ' — ready to serve<span class="pulse-dot"></span>';
+      text.textContent = 'Online — Ready to Serve';
+      sub.innerHTML = esc(connected?.ssid || 'Connected') + ' · ' + (connected?.signal || 0) + '% signal<span class="pulse-dot"></span>';
     } else if (connected) {
       bar.className = 'status-bar yellow';
       icon.textContent = '⚠️';
-      text.textContent = 'Connected — No Internet';
-      sub.innerHTML = 'Connected to ' + esc(connected.ssid) + ' but no internet detected<span class="pulse-dot"></span>';
+      text.textContent = 'WiFi Connected — No Internet';
+      sub.innerHTML = 'Connected to ' + esc(connected.ssid) + '<span class="pulse-dot"></span>';
     } else {
       bar.className = 'status-bar red';
       icon.textContent = '📡';
@@ -144,111 +326,43 @@ async function refresh() {
       sub.innerHTML = 'Turn on your phone hotspot<span class="pulse-dot"></span>';
     }
 
-    // ── Orders ──
     document.getElementById('order-count').textContent = statusRes?.orders?.today ?? '-';
-
-    // ── Connection Details ──
-    if (connected) {
-      document.getElementById('conn-ssid').textContent = connected.ssid;
-      document.getElementById('conn-signal').textContent = connected.signal + '%';
-      document.getElementById('conn-signal').className = 'value ' + (connected.signal > 50 ? 'green' : connected.signal > 25 ? 'yellow' : 'red');
-      document.getElementById('conn-ip').textContent = connected.ip || '--';
-    } else {
-      document.getElementById('conn-ssid').textContent = 'Not connected';
-      document.getElementById('conn-ssid').className = 'value red';
-      document.getElementById('conn-signal').textContent = '--';
-      document.getElementById('conn-ip').textContent = '--';
-    }
+    document.getElementById('conn-ssid').textContent = connected?.ssid || 'Not connected';
+    document.getElementById('conn-ssid').className = 'value ' + (connected ? 'white' : 'red');
+    document.getElementById('conn-signal').textContent = connected ? connected.signal + '%' : '--';
+    document.getElementById('conn-signal').className = 'value ' + (connected?.signal > 50 ? 'green' : connected?.signal > 25 ? 'yellow' : 'red');
     document.getElementById('conn-sync').textContent = online ? 'Active' : 'Offline';
     document.getElementById('conn-sync').className = 'value ' + (online ? 'green' : 'red');
-
-    // ── Hotspot Config ──
-    const hsStatus = document.getElementById('hotspot-status');
-    const hsForm = document.getElementById('hotspot-form');
-    if (hotspotRes?.configured && hotspotRes.ssid) {
-      hsStatus.innerHTML = '<div style="background:#065f4620;border:1px solid #34d39940;border-radius:10px;padding:12px;margin-bottom:12px;">' +
-        '<span style="color:#34d399;font-weight:700;">✓ Auto-connects to: ' + esc(hotspotRes.ssid) + '</span></div>';
-      document.getElementById('hs-ssid').value = hotspotRes.ssid;
-    } else {
-      hsStatus.innerHTML = '<div style="background:#7f1d1d20;border:1px solid #f8717140;border-radius:10px;padding:12px;margin-bottom:12px;">' +
-        '<span style="color:#f87171;font-weight:700;">Not set up</span><br>' +
-        '<span style="color:#9ca3af;font-size:12px;">Enter your phone hotspot name so ChowBox gets internet at events.</span></div>';
-    }
-
-  } catch (e) {
-    document.getElementById('status-bar').className = 'status-bar red';
-    document.getElementById('status-text').textContent = 'Connection Error';
-    document.getElementById('status-sub').innerHTML = 'Cannot reach ChowBox server<span class="pulse-dot"></span>';
-  }
+    document.getElementById('conn-printer').textContent = statusRes?.printer?.available ? 'Connected' : 'Not detected';
+    document.getElementById('conn-printer').className = 'value ' + (statusRes?.printer?.available ? 'green' : 'red');
+  } catch {}
 }
 
-async function saveHotspot() {
-  const ssid = document.getElementById('hs-ssid').value.trim();
-  const password = document.getElementById('hs-pass').value;
-  const btn = document.getElementById('hs-btn');
-  const msg = document.getElementById('hs-msg');
-  if (!ssid) { msg.innerHTML = '<span style="color:#f87171;">Enter hotspot name</span>'; return; }
+let dashInterval;
+function startDashboard() {
+  refreshDashboard();
+  dashInterval = setInterval(refreshDashboard, 2000);
+}
 
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Connecting...';
-  msg.innerHTML = '<span style="color:#fbbf24;">Saving and connecting...</span>';
-
+// ── Init: check if setup is complete ──
+async function init() {
   try {
-    const res = await fetch('/api/v1/network/phone-hotspot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ssid, password: password || undefined }),
-    });
-    const d = await res.json();
-    if (d.success) {
-      if (d.connected && d.internet) {
-        msg.innerHTML = '<span style="color:#34d399;">✓ Connected with internet!</span>';
-      } else if (d.connected) {
-        msg.innerHTML = '<span style="color:#fbbf24;">✓ Connected — waiting for internet...</span>';
-      } else {
-        msg.innerHTML = '<span style="color:#9ca3af;">Saved. Turn on your phone hotspot — ChowBox will connect automatically.</span>';
-      }
-      document.getElementById('hs-pass').value = '';
-      setTimeout(refresh, 2000);
+    const res = await fetch('/api/v1/settings');
+    const settings = await res.json();
+    if (settings.setupComplete) {
+      document.getElementById('dashboard').style.display = 'block';
+      startDashboard();
     } else {
-      msg.innerHTML = '<span style="color:#f87171;">✗ ' + esc(d.error || 'Failed') + '</span>';
+      showWizard();
     }
   } catch {
-    msg.innerHTML = '<span style="color:#f87171;">✗ Request failed</span>';
+    showWizard();
   }
-  btn.disabled = false;
-  btn.textContent = 'Save & Connect';
 }
 
-async function scanAndReconnect() {
-  const btn = event.target;
-  btn.disabled = true;
-  btn.textContent = 'Reconnecting...';
-  try {
-    // Try to connect to saved hotspot
-    const hs = await fetch('/api/v1/network/phone-hotspot').then(r => r.json());
-    if (hs.configured && hs.ssid) {
-      await fetch('/api/v1/network/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ssid: hs.ssid }),
-      });
-    }
-    setTimeout(refresh, 3000);
-  } catch {}
-  btn.disabled = false;
-  btn.textContent = 'Reconnect WiFi';
-}
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s || '';
-  return d.innerHTML;
-}
-
-// Auto-refresh every 2s
-refresh();
-setInterval(refresh, 2000);
+init();
 </script>
 </body>
 </html>

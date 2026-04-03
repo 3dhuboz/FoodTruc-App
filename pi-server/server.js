@@ -513,6 +513,15 @@ async function handleApi(req, url) {
     }
   }
 
+  // ── Admin: Test SMS ──
+  if (path === '/admin/test-sms' && method === 'POST') {
+    const body = await readBody(req);
+    const { phone, message } = body;
+    if (!phone || !message) return json({ error: 'phone and message required' }, 400);
+    const result = await sendOperatorSms(phone, message);
+    return json(result);
+  }
+
   // ── SMS stubs (no-op locally, synced to cloud later) ──
   if (path.startsWith('/sms/') || path.startsWith('/email/')) {
     if (method === 'POST') {
@@ -892,14 +901,81 @@ async function sendHeartbeat() {
   }
 }
 
+// ─── Operator SMS Alerts ─────────────────────────────────────
+
+async function sendOperatorSms(phone, message) {
+  try {
+    // Get Twilio settings from local DB
+    const row = db.prepare("SELECT data FROM settings WHERE key = 'general'").get();
+    const settings = parseJson(row?.data, {});
+    const sms = settings.smsSettings || {};
+    if (!sms.accountSid || !sms.authToken || !sms.fromNumber) {
+      // No Twilio config — try sending via cloud relay
+      if (isOnline) {
+        await fetch(`${CLOUD_URL}/api/v1/sms/operator-alert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, message, tenantId: TENANT_ID }),
+          signal: AbortSignal.timeout(10000),
+        });
+        return { sent: true, via: 'cloud' };
+      }
+      return { sent: false, error: 'No SMS config and no internet' };
+    }
+    // Send directly via Twilio
+    const auth = Buffer.from(`${sms.accountSid}:${sms.authToken}`).toString('base64');
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sms.accountSid}/Messages.json`, {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `To=${encodeURIComponent(phone)}&From=${encodeURIComponent(sms.fromNumber)}&Body=${encodeURIComponent(message)}`,
+      signal: AbortSignal.timeout(10000),
+    });
+    return { sent: res.ok, via: 'twilio' };
+  } catch (err) {
+    console.error('[SMS] Failed:', err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+let lastOnlineState = null;
+
+async function checkAndNotifyConnectivity() {
+  const wasOnline = lastOnlineState;
+  await checkConnectivity();
+
+  // Only notify on state change, and only on worker 0
+  if (wasOnline !== null && wasOnline !== isOnline) {
+    try {
+      const row = db.prepare("SELECT data FROM settings WHERE key = 'general'").get();
+      const settings = parseJson(row?.data, {});
+      const phone = settings.operatorPhone;
+      const name = settings.businessName || 'ChowBox';
+      if (phone) {
+        const today = new Date().toISOString().split('T')[0];
+        const orderCount = db.prepare('SELECT COUNT(*) as count FROM orders WHERE created_at >= ?').get(today);
+        if (isOnline) {
+          await sendOperatorSms(phone, `${name} is ONLINE and ready to serve. ${orderCount?.count || 0} orders today. Cloud sync active.`);
+          console.log('[SMS] Sent online notification to', phone);
+        } else {
+          await sendOperatorSms(phone, `${name} lost internet. Orders are being saved locally and will sync when connection returns.`);
+          console.log('[SMS] Sent offline notification to', phone);
+        }
+      }
+    } catch (err) {
+      console.error('[SMS] Notification failed:', err.message);
+    }
+  }
+  lastOnlineState = isOnline;
+}
+
 // ─── Sync Loops (worker 0 only — avoids duplicate heartbeats) ──
 
 const isFirstWorker = cluster.worker?.id === 1;
 
 if (isFirstWorker) {
-  // Fast loop: check connectivity + flush queue + heartbeat (every 30s)
+  // Fast loop: check connectivity (with SMS alerts) + flush queue + heartbeat (every 30s)
   setInterval(async () => {
-    await checkConnectivity();
+    await checkAndNotifyConnectivity();
     if (isOnline) {
       await flushSyncQueue();
       await sendHeartbeat();
@@ -911,8 +987,8 @@ if (isFirstWorker) {
     if (isOnline) await pullFromCloud();
   }, 300000);
 
-  // Initial sync
-  checkConnectivity();
+  // Initial sync — notify operator on first boot if online
+  checkAndNotifyConnectivity();
   setTimeout(() => { if (isOnline) pullFromCloud(); }, 3000);
 
   // Log queue status every 60s
