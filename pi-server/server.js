@@ -19,7 +19,15 @@
  */
 
 import cluster from 'cluster';
-import { availableParallelism } from 'os';
+import { createServer } from 'http';
+import { readFileSync, existsSync, statSync, writeFileSync } from 'fs';
+import { join, dirname, extname } from 'path';
+import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
+import { gzipSync } from 'zlib';
+import Database from 'better-sqlite3';
+import { availableParallelism, networkInterfaces } from 'os';
+import { initPrinter, isPrinterAvailable, printOrderLabel, printTestLabel } from './printer.js';
 
 // ─── Cluster Primary ────────────────────────────────────────
 if (cluster.isPrimary) {
@@ -30,21 +38,10 @@ if (cluster.isPrimary) {
     console.log(`[ChowBox] Worker ${worker.process.pid} exited (code ${code}), restarting...`);
     cluster.fork();
   });
-  // Primary does nothing else — workers handle all requests + sync
-  // Only worker 0 (first spawned) runs sync loops to avoid duplicates
-} else {
+}
 
 // ─── Worker Process ─────────────────────────────────────────
-
-import { createServer } from 'http';
-import { readFileSync, existsSync, statSync, writeFileSync } from 'fs';
-import { join, dirname, extname } from 'path';
-import { fileURLToPath } from 'url';
-import { exec } from 'child_process';
-import { gzipSync } from 'zlib';
-import Database from 'better-sqlite3';
-import { networkInterfaces } from 'os';
-import { initPrinter, isPrinterAvailable, printOrderLabel, printTestLabel } from './printer.js';
+if (!cluster.isPrimary) {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '80');
