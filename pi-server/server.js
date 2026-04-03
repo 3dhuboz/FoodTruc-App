@@ -369,9 +369,15 @@ async function handleApi(req, url) {
         : `nmcli connection add type wifi con-name 'ChowBox-Phone' ifname wlan0 ssid '${escapedSsid}' connection.autoconnect yes connection.autoconnect-priority 100`;
       await execCommand(addCmd, 15000);
 
-      // Now try to connect immediately
+      // Now try to connect immediately via passwd-file
       try {
-        await execCommand("nmcli connection up 'ChowBox-Phone'", 30000);
+        if (password) {
+          writeFileSync('/tmp/.chowbox-phone-pass', `802-11-wireless-security.psk:${password}`);
+          await execCommand("nmcli -w 30 connection up 'ChowBox-Phone' passwd-file /tmp/.chowbox-phone-pass", 35000);
+          try { await execCommand('rm /tmp/.chowbox-phone-pass'); } catch {}
+        } else {
+          await execCommand("nmcli -w 30 connection up 'ChowBox-Phone'", 35000);
+        }
       } catch {
         // Connection failed — hotspot might not be broadcasting yet, that's OK
         // It's saved and will auto-connect when in range
@@ -460,11 +466,20 @@ async function handleApi(req, url) {
       return json({ error: 'Invalid characters in SSID or password' }, 400);
     }
     try {
-      const cmd = password
-        ? `nmcli device wifi connect '${ssid.replace(/'/g, "'\\''")}' password '${password.replace(/'/g, "'\\''")}'`
-        : `nmcli device wifi connect '${ssid.replace(/'/g, "'\\''")}'`;
-      await execCommand(cmd, 30000);
-      // Check if we got internet
+      const escapedSsid = ssid.replace(/'/g, "'\\''");
+      const conName = 'ChowBox-WiFi';
+      // Delete old connection, create new with stored password, activate via passwd-file
+      await execCommand(`nmcli connection delete '${conName}' 2>/dev/null || true`);
+      if (password) {
+        await execCommand(`nmcli connection add type wifi con-name '${conName}' ifname wlan0 ssid '${escapedSsid}' wifi-sec.key-mgmt wpa-psk wifi-sec.psk-flags 0`, 15000);
+        await execCommand(`nmcli connection modify '${conName}' wifi-sec.psk '${password.replace(/'/g, "'\\''")}'`, 5000);
+        writeFileSync('/tmp/.chowbox-wifi-pass', `802-11-wireless-security.psk:${password}`);
+        await execCommand(`nmcli -w 30 connection up '${conName}' passwd-file /tmp/.chowbox-wifi-pass`, 35000);
+        try { await execCommand('rm /tmp/.chowbox-wifi-pass'); } catch {}
+      } else {
+        await execCommand(`nmcli connection add type wifi con-name '${conName}' ifname wlan0 ssid '${escapedSsid}'`, 15000);
+        await execCommand(`nmcli -w 30 connection up '${conName}'`, 35000);
+      }
       setTimeout(() => checkConnectivity(), 3000);
       return json({ success: true, ssid });
     } catch (err) {
@@ -745,15 +760,27 @@ const server = createServer(async (req, res) => {
       '/success.txt',            // Various
     ];
     if (captiveUrls.some(u => url.pathname === u)) {
-      // Redirect to ordering page on the AP interface
-      const host = req.headers.host?.split(':')[0] || '10.0.0.1';
-      const orderUrl = `http://${host}/#/qr-order`;
+      // If accessed via AP interface (10.0.0.1) → show operator setup
+      // If accessed via other interface → show QR ordering
+      const captiveHost = req.headers.host?.split(':')[0] || '10.0.0.1';
+      const orderUrl = captiveHost === '10.0.0.1' ? `http://10.0.0.1/setup` : `http://${captiveHost}/#/qr-order`;
       // Some phones need a non-redirect response to trigger the captive portal popup
       // Return a small HTML page that also redirects via meta + JS
       const html = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${orderUrl}"><title>ChowBox</title></head><body style="background:#030712;color:#f97316;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h1 style="font-size:28px;margin-bottom:16px;">ChowBox</h1><p style="color:#9ca3af;">Loading menu...</p><a href="${orderUrl}" style="display:inline-block;margin-top:20px;background:#f97316;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">Tap to Order</a></div><script>location.href="${orderUrl}"</script></body></html>`;
       res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
       res.end(html);
       return;
+    }
+
+    // Operator Setup Page — served at /setup or when accessing via AP (10.0.0.1)
+    const host = req.headers.host?.split(':')[0] || '';
+    if (url.pathname === '/setup' || url.pathname === '/setup/' || (host === '10.0.0.1' && url.pathname === '/')) {
+      const setupPath = join(__dirname, 'operator.html');
+      if (existsSync(setupPath)) {
+        const html = readFileSync(setupPath, 'utf-8');
+        await sendResponse(req, res, 200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' }, html);
+        return;
+      }
     }
 
     // ChowBox Admin Page — served from pi-server directory
