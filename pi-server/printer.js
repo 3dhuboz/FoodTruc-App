@@ -29,7 +29,7 @@ const CMD = {
   LEFT: Buffer.from([ESC, 0x61, 0x00]),               // Left align
   CUT: Buffer.from([GS, 0x56, 0x42, 0x03]),          // Partial cut (with feed)
   FEED: Buffer.from([ESC, 0x64, 0x04]),               // Feed 4 lines
-  LINE: Buffer.from([0x2D].concat(Array(32).fill(0x2D)), // Dashed line
+  LINE: Buffer.from([0x2D].concat(Array(32).fill(0x2D))), // Dashed line
 };
 
 // Auto-detect USB printer device
