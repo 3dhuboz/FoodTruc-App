@@ -78,10 +78,46 @@ export const generateSocialPost = async (topic: string, platform: 'Facebook' | '
 };
 
 export const generateMarketingImage = async (prompt: string): Promise<string | null> => {
-  // OpenRouter doesn't do image generation directly.
-  // Return null — image generation should go through a dedicated service (FAL.ai, etc.)
-  console.warn('[AI] Image generation requires a dedicated image API (FAL.ai, etc.)');
-  return null;
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': window.location.origin,
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-preview-05-20',
+        modalities: ['image', 'text'],
+        messages: [{ role: 'user', content: `Generate a high-quality, appetising food truck photo: ${prompt}. Make it look professional and vibrant, suitable for a menu or marketing material.` }],
+      }),
+    });
+
+    if (!res.ok) throw new Error(`Image API ${res.status}`);
+    const data = await res.json();
+
+    // Extract base64 image from response
+    const content = data.choices?.[0]?.message?.content;
+    if (Array.isArray(content)) {
+      const imgPart = content.find((p: any) => p.type === 'image_url');
+      if (imgPart?.image_url?.url) return imgPart.image_url.url;
+    }
+    // Some models return inline_data
+    const parts = data.choices?.[0]?.message?.parts;
+    if (Array.isArray(parts)) {
+      const imgPart = parts.find((p: any) => p.inline_data);
+      if (imgPart?.inline_data?.data) {
+        return `data:${imgPart.inline_data.mime_type || 'image/png'};base64,${imgPart.inline_data.data}`;
+      }
+    }
+    return null;
+  } catch (err: any) {
+    console.error('[AI] Image generation failed:', err.message);
+    return null;
+  }
 };
 
 export const analyzePostTimes = async () => {
