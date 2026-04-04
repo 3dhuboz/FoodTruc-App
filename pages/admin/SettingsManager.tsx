@@ -868,24 +868,7 @@ const SettingsManager: React.FC = () => {
       </Section>
 
 
-      {/* --- AI STATUS (read-only — managed by platform) --- */}
-      <Section title="AI Features" icon={<Wand2 size={18} className="text-bbq-gold"/>}>
-          <div className={`border rounded-xl p-5 ${geminiStatus === 'connected' ? 'border-green-600/40 bg-green-950/20' : 'border-gray-700 bg-black/20'}`}>
-              <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${geminiStatus === 'connected' ? 'bg-green-600/20' : 'bg-gray-800'}`}>
-                      <Wand2 size={20} className={geminiStatus === 'connected' ? 'text-green-400' : 'text-gray-500'}/>
-                  </div>
-                  <div>
-                      <h5 className="font-bold text-white">OpenRouter AI</h5>
-                      <p className="text-xs text-gray-400">
-                          {geminiStatus === 'connected'
-                              ? <span className="text-green-400 flex items-center gap-1"><CheckCircle size={12}/> Active — AI image generation and content features enabled</span>
-                              : 'Not configured — contact your ChowNow admin to enable AI features'}
-                      </p>
-                  </div>
-              </div>
-          </div>
-      </Section>
+      {/* AI Features section removed — managed at platform level */}
 
       {/* --- PAYMENT GATEWAY --- */}
       <Section title="Payment Gateway" icon={<Banknote size={18} className="text-green-400"/>}>
@@ -1093,8 +1076,49 @@ const SettingsManager: React.FC = () => {
           </div>
       </Section>
 
-      {/* --- LIVE OPS CONSOLE --- */}
-      <Section title="Live Operations Console" icon={<Activity size={18} className="text-green-500"/>}>
+      {/* --- PRINTING (new) --- */}
+      <Section title="Printing" icon={<Printer size={18} className="text-orange-400"/>}>
+          <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                      <h5 className="text-xs font-bold text-gray-500 uppercase mb-2">Printer Status</h5>
+                      <p className="text-white text-sm">Check printer from the Kitchen Display (BOH) or Pi admin page.</p>
+                  </div>
+                  <div className="space-y-2">
+                      <button onClick={() => fetch('/api/v1/print/test', { method: 'POST' }).catch(() => {})}
+                          className="w-full bg-gray-800 hover:bg-gray-700 text-white text-sm font-bold py-2.5 rounded-lg transition flex items-center justify-center gap-2">
+                          <Printer size={14} /> Print Test Label
+                      </button>
+                      <button onClick={() => {
+                          const url = window.location.origin + '#/qr-order';
+                          fetch('/api/v1/print/qr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, businessName: settings.businessName }) }).catch(() => {});
+                      }}
+                          className="w-full bg-gray-800 hover:bg-gray-700 text-white text-sm font-bold py-2.5 rounded-lg transition flex items-center justify-center gap-2">
+                          <Printer size={14} /> Print QR Stickers
+                      </button>
+                  </div>
+              </div>
+              <div className="space-y-3">
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Thank You Message</label>
+                      <input value={(formData as any).labelSettings?.thankYou || ''} onChange={e => setFormData({ ...formData, labelSettings: { ...(formData as any).labelSettings, thankYou: e.target.value } })}
+                          placeholder="Thanks {name}!" className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm mt-1" />
+                      <p className="text-[10px] text-gray-600 mt-1">Use {'{name}'} for the customer's first name</p>
+                  </div>
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Tagline</label>
+                      <input value={(formData as any).labelSettings?.tagline || ''} onChange={e => setFormData({ ...formData, labelSettings: { ...(formData as any).labelSettings, tagline: e.target.value } })}
+                          placeholder="We appreciate your support." className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm mt-1" />
+                  </div>
+              </div>
+          </div>
+      </Section>
+
+      {/* --- ADVANCED (collapsed by default — Site Visuals, Diagnostics) --- */}
+      <Section title="Advanced" icon={<Terminal size={18} className="text-gray-500"/>}>
+
+      {/* Live Operations Console (moved here from top-level) */}
+      <h5 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-3">System Status</h5>
           <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
               {/* Database */}
               <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
@@ -1135,6 +1159,9 @@ const SettingsManager: React.FC = () => {
                   <div><span className="text-gray-500 text-xs block">Tunnel</span><span className="text-white font-bold">Cloudflare Tunnel</span></div>
               </div>
           </div>
+
+      {/* Site Visuals (inside Advanced) */}
+      <h5 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-3 mt-6">Site Images</h5>
       </Section>
 
       {/* --- INTEGRATION WIZARD MODAL --- */}
@@ -1249,39 +1276,30 @@ const SettingsManager: React.FC = () => {
           </div>
       )}
 
-      {/* Duplicate email section removed — see unified Email Settings section below */}
-
-
-      {/* --- SITE VISUALS --- */}
-      <Section title="Site Visuals" icon={<ImageIcon size={18} className="text-pink-500"/>}>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="space-y-4">
-                  <h5 className="font-bold text-white border-b border-gray-700 pb-2">Home Page</h5>
-                  <ImageSettingRow label="Catering Hero" settingKey="heroCateringImage" prompt="Delicious BBQ catering spread, professional, appetizing" />
-                  <ImageSettingRow label="Cook/Menu Hero" settingKey="heroCookImage" prompt="Pitmaster smoking meat, BBQ smoke, authentic" />
-                  <ImageSettingRow label="Promoter Section" settingKey="homePromoterImage" prompt="Happy people eating BBQ, social gathering, party" />
-                  <ImageSettingRow label="Schedule Card" settingKey="homeScheduleCardImage" prompt="Food truck at outdoor event, street food, night market" />
-                  <ImageSettingRow label="Menu Card" settingKey="homeMenuCardImage" prompt="Juicy burger with fries, BBQ food close up, appetizing" />
-              </div>
-
-              <div className="space-y-4">
-                  <h5 className="font-bold text-white border-b border-gray-700 pb-2">Catering & DIY</h5>
-                  <ImageSettingRow label="DIY Page Hero" settingKey="diyHeroImage" prompt="BBQ feast on a table, family style dining" />
-                  <ImageSettingRow label="Package Card" settingKey="diyCardPackageImage" prompt="Curated BBQ platter, neat arrangement" />
-                  <ImageSettingRow label="Custom Card" settingKey="diyCardCustomImage" prompt="Variety of individual BBQ meats and sides" />
-              </div>
-
-              <div className="space-y-4">
-                  <h5 className="font-bold text-white border-b border-gray-700 pb-2">Other Pages</h5>
-                  <ImageSettingRow label="Menu Hero" settingKey="menuHeroImage" prompt="Close up of brisket and ribs, dark moody lighting" />
-                  <ImageSettingRow label="Events Hero" settingKey="eventsHeroImage" prompt="Outdoor BBQ event, festival atmosphere" />
-                  <ImageSettingRow label="Gallery Hero" settingKey="galleryHeroImage" prompt="Collage of BBQ food photos" />
-                  <ImageSettingRow label="Promoters Hero" settingKey="promotersHeroImage" prompt="Social media influencer taking photo of food" />
-                  <ImageSettingRow label="Maintenance Mode" settingKey="maintenanceImage" prompt="BBQ smoker silhouette, closed sign, moody" />
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
+          <div className="space-y-4">
+              <h5 className="font-bold text-white border-b border-gray-700 pb-2">Home Page</h5>
+              <ImageSettingRow label="Catering Hero" settingKey="heroCateringImage" prompt="Delicious BBQ catering spread, professional, appetizing" />
+              <ImageSettingRow label="Cook/Menu Hero" settingKey="heroCookImage" prompt="Pitmaster smoking meat, BBQ smoke, authentic" />
+              <ImageSettingRow label="Promoter Section" settingKey="homePromoterImage" prompt="Happy people eating BBQ, social gathering, party" />
+              <ImageSettingRow label="Schedule Card" settingKey="homeScheduleCardImage" prompt="Food truck at outdoor event, street food, night market" />
+              <ImageSettingRow label="Menu Card" settingKey="homeMenuCardImage" prompt="Juicy burger with fries, BBQ food close up, appetizing" />
           </div>
-      </Section>
+          <div className="space-y-4">
+              <h5 className="font-bold text-white border-b border-gray-700 pb-2">Catering & DIY</h5>
+              <ImageSettingRow label="DIY Page Hero" settingKey="diyHeroImage" prompt="BBQ feast on a table, family style dining" />
+              <ImageSettingRow label="Package Card" settingKey="diyCardPackageImage" prompt="Curated BBQ platter, neat arrangement" />
+              <ImageSettingRow label="Custom Card" settingKey="diyCardCustomImage" prompt="Variety of individual BBQ meats and sides" />
+          </div>
+          <div className="space-y-4">
+              <h5 className="font-bold text-white border-b border-gray-700 pb-2">Other Pages</h5>
+              <ImageSettingRow label="Menu Hero" settingKey="menuHeroImage" prompt="Close up of brisket and ribs, dark moody lighting" />
+              <ImageSettingRow label="Events Hero" settingKey="eventsHeroImage" prompt="Outdoor BBQ event, festival atmosphere" />
+              <ImageSettingRow label="Gallery Hero" settingKey="galleryHeroImage" prompt="Collage of BBQ food photos" />
+              <ImageSettingRow label="Promoters Hero" settingKey="promotersHeroImage" prompt="Social media influencer taking photo of food" />
+              <ImageSettingRow label="Maintenance Mode" settingKey="maintenanceImage" prompt="BBQ smoker silhouette, closed sign, moody" />
+          </div>
+      </div>
 
 
       {/* --- ADMIN CREDENTIALS --- */}
@@ -1309,21 +1327,7 @@ const SettingsManager: React.FC = () => {
       </Section>
 
 
-      {/* --- FACEBOOK --- */}
-      <Section title="Facebook / Instagram" icon={<Facebook size={18} className="text-blue-500"/>}>
-          <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle size={18} className="text-blue-400 shrink-0 mt-0.5"/>
-              <div>
-                  <p className="text-blue-200 font-bold text-sm">Manage Facebook connection in the Social &amp; AI tab</p>
-                  <p className="text-blue-300/70 text-xs mt-1">The full Facebook login wizard, page selection, connection testing, and Instagram linking are all in the <strong className="text-white">Social &amp; AI</strong> tab to keep everything in one place.</p>
-                  {settings.facebookConnected ? (
-                      <div className="mt-2 flex items-center gap-2 text-green-400 text-xs"><CheckCircle size={12}/> Page currently connected</div>
-                  ) : (
-                      <div className="mt-2 flex items-center gap-2 text-yellow-400 text-xs"><AlertCircle size={12}/> No page connected yet</div>
-                  )}
-              </div>
-          </div>
-      </Section>
+      {/* Facebook section removed — dead end */}
 
       {/* --- REWARDS PROGRAM --- */}
       <Section title="Rewards Program" icon={<Gift size={18} className="text-bbq-gold"/>}>
@@ -1445,16 +1449,7 @@ const SettingsManager: React.FC = () => {
       </Section>
 
 
-      {/* --- EMAIL, SMS & INVOICES (managed by platform) --- */}
-      <Section title="Email, SMS & Invoices" icon={<MessageSquare size={18} className="text-purple-500"/>}>
-          <div className="border border-gray-700 bg-black/20 rounded-xl p-5 text-center">
-              <MessageSquare size={32} className="text-gray-600 mx-auto mb-3" />
-              <h5 className="text-white font-bold mb-1">Managed by ChowNow</h5>
-              <p className="text-gray-500 text-sm">Email notifications, SMS alerts, and invoice templates are configured at the platform level. Your customers will receive branded communications automatically.</p>
-          </div>
-      </Section>
-
-      {/* Email/SMS/Invoice sections removed — managed at platform level via Super Admin */}
+      {/* Email/SMS sections removed — managed at platform level */}
 
       {/* --- DIAGNOSTICS MODAL --- */}
       {showDiagnostics && (

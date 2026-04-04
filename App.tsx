@@ -21,6 +21,7 @@ const Rewards = React.lazy(() => import('./pages/Rewards'));
 const Promoters = React.lazy(() => import('./pages/Promoters'));
 const Tracking = React.lazy(() => import('./pages/Tracking'));
 const DataSetup = React.lazy(() => import('./pages/admin/DataSetup'));
+const SetupWizard = React.lazy(() => import('./pages/admin/SetupWizard'));
 const Maintenance = React.lazy(() => import('./pages/Maintenance'));
 const PitmasterAI = React.lazy(() => import('./pages/PitmasterAI'));
 const Gallery = React.lazy(() => import('./pages/Gallery'));
@@ -85,8 +86,8 @@ const AppRoutes = () => {
         </div>
       )}
       <Routes>
-        {/* Setup Route - Outside Layout for Focus */}
-        <Route path="/setup" element={<DataSetup />} />
+        {/* Setup Wizard - Full-screen onboarding */}
+        <Route path="/setup" element={<SetupWizard />} />
 
         {/* Staff Views - Full-screen, no nav */}
         <Route path="/boh" element={<Suspense fallback={<PageLoader />}><BOH /></Suspense>} />
