@@ -538,15 +538,24 @@ const FOH: React.FC = () => {
                 const qty = cartQty(item.id);
                 return (
                   <button key={item.id} onClick={() => addItem(item)}
-                    className={`relative bg-gray-900 border rounded-xl p-2 text-left transition active:scale-95 ${
+                    className={`relative bg-gray-900 border rounded-xl overflow-hidden text-left transition active:scale-95 ${
                       qty > 0 ? 'border-orange-500 ring-1 ring-orange-500/30' : 'border-gray-800 hover:border-gray-600'
                     }`}>
-                    {item.image && <img src={item.image} alt={item.name} className="w-full h-16 object-cover rounded-lg mb-1.5" />}
-                    {qty > 0 && (
-                      <span className="absolute top-1 right-1 bg-orange-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{qty}</span>
+                    {item.image ? (
+                      <img src={item.image} alt={item.name} className="w-full h-20 object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
+                    ) : (
+                      <div className="w-full h-10 bg-gradient-to-br from-gray-800 to-gray-900" />
                     )}
-                    <div className="text-white font-semibold text-[11px] leading-tight line-clamp-2">{item.name}</div>
-                    <div className="text-orange-400 font-bold text-xs mt-0.5">${item.price.toFixed(2)}</div>
+                    {qty > 0 && (
+                      <span className="absolute top-1 right-1 bg-orange-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow">{qty}</span>
+                    )}
+                    {item.isPack && (
+                      <span className="absolute top-1 left-1 bg-purple-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">Deal</span>
+                    )}
+                    <div className="p-2">
+                      <div className="text-white font-semibold text-[11px] leading-tight line-clamp-2">{item.name}</div>
+                      <div className="text-orange-400 font-bold text-xs mt-0.5">${item.price.toFixed(2)}</div>
+                    </div>
                   </button>
                 );
               })}
