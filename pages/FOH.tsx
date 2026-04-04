@@ -247,6 +247,9 @@ const FOH: React.FC = () => {
   const [showCustomer, setShowCustomer] = useState(false);
   const [lastOrderNum, setLastOrderNum] = useState<string | null>(null);
   const [readyAlerts, setReadyAlerts] = useState<Order[]>([]);
+  const [readyTimestamps, setReadyTimestamps] = useState<Record<string, number>>({});
+  const [readyElapsed, setReadyElapsed] = useState<Record<string, number>>({});
+  const [resending, setResending] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<'cart' | 'orders'>('cart');
   const prevReadyIds = useRef<Set<string>>(new Set());
   const audioCtx = useRef<AudioContext | null>(null);
@@ -269,6 +272,11 @@ const FOH: React.FC = () => {
     const newlyReady = readyOrders.filter(o => !prevReadyIds.current.has(o.id));
     if (newlyReady.length > 0 && unlocked) {
       setReadyAlerts(prev => [...prev, ...newlyReady]);
+      setReadyTimestamps(prev => {
+        const next = { ...prev };
+        newlyReady.forEach(o => { if (!next[o.id]) next[o.id] = Date.now(); });
+        return next;
+      });
       try {
         if (!audioCtx.current) audioCtx.current = new AudioContext();
         const ctx = audioCtx.current;
@@ -283,10 +291,46 @@ const FOH: React.FC = () => {
         osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.8);
       } catch {}
     }
+    // Remove alerts for orders no longer Ready (collected/completed)
+    setReadyAlerts(prev => prev.filter(o => readyOrders.some(r => r.id === o.id)));
     prevReadyIds.current = new Set(readyOrders.map(o => o.id));
   }, [orders, unlocked]);
 
-  const dismissAlert = (id: string) => setReadyAlerts(prev => prev.filter(o => o.id !== id));
+  // Tick elapsed time every second for ready alerts
+  useEffect(() => {
+    if (readyAlerts.length === 0) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const elapsed: Record<string, number> = {};
+      readyAlerts.forEach(o => {
+        elapsed[o.id] = Math.floor((now - (readyTimestamps[o.id] || now)) / 1000);
+      });
+      setReadyElapsed(elapsed);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [readyAlerts, readyTimestamps]);
+
+  const dismissAlert = (id: string) => {
+    setReadyAlerts(prev => prev.filter(o => o.id !== id));
+    updateOrderStatus(id, 'Completed');
+  };
+
+  const resendCollectSms = async (order: Order) => {
+    if (!settings.smsSettings?.enabled || !order.customerPhone) return;
+    setResending(order.id);
+    try {
+      await fetch('/api/v1/sms/order-ready', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: settings.smsSettings,
+          order: { ...order, pickupLocation: order.pickupLocation || settings.businessAddress },
+          businessName: settings.businessName,
+        }),
+      });
+    } catch {} finally {
+      setTimeout(() => setResending(null), 2000);
+    }
+  };
 
   const availableMenu = useMemo(() => menu.filter(i => i.available && !i.isPack), [menu]);
   const categories = useMemo(() => ['All', ...new Set(availableMenu.map(i => i.category))], [availableMenu]);
@@ -389,18 +433,42 @@ const FOH: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
-      {/* Ready Alerts */}
+      {/* Ready Alerts — colour changes over time */}
       {readyAlerts.length > 0 && (
         <div className="fixed top-0 left-0 right-0 z-50">
-          {readyAlerts.map(order => (
-            <div key={order.id} className="bg-green-500 text-black px-6 py-3 flex items-center justify-between cursor-pointer" onClick={() => dismissAlert(order.id)}>
-              <div className="flex items-center gap-3">
-                <Bell size={22} className="animate-bounce" />
-                <span className="font-black">READY — {order.collectionPin || '#' + order.id.slice(-4).toUpperCase()} ({order.customerName})</span>
+          {readyAlerts.map(order => {
+            const secs = readyElapsed[order.id] || 0;
+            const mins = Math.floor(secs / 60);
+            const timeStr = mins > 0 ? `${mins}m ${secs % 60}s` : `${secs}s`;
+            const bg = secs > 300 ? 'bg-red-600' : secs > 180 ? 'bg-orange-500' : 'bg-green-500';
+            const textMuted = secs > 300 ? 'text-red-200' : secs > 180 ? 'text-orange-900' : 'text-green-900';
+            const isLate = secs > 300;
+
+            return (
+              <div key={order.id} className={`${bg} text-black px-6 py-3 flex items-center justify-between transition-colors duration-1000`}>
+                <div className="flex items-center gap-3">
+                  <Bell size={22} className={isLate ? 'animate-ping' : 'animate-bounce'} />
+                  <span className="font-black">
+                    READY — {order.collectionPin || '#' + order.id.slice(-4).toUpperCase()} ({order.customerName})
+                  </span>
+                  <span className={`${textMuted} font-bold text-sm`}>{timeStr}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {order.customerPhone && secs > 120 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); resendCollectSms(order); }}
+                      className="bg-black/20 hover:bg-black/30 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition"
+                    >
+                      {resending === order.id ? 'Sent!' : 'Resend SMS'}
+                    </button>
+                  )}
+                  <button onClick={() => dismissAlert(order.id)} className={`${textMuted} font-bold text-sm hover:text-black`}>
+                    Collected
+                  </button>
+                </div>
               </div>
-              <span className="text-green-900 font-bold text-sm">Dismiss</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
