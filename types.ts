@@ -117,6 +117,12 @@ export interface Order {
   discountApplied?: boolean; // If the 10% catering discount was used
   paymentIntentId?: string;
   squareCheckoutId?: string; // Square order ID from checkout link, used for webhook payment matching
+  // Status timestamps for analytics
+  confirmedAt?: string;
+  cookingAt?: string;
+  readyAt?: string;
+  completedAt?: string;
+  cancelledAt?: string;
 }
 
 export interface CookDay {

@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../components/Toast';
-import { MessageCircle, Check, Clock, XCircle, CheckCircle, AlertTriangle, Edit2, Plus, Trash2, X, Save, DollarSign, Mail, Smartphone, CreditCard, Flame, Snowflake, Truck, ShoppingBag, Package, Loader2, MapPin } from 'lucide-react';
+import { MessageCircle, Check, Clock, XCircle, CheckCircle, AlertTriangle, Edit2, Plus, Trash2, X, Save, DollarSign, Mail, Smartphone, CreditCard, Flame, Snowflake, Truck, ShoppingBag, Package, Loader2, MapPin, BarChart3, Download, TrendingUp, Timer, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { Order, MenuItem } from '../../types';
 
 const normalizePhone = (raw: string): string => {
@@ -28,6 +28,52 @@ const normalizePhone = (raw: string): string => {
   // Invoice State
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceContact, setInvoiceContact] = useState({ email: '', phone: '' });
+
+  // Analytics State
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<'today' | 'week' | 'month'>('today');
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  const fetchAnalytics = async (period: string) => {
+    setAnalyticsLoading(true);
+    try {
+      const res = await fetch(`/api/v1/admin/analytics?period=${period}`);
+      const data = await res.json();
+      setAnalyticsData(data);
+    } catch {}
+    setAnalyticsLoading(false);
+  };
+
+  useEffect(() => {
+    if (showAnalytics) fetchAnalytics(analyticsPeriod);
+  }, [showAnalytics, analyticsPeriod]);
+
+  const downloadCSV = () => {
+    if (!analyticsData?.orders?.length) return;
+    const headers = ['Order ID', 'Date', 'Time', 'Customer', 'Phone', 'Total', 'Source', 'Status', 'PIN', 'Wait to Cook (min)', 'Cook Time (min)', 'Pickup Wait (min)', 'Total Time (min)'];
+    const rows = analyticsData.orders.map((o: any) => [
+      o.id, o.date, o.time, o.customer, o.phone, o.total, o.source, o.status, o.collectionPin,
+      o.confirmToCookMin?.toFixed(1) || '', o.cookToReadyMin?.toFixed(1) || '',
+      o.readyToCompleteMin?.toFixed(1) || '', o.totalMin?.toFixed(1) || '',
+    ]);
+    const csv = [headers.join(','), ...rows.map((r: any) => r.map((v: any) => `"${v}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chownow-orders-${analyticsPeriod}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const timingColor = (mins: number | null) => {
+    if (mins === null) return 'text-gray-500';
+    if (mins < 10) return 'text-green-400';
+    if (mins < 20) return 'text-yellow-400';
+    if (mins < 30) return 'text-orange-400';
+    return 'text-red-400';
+  };
 
   // Split orders
   const pendingRequests = orders.filter(o => o.status === 'Pending');
@@ -713,6 +759,169 @@ const normalizePhone = (raw: string): string => {
                 <Plus size={18} /> Create Manual Order
             </button>
         </div>
+
+      {/* === ANALYTICS DASHBOARD === */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden">
+        <button onClick={() => setShowAnalytics(!showAnalytics)}
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-800/30 transition">
+          <div className="flex items-center gap-3">
+            <BarChart3 size={20} className="text-orange-400" />
+            <span className="font-bold text-white">Performance Analytics</span>
+            {analyticsData?.summary && !showAnalytics && (
+              <span className="text-xs text-gray-500 ml-2">
+                {analyticsData.summary.totalOrders} orders | ${analyticsData.summary.totalRevenue?.toFixed(0)} revenue
+              </span>
+            )}
+          </div>
+          {showAnalytics ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
+        </button>
+
+        {showAnalytics && (
+          <div className="p-5 pt-0 space-y-5">
+            {/* Period Selector + Export */}
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1">
+                {(['today', 'week', 'month'] as const).map(p => (
+                  <button key={p} onClick={() => setAnalyticsPeriod(p)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${analyticsPeriod === p ? 'bg-orange-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
+                    {p === 'today' ? 'Today' : p === 'week' ? 'This Week' : 'This Month'}
+                  </button>
+                ))}
+              </div>
+              <button onClick={downloadCSV} disabled={!analyticsData?.orders?.length}
+                className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                <Download size={12} /> Export CSV
+              </button>
+            </div>
+
+            {analyticsLoading ? (
+              <div className="text-center py-8 text-gray-500"><Loader2 size={20} className="animate-spin mx-auto mb-2" /> Loading analytics...</div>
+            ) : analyticsData ? (
+              <>
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-black/30 border border-gray-800 rounded-lg p-3">
+                    <div className="text-gray-500 text-[10px] uppercase tracking-widest">Orders</div>
+                    <div className="text-2xl font-black text-white">{analyticsData.summary.totalOrders}</div>
+                  </div>
+                  <div className="bg-black/30 border border-gray-800 rounded-lg p-3">
+                    <div className="text-gray-500 text-[10px] uppercase tracking-widest">Revenue</div>
+                    <div className="text-2xl font-black text-green-400">${analyticsData.summary.totalRevenue?.toFixed(0)}</div>
+                  </div>
+                  <div className="bg-black/30 border border-gray-800 rounded-lg p-3">
+                    <div className="text-gray-500 text-[10px] uppercase tracking-widest">Avg Order</div>
+                    <div className="text-2xl font-black text-orange-400">${analyticsData.summary.avgOrderValue?.toFixed(0)}</div>
+                  </div>
+                  <div className="bg-black/30 border border-gray-800 rounded-lg p-3">
+                    <div className="text-gray-500 text-[10px] uppercase tracking-widest">Completed</div>
+                    <div className="text-2xl font-black text-blue-400">{analyticsData.summary.ordersCompleted}/{analyticsData.summary.totalOrders}</div>
+                  </div>
+                </div>
+
+                {/* Timing Metrics — the mirror */}
+                <div className="bg-black/30 border border-gray-800 rounded-xl p-4">
+                  <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2"><Timer size={14} className="text-orange-400" /> Workflow Timing</h4>
+                  {analyticsData.timing.sampleSize > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <div className="text-gray-500 text-[10px] uppercase tracking-widest mb-1">Wait to Start Cooking</div>
+                        <div className={`text-xl font-black ${timingColor(analyticsData.timing.avgConfirmToCook)}`}>
+                          {analyticsData.timing.avgConfirmToCook !== null ? `${analyticsData.timing.avgConfirmToCook} min` : '—'}
+                        </div>
+                        <div className="text-gray-600 text-[10px]">Confirmed → Cooking</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500 text-[10px] uppercase tracking-widest mb-1">Cook Time</div>
+                        <div className={`text-xl font-black ${timingColor(analyticsData.timing.avgCookToReady)}`}>
+                          {analyticsData.timing.avgCookToReady !== null ? `${analyticsData.timing.avgCookToReady} min` : '—'}
+                        </div>
+                        <div className="text-gray-600 text-[10px]">Cooking → Ready</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500 text-[10px] uppercase tracking-widest mb-1">Pickup Wait</div>
+                        <div className={`text-xl font-black ${timingColor(analyticsData.timing.avgReadyToComplete)}`}>
+                          {analyticsData.timing.avgReadyToComplete !== null ? `${analyticsData.timing.avgReadyToComplete} min` : '—'}
+                        </div>
+                        <div className="text-gray-600 text-[10px]">Ready → Collected</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500 text-[10px] uppercase tracking-widest mb-1">Total Fulfillment</div>
+                        <div className={`text-xl font-black ${timingColor(analyticsData.timing.avgTotalFulfillment)}`}>
+                          {analyticsData.timing.avgTotalFulfillment !== null ? `${analyticsData.timing.avgTotalFulfillment} min` : '—'}
+                        </div>
+                        <div className="text-gray-600 text-[10px]">Order → Done</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500 text-[10px] uppercase tracking-widest mb-1">Fastest</div>
+                        <div className="text-xl font-black text-green-400">
+                          {analyticsData.timing.fastest !== null ? `${analyticsData.timing.fastest} min` : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500 text-[10px] uppercase tracking-widest mb-1">Slowest</div>
+                        <div className="text-xl font-black text-red-400">
+                          {analyticsData.timing.slowest !== null ? `${analyticsData.timing.slowest} min` : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-600 text-sm">No timing data yet. Timestamps are recorded as orders move through statuses.</p>
+                  )}
+                </div>
+
+                {/* Hourly Breakdown + Source Split */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Hourly */}
+                  <div className="bg-black/30 border border-gray-800 rounded-xl p-4">
+                    <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2"><TrendingUp size={14} className="text-blue-400" /> Orders by Hour</h4>
+                    <div className="flex items-end gap-0.5 h-24">
+                      {(analyticsData.hourly || []).filter((h: any) => h.hour >= 6 && h.hour <= 22).map((h: any) => {
+                        const maxOrders = Math.max(...(analyticsData.hourly || []).map((x: any) => x.orders), 1);
+                        const height = h.orders > 0 ? Math.max((h.orders / maxOrders) * 100, 4) : 0;
+                        const isPeak = analyticsData.peakHour?.hour === h.hour && h.orders > 0;
+                        return (
+                          <div key={h.hour} className="flex-1 flex flex-col items-center justify-end gap-0.5" title={`${h.hour}:00 — ${h.orders} orders, $${h.revenue.toFixed(0)}`}>
+                            <div className={`w-full rounded-t transition-all ${isPeak ? 'bg-orange-500' : h.orders > 0 ? 'bg-blue-500/60' : 'bg-gray-800/30'}`}
+                              style={{ height: `${height}%` }} />
+                            <span className="text-[8px] text-gray-600">{h.hour}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {analyticsData.peakHour?.orders > 0 && (
+                      <p className="text-xs text-gray-500 mt-2">Peak: <span className="text-orange-400 font-bold">{analyticsData.peakHour.hour}:00</span> ({analyticsData.peakHour.orders} orders)</p>
+                    )}
+                  </div>
+
+                  {/* Source + Top Items */}
+                  <div className="bg-black/30 border border-gray-800 rounded-xl p-4">
+                    <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2"><Zap size={14} className="text-yellow-400" /> Order Sources</h4>
+                    <div className="space-y-2 mb-4">
+                      {Object.entries(analyticsData.bySource || {}).map(([src, data]: [string, any]) => (
+                        <div key={src} className="flex items-center justify-between">
+                          <span className="text-gray-400 text-sm capitalize">{src === 'qr' ? 'QR Order' : src === 'walk_up' ? 'Walk-up' : src}</span>
+                          <span className="text-white text-sm font-bold">{data.count} orders · ${data.revenue.toFixed(0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <h4 className="text-white font-bold text-sm mb-2">Top Items</h4>
+                    <div className="space-y-1">
+                      {(analyticsData.topItems || []).slice(0, 5).map((item: any, i: number) => (
+                        <div key={item.name} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-400 truncate mr-2">{i + 1}. {item.name}</span>
+                          <span className="text-white font-bold shrink-0">{item.quantity}x · ${item.revenue.toFixed(0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-gray-600 text-sm text-center py-4">No data available for this period.</p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* === UPCOMING COOK DAYS VIEW === */}
       {allUpcomingDates.length === 0 && (

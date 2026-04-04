@@ -46,8 +46,20 @@ export const onRequest = async (context: any) => {
 
       if (fields.length === 0) return json({ error: 'No fields to update' }, 400);
 
+      // Auto-set status timestamps for analytics
+      const now = new Date().toISOString();
+      if (data.status) {
+        const tsMap: Record<string, string> = {
+          'Confirmed': 'confirmed_at', 'Cooking': 'cooking_at',
+          'Ready': 'ready_at', 'Completed': 'completed_at',
+          'Cancelled': 'cancelled_at',
+        };
+        const tsCol = tsMap[data.status];
+        if (tsCol) { fields.push(`${tsCol} = ?`); binds.push(now); }
+      }
+
       fields.push('updated_at = ?');
-      binds.push(new Date().toISOString());
+      binds.push(now);
       binds.push(id);
       binds.push(tenantId);
 

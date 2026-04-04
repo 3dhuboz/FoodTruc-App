@@ -111,7 +111,12 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_intent_id TEXT,
   square_checkout_id TEXT,
   source TEXT DEFAULT 'walk_up',
-  updated_at TEXT DEFAULT (datetime('now'))
+  updated_at TEXT DEFAULT (datetime('now')),
+  confirmed_at TEXT,
+  cooking_at TEXT,
+  ready_at TEXT,
+  completed_at TEXT,
+  cancelled_at TEXT
 );
 
 -- ─── Calendar Events ─────────────────────────────────────────
