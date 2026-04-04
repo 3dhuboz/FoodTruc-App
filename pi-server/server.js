@@ -270,14 +270,19 @@ async function handleApi(req, url) {
 
   // ── Print ──
   if (path === '/print/order' && method === 'POST') {
-    const body = await readBody(req);
-    if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
-    const labelSettings = body.labelSettings || settings?.labelSettings || {};
-    const logoUrl = labelSettings.logoUrl || body.logoUrl || settings?.logoUrl;
-    const businessName = body.businessName || settings?.businessName;
-    const siteUrl = labelSettings.socialUrl || body.siteUrl || settings?.siteUrl || (CLOUD_URL ? `${CLOUD_URL}/#/menu` : null);
-    const success = await printOrderLabel(body, logoUrl, businessName, siteUrl, labelSettings);
-    return json({ printed: success });
+    try {
+      const body = await readBody(req);
+      if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
+      const labelSettings = body.labelSettings || settings?.labelSettings || {};
+      const logoUrl = labelSettings.logoUrl || body.logoUrl || settings?.logoUrl;
+      const businessName = body.businessName || settings?.businessName;
+      const siteUrl = labelSettings.socialUrl || body.siteUrl || settings?.siteUrl || (CLOUD_URL ? `${CLOUD_URL}/#/menu` : null);
+      const success = await printOrderLabel(body, logoUrl, businessName, siteUrl, labelSettings);
+      return json({ printed: success });
+    } catch (err) {
+      console.error('[Print] Order label error:', err);
+      return json({ printed: false, error: err.message }, 500);
+    }
   }
   if (path === '/print/test' && method === 'POST') {
     if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
