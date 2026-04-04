@@ -896,7 +896,7 @@ const SettingsManager: React.FC = () => {
                               const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${geminiKey}` },
-                                body: JSON.stringify({ model: 'google/gemini-2.5-flash-preview', messages: [{ role: 'user', content: 'Say OK' }] }),
+                                body: JSON.stringify({ model: 'google/gemini-2.5-flash', messages: [{ role: 'user', content: 'Say OK' }] }),
                               });
                               const data = await res.json();
                               if (data.choices?.[0]?.message?.content) { setGeminiStatus('connected'); toast('OpenRouter AI connection verified!', 'success'); }

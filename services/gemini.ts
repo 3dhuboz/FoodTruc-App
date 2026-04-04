@@ -12,7 +12,8 @@ const getApiKey = () => {
   return (typeof import.meta !== 'undefined' && import.meta.env?.VITE_OPENROUTER_API_KEY) || '';
 };
 
-const MODEL = 'google/gemini-2.5-flash-preview';
+const MODEL = 'google/gemini-2.5-flash';
+const IMAGE_MODEL = 'google/gemini-2.5-flash-image';
 
 async function openRouterChat(
   systemPrompt: string,
@@ -90,7 +91,7 @@ export const generateMarketingImage = async (prompt: string): Promise<string | n
         'HTTP-Referer': window.location.origin,
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-preview-05-20',
+        model: IMAGE_MODEL,
         modalities: ['image', 'text'],
         messages: [{ role: 'user', content: `Generate a high-quality, appetising food truck photo: ${prompt}. Make it look professional and vibrant, suitable for a menu or marketing material.` }],
       }),
