@@ -138,6 +138,31 @@ const SettingsManager: React.FC = () => {
     });
   }, [settings]);
 
+  // Check if returning from Stripe Connect onboarding
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('stripe_onboarded=true')) {
+      // Poll connect status to update settings
+      fetch('/api/v1/stripe/connect-status')
+        .then(r => r.json())
+        .then(data => {
+          if (data.connected) {
+            updateSettings({ stripeConnected: true });
+            toast('Stripe account connected successfully!', 'success');
+          } else {
+            toast('Stripe onboarding incomplete. You can resume from Settings anytime.', 'warning');
+          }
+        })
+        .catch(() => {});
+      // Clean URL
+      window.location.hash = window.location.hash.replace(/[?&]stripe_onboarded=true/, '');
+    }
+    if (hash.includes('stripe_refresh=true')) {
+      toast('Stripe onboarding session expired. Click "Connect Stripe" to resume.', 'warning');
+      window.location.hash = window.location.hash.replace(/[?&]stripe_refresh=true/, '');
+    }
+  }, []);
+
   useEffect(() => {
      checkSystemHealth();
      // Auto-ping every 30s
@@ -938,7 +963,92 @@ const SettingsManager: React.FC = () => {
       {/* --- PAYMENT GATEWAY --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
           <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><Banknote size={20} className="text-green-400"/> Payment Gateway</h4>
-          <p className="text-sm text-gray-400 mb-6">Connect your Square account to accept card payments for orders and catering deposits.</p>
+          <p className="text-sm text-gray-400 mb-6">Connect your Stripe account to accept card payments. ChowNow handles everything — you just complete the onboarding.</p>
+
+          {/* Stripe Connect Card */}
+          <div className={`border rounded-xl p-5 mb-6 ${settings.stripeConnected ? 'border-green-600/40 bg-green-950/20' : 'border-orange-600/40 bg-orange-950/10'}`}>
+              <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${settings.stripeConnected ? 'bg-green-600/20' : 'bg-orange-600/20'}`}>
+                          <CreditCard size={20} className={settings.stripeConnected ? 'text-green-400' : 'text-orange-400'}/>
+                      </div>
+                      <div>
+                          <h5 className="font-bold text-white">Stripe Payments</h5>
+                          <p className="text-xs text-gray-400">
+                              {settings.stripeConnected
+                                  ? <span className="text-green-400 flex items-center gap-1"><CheckCircle size={12}/> Connected — Accepting payments</span>
+                                  : <span className="text-orange-400">Setup required to accept payments</span>}
+                          </p>
+                      </div>
+                  </div>
+                  {settings.stripeConnected ? (
+                      <button
+                          onClick={async () => {
+                              try {
+                                  const res = await fetch(`/api/v1/stripe/connect-status?dashboard=true`, { headers: { 'Content-Type': 'application/json' } });
+                                  const data = await res.json();
+                                  if (data.dashboardUrl) window.open(data.dashboardUrl, '_blank');
+                                  else toast('Could not load Stripe dashboard', 'error');
+                              } catch { toast('Failed to open dashboard', 'error'); }
+                          }}
+                          className="text-xs text-blue-400 hover:text-blue-300 border border-blue-800 px-3 py-1.5 rounded-lg hover:bg-blue-900/20 transition flex items-center gap-1"
+                      >
+                          <ExternalLink size={12}/> Stripe Dashboard
+                      </button>
+                  ) : (
+                      <button
+                          onClick={async () => {
+                              setIsConnecting(true);
+                              try {
+                                  const res = await fetch('/api/v1/stripe/connect-onboard', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({}),
+                                  });
+                                  const data = await res.json();
+                                  if (data.url) window.location.href = data.url;
+                                  else toast(data.error || 'Failed to start onboarding', 'error');
+                              } catch (e: any) {
+                                  toast(e.message || 'Connection failed', 'error');
+                              } finally {
+                                  setIsConnecting(false);
+                              }
+                          }}
+                          disabled={isConnecting}
+                          className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm transition flex items-center gap-2"
+                      >
+                          {isConnecting ? <><Loader2 size={14} className="animate-spin"/> Connecting...</> : <><ArrowRight size={14}/> Connect Stripe</>}
+                      </button>
+                  )}
+              </div>
+
+              {settings.stripeConnected && (
+                  <div className="border-t border-gray-700 pt-4 mt-2">
+                      <div className="flex items-center gap-4 text-sm">
+                          <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                              <span className="text-gray-400">Card payments</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                              <span className="text-gray-400">Apple Pay / Google Pay</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                              <span className="text-gray-400">Payouts to your bank</span>
+                          </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-3">A 1.5% platform fee is applied to each transaction. Payouts are handled automatically by Stripe.</p>
+                  </div>
+              )}
+
+              {!settings.stripeConnected && (
+                  <div className="text-xs text-gray-500 flex items-start gap-2 mt-2">
+                      <Info size={14} className="shrink-0 mt-0.5"/>
+                      <span>Click "Connect Stripe" to complete a quick onboarding. Stripe handles identity verification, tax forms, and payouts. You'll be redirected to Stripe and brought back here when done.</span>
+                  </div>
+              )}
+          </div>
 
           {/* Square Status Card */}
           <div className={`border rounded-xl p-5 mb-6 ${settings.squareConnected ? 'border-green-600/40 bg-green-950/20' : 'border-gray-700 bg-black/20'}`}>
@@ -1102,7 +1212,7 @@ const SettingsManager: React.FC = () => {
                   <div><span className="text-gray-500 text-xs block">Backend</span><span className="text-white font-bold">Cloudflare Pages</span></div>
                   <div><span className="text-gray-500 text-xs block">Database</span><span className="text-white font-bold">D1 (SQLite)</span></div>
                   <div><span className="text-gray-500 text-xs block">SMS</span><span className="text-white font-bold">ClickSend</span></div>
-                  <div><span className="text-gray-500 text-xs block">Payments</span><span className="text-white font-bold">Square</span></div>
+                  <div><span className="text-gray-500 text-xs block">Payments</span><span className="text-white font-bold">Stripe Connect</span></div>
                   <div><span className="text-gray-500 text-xs block">Printer</span><span className="text-white font-bold">Dymo 4XL (CUPS)</span></div>
                   <div><span className="text-gray-500 text-xs block">Edge Server</span><span className="text-white font-bold">ChowBox (Pi 5)</span></div>
                   <div><span className="text-gray-500 text-xs block">Tunnel</span><span className="text-white font-bold">Cloudflare Tunnel</span></div>
