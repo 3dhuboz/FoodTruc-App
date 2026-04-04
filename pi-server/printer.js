@@ -1,156 +1,197 @@
 /**
- * Thermal Printer — ESC/POS over USB
+ * Label Printer — Dymo LabelWriter 4XL via CUPS
  *
- * Writes raw ESC/POS commands to the USB device file.
- * Works with most 58mm/80mm thermal receipt printers.
+ * Generates HTML labels and prints via the `lp` command through CUPS.
+ * Supports order collection labels and QR code stickers.
  *
- * On Linux (Pi): writes to /dev/usb/lp0 (or lp1, lp2)
- * Auto-detects the printer device on startup.
- *
- * No npm dependencies — just raw file writes.
+ * Setup: sudo bash setup-dymo.sh (installs CUPS + Dymo drivers)
+ * Printer name: DYMO-4XL (set as default by setup script)
  */
 
-import { writeFileSync, existsSync, readdirSync } from 'fs';
+import { execSync, exec } from 'child_process';
+import { writeFileSync, unlinkSync, existsSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
-// ESC/POS Commands
-const ESC = 0x1B;
-const GS = 0x1D;
-const LF = 0x0A;
+const PRINTER_NAME = 'DYMO-4XL';
+const LABEL_DIR = tmpdir();
 
-const CMD = {
-  INIT: Buffer.from([ESC, 0x40]),                    // Initialize printer
-  BOLD_ON: Buffer.from([ESC, 0x45, 0x01]),           // Bold on
-  BOLD_OFF: Buffer.from([ESC, 0x45, 0x00]),          // Bold off
-  DOUBLE_ON: Buffer.from([GS, 0x21, 0x11]),          // Double width + height
-  DOUBLE_OFF: Buffer.from([GS, 0x21, 0x00]),         // Normal size
-  WIDE_ON: Buffer.from([GS, 0x21, 0x10]),            // Double width only
-  WIDE_OFF: Buffer.from([GS, 0x21, 0x00]),           // Normal
-  CENTER: Buffer.from([ESC, 0x61, 0x01]),             // Center align
-  LEFT: Buffer.from([ESC, 0x61, 0x00]),               // Left align
-  CUT: Buffer.from([GS, 0x56, 0x42, 0x03]),          // Partial cut (with feed)
-  FEED: Buffer.from([ESC, 0x64, 0x04]),               // Feed 4 lines
-  LINE: Buffer.from([0x2D].concat(Array(32).fill(0x2D))), // Dashed line
-};
+// ─── Printer Detection ──────────────────────────────────────────
 
-// Auto-detect USB printer device
-function findPrinter() {
-  const paths = ['/dev/usb/lp0', '/dev/usb/lp1', '/dev/usb/lp2'];
-  for (const p of paths) {
-    if (existsSync(p)) return p;
-  }
-  // Check for serial printers too
-  try {
-    const devs = readdirSync('/dev').filter(d => d.startsWith('ttyUSB') || d.startsWith('ttyACM'));
-    if (devs.length > 0) return `/dev/${devs[0]}`;
-  } catch {}
-  return null;
-}
-
-let printerPath = null;
+let printerReady = false;
 
 export function initPrinter() {
-  printerPath = findPrinter();
-  if (printerPath) {
-    console.log(`[Printer] Found thermal printer at ${printerPath}`);
+  try {
+    const output = execSync('lpstat -p 2>/dev/null', { encoding: 'utf8', timeout: 5000 });
+    if (output.includes(PRINTER_NAME)) {
+      printerReady = true;
+      console.log(`[Printer] Dymo LabelWriter 4XL ready (${PRINTER_NAME})`);
+      return true;
+    }
+    // Fallback: check for any Dymo
+    if (output.toLowerCase().includes('dymo')) {
+      printerReady = true;
+      console.log(`[Printer] Dymo printer found via CUPS`);
+      return true;
+    }
+  } catch {}
+
+  // Also check legacy ESC/POS USB device
+  const usbPaths = ['/dev/usb/lp0', '/dev/usb/lp1', '/dev/usb/lp2'];
+  for (const p of usbPaths) {
+    if (existsSync(p)) {
+      printerReady = true;
+      console.log(`[Printer] USB printer found at ${p} (raw mode)`);
+      return true;
+    }
+  }
+
+  console.log('[Printer] No printer detected. Run: sudo bash setup-dymo.sh');
+  return false;
+}
+
+export function isPrinterAvailable() {
+  return printerReady;
+}
+
+// ─── HTML Label Generation ──────────────────────────────────────
+
+function orderLabelHTML(order) {
+  const pin = order.collectionPin || order.collection_pin || order.id?.slice(-4)?.toUpperCase() || '????';
+  const time = new Date(order.createdAt || Date.now()).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+  const name = order.customerName || order.customer_name || 'Walk-up';
+  const type = order.type || 'TAKEAWAY';
+
+  let items = [];
+  try {
+    items = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
+  } catch { items = []; }
+
+  const itemRows = items.map(entry => {
+    const item = entry.item || entry;
+    const qty = entry.quantity || 1;
+    const itemName = item.name || item.toString();
+    let row = `<tr><td class="qty">${qty}x</td><td>${itemName}</td></tr>`;
+    if (entry.selectedOption) {
+      row += `<tr><td></td><td class="sub">&rsaquo; ${entry.selectedOption}</td></tr>`;
+    }
+    if (entry.packSelections) {
+      for (const [group, sels] of Object.entries(entry.packSelections)) {
+        row += `<tr><td></td><td class="sub">${group}: ${sels.join(', ')}</td></tr>`;
+      }
+    }
+    return row;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { size: 4in 6in; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; padding: 12px; width: 4in; height: 6in; }
+  .pin { font-size: 72px; font-weight: 900; text-align: center; letter-spacing: 4px; margin: 8px 0; }
+  .name { font-size: 24px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+  .meta { font-size: 14px; text-align: center; color: #666; margin-bottom: 12px; }
+  hr { border: none; border-top: 2px dashed #000; margin: 10px 0; }
+  table { width: 100%; font-size: 18px; }
+  .qty { width: 40px; font-weight: 700; vertical-align: top; }
+  td { padding: 3px 0; }
+  .sub { font-size: 14px; color: #555; padding-left: 8px; }
+  .total { font-size: 22px; font-weight: 900; text-align: right; margin-top: 8px; }
+  .brand { font-size: 11px; text-align: center; color: #999; margin-top: auto; position: absolute; bottom: 12px; left: 0; right: 0; }
+</style></head><body>
+  <div class="pin">${pin}</div>
+  <div class="name">${escHTML(name)}</div>
+  <div class="meta">${time} &bull; ${type}</div>
+  <hr>
+  <table>${itemRows}</table>
+  <hr>
+  <div class="total">$${(order.total || 0).toFixed(2)}</div>
+  <div class="brand">Powered by ChowNow</div>
+</body></html>`;
+}
+
+function qrStickerHTML(url, businessName) {
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { size: 4in 4in; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; width: 4in; height: 4in; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; }
+  img { width: 240px; height: 240px; margin-bottom: 12px; }
+  .title { font-size: 20px; font-weight: 900; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: #555; }
+  .url { font-size: 11px; color: #888; margin-top: 8px; word-break: break-all; }
+</style></head><body>
+  <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url)}" alt="QR">
+  <div class="title">Scan to Order</div>
+  <div class="sub">${escHTML(businessName || 'Order ahead, skip the queue')}</div>
+  <div class="url">${escHTML(url)}</div>
+</body></html>`;
+}
+
+function escHTML(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ─── Print via CUPS ─────────────────────────────────────────────
+
+function printHTML(html, jobName = 'chownow-label') {
+  const filePath = join(LABEL_DIR, `${jobName}-${Date.now()}.html`);
+  try {
+    writeFileSync(filePath, html);
+    execSync(`lp -d ${PRINTER_NAME} -t "${jobName}" "${filePath}"`, { timeout: 10000 });
+    // Clean up after a delay
+    setTimeout(() => { try { unlinkSync(filePath); } catch {} }, 5000);
     return true;
-  } else {
-    console.log('[Printer] No USB thermal printer detected. Label printing disabled.');
-    console.log('[Printer] Connect a USB thermal printer and restart to enable.');
+  } catch (err) {
+    console.error(`[Printer] Print failed: ${err.message}`);
+    try { unlinkSync(filePath); } catch {}
     return false;
   }
 }
 
-export function isPrinterAvailable() {
-  if (!printerPath) return false;
-  return existsSync(printerPath);
-}
+// ─── Public API ─────────────────────────────────────────────────
 
 /**
- * Print an order label for the pass.
+ * Print an order collection label (4x6").
  * Called when cook taps "Cooking" on the KDS.
- *
- * @param {Object} order - { id, customerName, items, total, createdAt, type }
  */
 export function printOrderLabel(order) {
-  if (!printerPath) {
+  if (!printerReady) {
     console.log('[Printer] No printer — skipping label for order', order.id);
     return false;
   }
 
   try {
-    const orderNum = order.collectionPin || order.collection_pin || order.id?.slice(-4)?.toUpperCase() || '????';
-    const time = new Date(order.createdAt || Date.now()).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
-    const name = order.customerName || 'Walk-up';
-
-    // Parse items — could be JSON string or array
-    let items = [];
-    try {
-      items = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
-    } catch { items = []; }
-
-    // Build the label
-    const parts = [];
-
-    // Init
-    parts.push(CMD.INIT);
-
-    // Big order number
-    parts.push(CMD.CENTER);
-    parts.push(CMD.DOUBLE_ON);
-    parts.push(Buffer.from(`#${orderNum}\n`));
-    parts.push(CMD.DOUBLE_OFF);
-
-    // Customer name
-    parts.push(CMD.BOLD_ON);
-    parts.push(Buffer.from(`${name}\n`));
-    parts.push(CMD.BOLD_OFF);
-    parts.push(Buffer.from(`${time}  ${order.type || 'TAKEAWAY'}\n`));
-
-    // Separator
-    parts.push(CMD.LEFT);
-    parts.push(Buffer.from('--------------------------------\n'));
-
-    // Items
-    for (const entry of items) {
-      const item = entry.item || entry;
-      const qty = entry.quantity || 1;
-      const itemName = item.name || item.toString();
-      parts.push(CMD.BOLD_ON);
-      parts.push(Buffer.from(`${qty}x ${itemName}\n`));
-      parts.push(CMD.BOLD_OFF);
-
-      // Show selected option if any
-      if (entry.selectedOption) {
-        parts.push(Buffer.from(`   > ${entry.selectedOption}\n`));
-      }
-
-      // Show pack selections if any
-      if (entry.packSelections) {
-        for (const [group, selections] of Object.entries(entry.packSelections)) {
-          parts.push(Buffer.from(`   ${group}: ${selections.join(', ')}\n`));
-        }
-      }
+    const pin = order.collectionPin || order.collection_pin || order.id?.slice(-4)?.toUpperCase() || '????';
+    const html = orderLabelHTML(order);
+    const success = printHTML(html, `order-${pin}`);
+    if (success) {
+      const name = order.customerName || order.customer_name || 'Walk-up';
+      console.log(`[Printer] Printed label for order #${pin} (${name})`);
     }
-
-    // Separator
-    parts.push(Buffer.from('--------------------------------\n'));
-
-    // Total
-    parts.push(CMD.BOLD_ON);
-    parts.push(Buffer.from(`TOTAL: $${(order.total || 0).toFixed(2)}\n`));
-    parts.push(CMD.BOLD_OFF);
-
-    // Feed and cut
-    parts.push(CMD.FEED);
-    parts.push(CMD.CUT);
-
-    // Write to printer
-    const label = Buffer.concat(parts);
-    writeFileSync(printerPath, label);
-    console.log(`[Printer] Printed label for order #${orderNum} (${name})`);
-    return true;
+    return success;
   } catch (err) {
     console.error('[Printer] Print failed:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Print a QR code sticker (4x4").
+ * Used for truck signage — customers scan to order.
+ */
+export function printQRSticker(url, businessName) {
+  if (!printerReady) return false;
+
+  try {
+    const html = qrStickerHTML(url, businessName);
+    const success = printHTML(html, 'qr-sticker');
+    if (success) console.log(`[Printer] Printed QR sticker for ${url}`);
+    return success;
+  } catch (err) {
+    console.error('[Printer] QR sticker print failed:', err.message);
     return false;
   }
 }
@@ -159,30 +200,28 @@ export function printOrderLabel(order) {
  * Print a test label to verify the printer works.
  */
 export function printTestLabel() {
-  if (!printerPath) return false;
+  if (!printerReady) return false;
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { size: 4in 3in; margin: 0; }
+  body { font-family: Arial, sans-serif; width: 4in; height: 3in; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .logo { font-size: 36px; font-weight: 900; }
+  .sub { font-size: 16px; margin-top: 4px; }
+  .time { font-size: 12px; color: #888; margin-top: 12px; }
+  .ok { font-size: 14px; color: #16a34a; font-weight: 700; margin-top: 8px; }
+</style></head><body>
+  <div class="logo">ChowNow</div>
+  <div class="sub">Printer Test</div>
+  <div class="ok">If you can read this, your printer is working!</div>
+  <div class="time">${new Date().toLocaleString('en-AU')}</div>
+</body></html>`;
 
   try {
-    const parts = [
-      CMD.INIT,
-      CMD.CENTER,
-      CMD.DOUBLE_ON,
-      Buffer.from('ChowNow\n'),
-      CMD.DOUBLE_OFF,
-      CMD.BOLD_ON,
-      Buffer.from('Printer Test\n'),
-      CMD.BOLD_OFF,
-      Buffer.from(`${new Date().toLocaleString('en-AU')}\n`),
-      Buffer.from('--------------------------------\n'),
-      Buffer.from('If you can read this,\n'),
-      Buffer.from('your printer is working!\n'),
-      Buffer.from('--------------------------------\n'),
-      CMD.FEED,
-      CMD.CUT,
-    ];
-
-    writeFileSync(printerPath, Buffer.concat(parts));
-    console.log('[Printer] Test label printed');
-    return true;
+    const success = printHTML(html, 'test-label');
+    if (success) console.log('[Printer] Test label printed');
+    return success;
   } catch (err) {
     console.error('[Printer] Test print failed:', err.message);
     return false;

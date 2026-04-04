@@ -27,7 +27,7 @@ import { exec } from 'child_process';
 import { gzipSync } from 'zlib';
 import Database from 'better-sqlite3';
 import { availableParallelism, networkInterfaces } from 'os';
-import { initPrinter, isPrinterAvailable, printOrderLabel, printTestLabel } from './printer.js';
+import { initPrinter, isPrinterAvailable, printOrderLabel, printTestLabel, printQRSticker } from './printer.js';
 
 // ─── Cluster Primary ────────────────────────────────────────
 if (cluster.isPrimary) {
@@ -278,6 +278,12 @@ async function handleApi(req, url) {
   if (path === '/print/test' && method === 'POST') {
     if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
     const success = printTestLabel();
+    return json({ printed: success });
+  }
+  if (path === '/print/qr' && method === 'POST') {
+    const body = await readBody(req);
+    if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
+    const success = printQRSticker(body.url, body.businessName);
     return json({ printed: success });
   }
   if (path === '/print/status' && method === 'GET') {
