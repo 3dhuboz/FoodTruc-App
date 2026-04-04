@@ -100,20 +100,21 @@ export const generateMarketingImage = async (prompt: string): Promise<string | n
     if (!res.ok) throw new Error(`Image API ${res.status}`);
     const data = await res.json();
 
-    // Extract base64 image from response
-    const content = data.choices?.[0]?.message?.content;
-    if (Array.isArray(content)) {
-      const imgPart = content.find((p: any) => p.type === 'image_url');
+    // Extract image from response — OpenRouter returns in message.images[]
+    const msg = data.choices?.[0]?.message;
+
+    // Primary: message.images array (OpenRouter Gemini image models)
+    if (Array.isArray(msg?.images)) {
+      const img = msg.images.find((p: any) => p.image_url?.url);
+      if (img?.image_url?.url) return img.image_url.url;
+    }
+
+    // Fallback: content as array with image_url parts
+    if (Array.isArray(msg?.content)) {
+      const imgPart = msg.content.find((p: any) => p.type === 'image_url');
       if (imgPart?.image_url?.url) return imgPart.image_url.url;
     }
-    // Some models return inline_data
-    const parts = data.choices?.[0]?.message?.parts;
-    if (Array.isArray(parts)) {
-      const imgPart = parts.find((p: any) => p.inline_data);
-      if (imgPart?.inline_data?.data) {
-        return `data:${imgPart.inline_data.mime_type || 'image/png'};base64,${imgPart.inline_data.data}`;
-      }
-    }
+
     return null;
   } catch (err: any) {
     console.error('[AI] Image generation failed:', err.message);
