@@ -9,7 +9,10 @@
     "preview": "wrangler pages dev dist",
     "deploy": "vite build && wrangler pages deploy dist",
     "lint": "tsc --noEmit",
-    "db:seed": "wrangler d1 execute foodtruck-db --file=schema.sql --remote"
+    "db:seed": "wrangler d1 execute foodtruck-db --file=schema.sql --remote",
+    "cap:sync": "vite build && npx cap sync android",
+    "cap:open": "npx cap open android",
+    "cap:build": "vite build && npx cap sync android && cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
     "@capacitor-community/stripe-terminal": "^8.1.1",

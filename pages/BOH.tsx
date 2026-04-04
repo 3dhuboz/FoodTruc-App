@@ -98,15 +98,41 @@ const BOH: React.FC = () => {
     try {
       if (!audioCtx.current) audioCtx.current = new AudioContext();
       const ctx = audioCtx.current;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
-      osc.frequency.setValueAtTime(1320, ctx.currentTime + 0.2);
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6);
+      const t = ctx.currentTime;
+
+      // LOUD 3-tone ascending alert — cuts through kitchen noise
+      // Plays twice with a short gap for unmistakeable urgency
+      for (const offset of [0, 0.8]) {
+        // Tone 1: punchy low hit
+        const o1 = ctx.createOscillator();
+        const g1 = ctx.createGain();
+        o1.type = 'square';
+        o1.connect(g1); g1.connect(ctx.destination);
+        o1.frequency.setValueAtTime(800, t + offset);
+        g1.gain.setValueAtTime(0.8, t + offset);
+        g1.gain.exponentialRampToValueAtTime(0.01, t + offset + 0.2);
+        o1.start(t + offset); o1.stop(t + offset + 0.2);
+
+        // Tone 2: mid
+        const o2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        o2.type = 'square';
+        o2.connect(g2); g2.connect(ctx.destination);
+        o2.frequency.setValueAtTime(1100, t + offset + 0.2);
+        g2.gain.setValueAtTime(0.8, t + offset + 0.2);
+        g2.gain.exponentialRampToValueAtTime(0.01, t + offset + 0.4);
+        o2.start(t + offset + 0.2); o2.stop(t + offset + 0.4);
+
+        // Tone 3: high attention grabber
+        const o3 = ctx.createOscillator();
+        const g3 = ctx.createGain();
+        o3.type = 'square';
+        o3.connect(g3); g3.connect(ctx.destination);
+        o3.frequency.setValueAtTime(1500, t + offset + 0.4);
+        g3.gain.setValueAtTime(0.9, t + offset + 0.4);
+        g3.gain.exponentialRampToValueAtTime(0.01, t + offset + 0.7);
+        o3.start(t + offset + 0.4); o3.stop(t + offset + 0.7);
+      }
     } catch {}
   };
 

@@ -95,9 +95,13 @@ export const generateMarketingImage = async (prompt: string): Promise<string | n
         modalities: ['image', 'text'],
         messages: [{ role: 'user', content: `Generate a high-quality, appetising food truck photo: ${prompt}. Make it look professional and vibrant, suitable for a menu or marketing material.` }],
       }),
+      signal: AbortSignal.timeout(60000), // 60s timeout for image generation
     });
 
-    if (!res.ok) throw new Error(`Image API ${res.status}`);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Image API ${res.status}: ${errText.substring(0, 100)}`);
+    }
     const data = await res.json();
 
     // Extract image from response — OpenRouter returns in message.images[]

@@ -7,31 +7,28 @@ import { MenuItem, PackGroup } from '../../types';
 import { generateMarketingImage } from '../../services/gemini';
 import { PLACEHOLDER_IMG } from '../../constants';
 
-// Helper to compress base64 images
-const compressImage = (base64Str: string, maxWidth = 800, quality = 0.6) => {
+// Helper to compress images (handles both data URIs and external URLs)
+const compressImage = (imgUrl: string, maxWidth = 800, quality = 0.6) => {
     return new Promise<string>((resolve) => {
         const img = new Image();
-        img.src = base64Str;
+        // Allow cross-origin for external URLs (needed to draw to canvas)
+        if (!imgUrl.startsWith('data:')) img.crossOrigin = 'anonymous';
         img.onload = () => {
             const canvas = document.createElement('canvas');
             let width = img.width;
             let height = img.height;
-            
-            // Resize logic
             if (width > maxWidth) {
                 height *= maxWidth / width;
                 width = maxWidth;
             }
-            
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx?.drawImage(img, 0, 0, width, height);
             resolve(canvas.toDataURL('image/jpeg', quality));
         };
-        img.onerror = () => {
-            resolve(base64Str);
-        };
+        img.onerror = () => resolve(imgUrl);
+        img.src = imgUrl;
     });
 };
 
@@ -125,17 +122,21 @@ const MenuManager: React.FC = () => {
          toast('Please enter a name or description first.', 'warning');
          return;
      }
-     
+
      setIsGeneratingImage(true);
-     const prompt = `${editItem.name || 'BBQ Food'}. ${editItem.description || ''}. Authentic, delicious, professional food photography.`;
-     const base64Image = await generateMarketingImage(prompt);
-     
-     if (base64Image) {
-         // Compress the generated image to save space
-         const compressed = await compressImage(base64Image);
-         setEditItem(prev => ({ ...prev, image: compressed }));
-     } else {
-         toast('Could not generate image. Please check API key or try again.', 'error');
+     try {
+       const prompt = `${editItem.name || 'BBQ Food'}. ${editItem.description || ''}. Authentic, delicious, professional food photography.`;
+       const imageUrl = await generateMarketingImage(prompt);
+
+       if (imageUrl) {
+           const compressed = await compressImage(imageUrl);
+           setEditItem(prev => ({ ...prev, image: compressed }));
+           toast('Image generated!', 'success');
+       } else {
+           toast('No image returned. Check your OpenRouter API key in Settings.', 'error');
+       }
+     } catch (err: any) {
+       toast(err.message || 'Image generation failed.', 'error');
      }
      setIsGeneratingImage(false);
   };

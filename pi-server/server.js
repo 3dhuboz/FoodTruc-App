@@ -28,6 +28,7 @@ import { gzipSync } from 'zlib';
 import Database from 'better-sqlite3';
 import { availableParallelism, networkInterfaces } from 'os';
 import { initPrinter, isPrinterAvailable, printOrderLabel, printTestLabel, printQRSticker } from './printer.js';
+import { initBtPrinter, isBtPrinterAvailable, btPrintOrderReceipt, btPrintTestReceipt } from './bt-printer.js';
 
 // ─── Cluster Primary ────────────────────────────────────────
 if (cluster.isPrimary) {
@@ -272,7 +273,9 @@ async function handleApi(req, url) {
   if (path === '/print/order' && method === 'POST') {
     try {
       const body = await readBody(req);
-      if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
+      const hasDymo = isPrinterAvailable();
+      const hasBt = isBtPrinterAvailable();
+      if (!hasDymo && !hasBt) return json({ error: 'No printer connected', printed: false }, 503);
       // Load settings from local SQLite
       const settingsRows = db.prepare('SELECT * FROM settings').all();
       const appSettings = {};
@@ -281,17 +284,29 @@ async function handleApi(req, url) {
       const logoUrl = labelSettings.logoUrl || body.logoUrl || appSettings.logoUrl;
       const businessName = body.businessName || appSettings.businessName;
       const siteUrl = labelSettings.socialUrl || body.siteUrl || appSettings.siteUrl || (CLOUD_URL ? `${CLOUD_URL}/#/menu` : null);
-      const success = await printOrderLabel(body, logoUrl, businessName, siteUrl, labelSettings);
-      return json({ printed: success });
+      // Dymo label printer (4x6" label with logo + QR) takes priority
+      // Falls back to Bluetooth thermal receipt printer
+      let success = false;
+      let printerUsed = 'none';
+      if (hasDymo) {
+        success = await printOrderLabel(body, logoUrl, businessName, siteUrl, labelSettings);
+        printerUsed = 'dymo';
+      } else if (hasBt) {
+        success = btPrintOrderReceipt(body, businessName, siteUrl, labelSettings);
+        printerUsed = 'bluetooth';
+      }
+      return json({ printed: success, printer: printerUsed });
     } catch (err) {
       console.error('[Print] Order label error:', err);
       return json({ printed: false, error: err.message }, 500);
     }
   }
   if (path === '/print/test' && method === 'POST') {
-    if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
-    const success = printTestLabel();
-    return json({ printed: success });
+    const hasDymo = isPrinterAvailable();
+    const hasBt = isBtPrinterAvailable();
+    if (!hasDymo && !hasBt) return json({ error: 'No printer connected', printed: false }, 503);
+    const success = hasDymo ? printTestLabel() : btPrintTestReceipt();
+    return json({ printed: success, printer: hasDymo ? 'dymo' : 'bluetooth' });
   }
   if (path === '/print/qr' && method === 'POST') {
     const body = await readBody(req);
@@ -300,12 +315,16 @@ async function handleApi(req, url) {
     return json({ printed: success });
   }
   if (path === '/print/status' && method === 'GET') {
-    return json({ available: isPrinterAvailable() });
+    return json({
+      available: isPrinterAvailable() || isBtPrinterAvailable(),
+      dymo: isPrinterAvailable(),
+      bluetooth: isBtPrinterAvailable(),
+    });
   }
 
   // ── Health ──
   if (path === '/health') {
-    return json({ ok: true, mode: 'local', service: 'street-eats-pi', printer: isPrinterAvailable() });
+    return json({ ok: true, mode: 'local', service: 'chownow-pi', printer: isPrinterAvailable() || isBtPrinterAvailable(), printerType: isPrinterAvailable() ? 'dymo' : isBtPrinterAvailable() ? 'bluetooth' : 'none' });
   }
 
   // ── Admin Diagnostics ──
@@ -838,8 +857,9 @@ const server = createServer(async (req, res) => {
   }
 });
 
-// ─── Printer Init ────────────────────────────────────────────
+// ─── Printer Init — try Dymo (CUPS) first, then Bluetooth ────
 initPrinter();
+if (!isPrinterAvailable()) initBtPrinter();
 
 // ─── Start ───────────────────────────────────────────────────
 

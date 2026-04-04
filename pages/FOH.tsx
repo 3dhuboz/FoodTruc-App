@@ -4,7 +4,7 @@ import { MenuItem, Order, CartItem } from '../types';
 import {
   Plus, Minus, Trash2, ShoppingCart, ChefHat, X, CheckCircle, Search, Lock,
   Bell, Wifi, WifiOff, CloudOff, ClipboardList, Flame, Clock, Package, Users,
-  CreditCard, Loader2, PauseCircle, PlayCircle
+  CreditCard, Loader2, PauseCircle, PlayCircle, QrCode, Smartphone
 } from 'lucide-react';
 import { isNativePaymentAvailable, initTerminal, connectTapToPay, collectPayment } from '../services/stripeTerminal';
 
@@ -48,12 +48,12 @@ const PinGate: React.FC<{ pin: string; onUnlock: () => void }> = ({ pin, onUnloc
   );
 };
 
-// ─── Customer Detail Modal ───────────────────────────────────
-const CustomerModal: React.FC<{
+// ─── Checkout Modal (Customer Details → Payment) ──────────��─
+const CheckoutModal: React.FC<{
   cart: CartItem[]; total: number;
-  onConfirm: (name: string, phone: string, notes: string) => void;
+  onCreateOrder: (name: string, phone: string, notes: string) => void;
   onClose: () => void;
-}> = ({ cart, total, onConfirm, onClose }) => {
+}> = ({ cart, total, onCreateOrder, onClose }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
@@ -61,7 +61,7 @@ const CustomerModal: React.FC<{
     <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50 p-4">
       <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-md space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-white font-black text-xl">Customer Details</h2>
+          <h2 className="text-white font-black text-xl">Checkout</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={22} /></button>
         </div>
         <div className="bg-gray-800 rounded-xl p-4 space-y-1 max-h-32 overflow-y-auto">
@@ -81,9 +81,64 @@ const CustomerModal: React.FC<{
           className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 outline-none focus:border-orange-500 text-lg" />
         <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Special instructions..." rows={2}
           className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 outline-none focus:border-orange-500 resize-none" />
-        <button onClick={() => name.trim() && onConfirm(name.trim(), phone.trim(), notes.trim())} disabled={!name.trim()}
+        <button onClick={() => name.trim() && onCreateOrder(name.trim(), phone.trim(), notes.trim())} disabled={!name.trim()}
           className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white font-black text-xl py-4 rounded-xl transition active:scale-95">
-          Send to Kitchen — ${total.toFixed(2)}
+          Continue to Payment — ${total.toFixed(2)}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Payment Method Modal ───────────────────────────────────
+const PaymentModal: React.FC<{
+  order: Order;
+  onQR: () => void;
+  onNFC: () => void;
+  onCash: () => void;
+  onClose: () => void;
+  charging: boolean;
+}> = ({ order, onQR, onNFC, onCash, onClose, charging }) => {
+  const hasNfc = isNativePaymentAvailable();
+  const pin = order.collectionPin || order.id?.slice(-4).toUpperCase();
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-white font-black text-xl">Payment</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={22} /></button>
+        </div>
+
+        <div className="text-center space-y-1">
+          <div className="text-orange-400 font-black text-4xl">${order.total.toFixed(2)}</div>
+          <div className="text-gray-400 text-sm">{order.customerName} &middot; #{pin}</div>
+        </div>
+
+        <div className="space-y-2.5">
+          {/* Primary: QR Code payment (works on any device) */}
+          <button onClick={onQR}
+            className="w-full bg-blue-500 hover:bg-blue-400 text-white font-bold py-4 rounded-xl transition active:scale-95 flex items-center justify-center gap-2.5 text-base">
+            <QrCode size={20} /> Customer Scans to Pay
+          </button>
+
+          {/* NFC Tap to Pay (only in Capacitor native app) */}
+          {hasNfc && (
+            <button onClick={onNFC} disabled={charging}
+              className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl transition active:scale-95 flex items-center justify-center gap-2.5">
+              {charging ? <><Loader2 size={18} className="animate-spin" /> Tap card...</> : <><CreditCard size={18} /> NFC Tap to Pay</>}
+            </button>
+          )}
+
+          {/* Cash / External EFTPOS */}
+          <button onClick={onCash}
+            className="w-full bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold py-3.5 rounded-xl transition active:scale-95 flex items-center justify-center gap-2.5">
+            <span className="text-lg">💵</span> Cash / External EFTPOS
+          </button>
+        </div>
+
+        <button onClick={onClose}
+          className="w-full text-gray-500 hover:text-gray-300 text-xs font-semibold py-2 transition">
+          Cancel Order
         </button>
       </div>
     </div>
@@ -100,6 +155,116 @@ const SuccessFlash: React.FC<{ orderNum: string; onDismiss: () => void }> = ({ o
   </div>
 );
 
+// ─── Payment QR Modal ───────────────────────────────────────
+const PaymentQRModal: React.FC<{
+  order: Order;
+  onPaid: () => void;
+  onCancel: () => void;
+}> = ({ order, onPaid, onCancel }) => {
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [polling, setPolling] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Create Stripe Checkout session on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/v1/stripe/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: order.id,
+            items: order.items.map(i => ({
+              name: i.item.name,
+              price: i.item.price,
+              quantity: i.quantity,
+            })),
+            total: order.total,
+            customerName: order.customerName,
+            customerPhone: order.customerPhone || '',
+            source: 'foh',
+          }),
+        });
+        if (!res.ok) throw new Error('Failed to create checkout');
+        const data = await res.json();
+        if (!cancelled) {
+          setCheckoutUrl(data.url);
+          setPolling(true);
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [order]);
+
+  // Poll for payment confirmation (order status changes from Awaiting Payment)
+  useEffect(() => {
+    if (!polling) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/v1/orders?id=${order.id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const updated = Array.isArray(data) ? data[0] : data;
+        if (updated?.status === 'Confirmed' || updated?.status === 'Cooking' || updated?.status === 'Ready') {
+          onPaid();
+        }
+      } catch {}
+    }, 2000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [polling, order.id, onPaid]);
+
+  const qrImgUrl = checkoutUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(checkoutUrl)}&format=png`
+    : null;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm space-y-4 text-center">
+        <div className="flex items-center justify-between">
+          <h2 className="text-white font-black text-lg flex items-center gap-2">
+            <Smartphone size={20} className="text-blue-400" /> Customer Pays
+          </h2>
+          <button onClick={onCancel} className="text-gray-500 hover:text-white"><X size={20} /></button>
+        </div>
+
+        <div className="text-orange-400 font-black text-3xl">${order.total.toFixed(2)}</div>
+        <div className="text-gray-400 text-sm">{order.customerName}</div>
+
+        {error && (
+          <div className="bg-red-900/30 border border-red-800 rounded-xl p-3 text-red-300 text-sm">{error}</div>
+        )}
+
+        {!checkoutUrl && !error && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 size={32} className="animate-spin text-orange-400" />
+          </div>
+        )}
+
+        {qrImgUrl && (
+          <>
+            <div className="bg-white rounded-xl p-3 inline-block mx-auto">
+              <img src={qrImgUrl} alt="Payment QR" className="w-56 h-56" />
+            </div>
+            <p className="text-gray-400 text-xs">Customer scans with their phone camera to pay</p>
+            <div className="flex items-center justify-center gap-2 text-blue-400 text-sm">
+              <Loader2 size={14} className="animate-spin" /> Waiting for payment...
+            </div>
+          </>
+        )}
+
+        <button onClick={onCancel}
+          className="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-bold py-2.5 rounded-xl transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ─── Order Queue Panel (right side) ──────────────────────────
 const OrderQueue: React.FC<{
   orders: Order[];
@@ -107,8 +272,9 @@ const OrderQueue: React.FC<{
   onMarkComplete: (order: Order) => void;
   onMarkPaid: (order: Order) => void;
   onCharge: (order: Order) => void;
+  onChargeQR: (order: Order) => void;
   charging: string | null;
-}> = ({ orders, onMarkReady, onMarkComplete, onMarkPaid, onCharge, charging }) => {
+}> = ({ orders, onMarkReady, onMarkComplete, onMarkPaid, onCharge, onChargeQR, charging }) => {
   const hasNfcPayment = isNativePaymentAvailable();
   const [elapsed, setElapsed] = useState<Record<string, string>>({});
 
@@ -162,15 +328,19 @@ const OrderQueue: React.FC<{
         <div className="text-orange-400 text-xs font-bold mb-2">${order.total.toFixed(2)}</div>
         {order.status === 'Pending' && (
           <div className="space-y-1.5">
+            <button onClick={() => onChargeQR(order)}
+              className="w-full bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold py-2.5 rounded-lg transition active:scale-95 flex items-center justify-center gap-1.5">
+              <QrCode size={12} /> Charge ${order.total.toFixed(2)}
+            </button>
             {hasNfcPayment && (
               <button onClick={() => onCharge(order)} disabled={charging === order.id}
-                className="w-full bg-blue-500 hover:bg-blue-400 disabled:opacity-60 text-white text-xs font-bold py-2.5 rounded-lg transition active:scale-95 flex items-center justify-center gap-1.5">
-                {charging === order.id ? <><Loader2 size={12} className="animate-spin" /> Tap card...</> : <><CreditCard size={12} /> Charge ${order.total.toFixed(2)}</>}
+                className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-60 text-white text-xs font-bold py-2 rounded-lg transition active:scale-95 flex items-center justify-center gap-1.5">
+                {charging === order.id ? <><Loader2 size={12} className="animate-spin" /> Tap card...</> : <><CreditCard size={12} /> NFC Tap</>}
               </button>
             )}
             <button onClick={() => onMarkPaid(order)}
-              className="w-full bg-purple-500 hover:bg-purple-400 text-white text-xs font-bold py-2 rounded-lg transition active:scale-95">
-              {hasNfcPayment ? 'Cash / External EFTPOS' : 'Mark Paid → Kitchen'}
+              className="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-bold py-2 rounded-lg transition active:scale-95">
+              Cash / EFTPOS
             </button>
           </div>
         )}
@@ -277,18 +447,31 @@ const FOH: React.FC = () => {
         newlyReady.forEach(o => { if (!next[o.id]) next[o.id] = Date.now(); });
         return next;
       });
+      // LOUD ready alert — rapid high-low siren, plays 3 times
       try {
         if (!audioCtx.current) audioCtx.current = new AudioContext();
         const ctx = audioCtx.current;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.setValueAtTime(1200, ctx.currentTime);
-        osc.frequency.setValueAtTime(1500, ctx.currentTime + 0.15);
-        osc.frequency.setValueAtTime(1800, ctx.currentTime + 0.3);
-        gain.gain.setValueAtTime(0.4, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
-        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.8);
+        const t = ctx.currentTime;
+        for (let i = 0; i < 3; i++) {
+          const offset = i * 0.6;
+          const oHi = ctx.createOscillator();
+          const gHi = ctx.createGain();
+          oHi.type = 'square';
+          oHi.connect(gHi); gHi.connect(ctx.destination);
+          oHi.frequency.setValueAtTime(1800, t + offset);
+          gHi.gain.setValueAtTime(0.9, t + offset);
+          gHi.gain.exponentialRampToValueAtTime(0.01, t + offset + 0.25);
+          oHi.start(t + offset); oHi.stop(t + offset + 0.25);
+
+          const oLo = ctx.createOscillator();
+          const gLo = ctx.createGain();
+          oLo.type = 'square';
+          oLo.connect(gLo); gLo.connect(ctx.destination);
+          oLo.frequency.setValueAtTime(1200, t + offset + 0.25);
+          gLo.gain.setValueAtTime(0.9, t + offset + 0.25);
+          gLo.gain.exponentialRampToValueAtTime(0.01, t + offset + 0.5);
+          oLo.start(t + offset + 0.25); oLo.stop(t + offset + 0.5);
+        }
       } catch {}
     }
     // Remove alerts for orders no longer Ready (collected/completed)
@@ -363,13 +546,15 @@ const FOH: React.FC = () => {
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
   const readyCount = activeOrders.filter(o => o.status === 'Ready').length;
 
+  const [pendingPaymentOrder, setPendingPaymentOrder] = useState<Order | null>(null);
+
   const handleConfirm = (name: string, phone: string, notes: string) => {
     const orderId = newOrderId();
     const order: Order = {
       id: orderId, userId: 'walk_up', customerName: name,
       customerPhone: phone || undefined, customerEmail: undefined,
       items: cart.map(c => ({ item: c, quantity: c.quantity })),
-      total, status: 'Confirmed',
+      total, status: 'Pending',
       cookDay: new Date().toISOString().split('T')[0],
       type: 'TAKEAWAY', temperature: 'HOT', fulfillmentMethod: 'PICKUP',
       createdAt: new Date().toISOString(),
@@ -378,11 +563,42 @@ const FOH: React.FC = () => {
     };
     createOrder(order);
     setCart([]); setShowCustomer(false);
-    setLastOrderNum(orderId.slice(-4).toUpperCase());
+    setPendingPaymentOrder(order);
+  };
+
+  const handlePaymentComplete = (order: Order) => {
+    updateOrderStatus(order.id, 'Confirmed');
+    setPendingPaymentOrder(null);
+    setLastOrderNum(order.id.slice(-4).toUpperCase());
+    // LOUD payment success — satisfying cash register "ka-ching" style
+    try {
+      if (!audioCtx.current) audioCtx.current = new AudioContext();
+      const ctx = audioCtx.current;
+      const t = ctx.currentTime;
+      // Low thump
+      const o1 = ctx.createOscillator();
+      const g1 = ctx.createGain();
+      o1.connect(g1); g1.connect(ctx.destination);
+      o1.frequency.setValueAtTime(400, t);
+      g1.gain.setValueAtTime(0.7, t);
+      g1.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+      o1.start(t); o1.stop(t + 0.15);
+      // Bright ding
+      const o2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      o2.type = 'sine';
+      o2.connect(g2); g2.connect(ctx.destination);
+      o2.frequency.setValueAtTime(1200, t + 0.1);
+      o2.frequency.setValueAtTime(1600, t + 0.25);
+      g2.gain.setValueAtTime(0.8, t + 0.1);
+      g2.gain.exponentialRampToValueAtTime(0.01, t + 0.6);
+      o2.start(t + 0.1); o2.stop(t + 0.6);
+    } catch {}
   };
 
   const [charging, setCharging] = useState<string | null>(null);
   const [terminalReady, setTerminalReady] = useState(false);
+  const [qrChargeOrder, setQrChargeOrder] = useState<Order | null>(null);
 
   // Init Stripe Terminal on mount if native
   useEffect(() => {
@@ -398,27 +614,17 @@ const FOH: React.FC = () => {
     try {
       const result = await collectPayment(order.total, order.id);
       if (result.success) {
-        // Payment collected — send to kitchen
-        await updateOrderStatus(order.id, 'Confirmed');
-        // Play success chime
-        try {
-          if (!audioCtx.current) audioCtx.current = new AudioContext();
-          const ctx = audioCtx.current;
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.frequency.setValueAtTime(800, ctx.currentTime);
-          osc.frequency.setValueAtTime(1200, ctx.currentTime + 0.15);
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
-        } catch {}
+        handlePaymentComplete(order);
       } else {
         alert(result.error || 'Payment failed');
       }
     } finally {
       setCharging(null);
     }
+  };
+
+  const handleChargeQR = (order: Order) => {
+    setQrChargeOrder(order);
   };
 
   const handleMarkPaid = (order: Order) => {
@@ -609,7 +815,7 @@ const FOH: React.FC = () => {
                 </div>
                 <button onClick={() => cart.length > 0 && setShowCustomer(true)} disabled={cart.length === 0}
                   className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-40 text-white font-black text-base py-3.5 rounded-xl transition active:scale-95">
-                  Send to Kitchen
+                  Checkout
                 </button>
                 {cart.length > 0 && (
                   <button onClick={() => setCart([])} className="w-full text-gray-500 hover:text-red-400 text-xs font-semibold py-1.5 transition">Clear</button>
@@ -620,12 +826,35 @@ const FOH: React.FC = () => {
 
           {/* Orders Panel */}
           {activePanel === 'orders' && (
-            <OrderQueue orders={activeOrders} onMarkReady={() => {}} onMarkComplete={handleMarkComplete} onMarkPaid={handleMarkPaid} onCharge={handleCharge} charging={charging} />
+            <OrderQueue orders={activeOrders} onMarkReady={() => {}} onMarkComplete={handleMarkComplete} onMarkPaid={handleMarkPaid} onCharge={handleCharge} onChargeQR={handleChargeQR} charging={charging} />
           )}
         </div>
       </div>
 
-      {showCustomer && <CustomerModal cart={cart} total={total} onConfirm={handleConfirm} onClose={() => setShowCustomer(false)} />}
+      {showCustomer && <CheckoutModal cart={cart} total={total} onCreateOrder={handleConfirm} onClose={() => setShowCustomer(false)} />}
+
+      {pendingPaymentOrder && !qrChargeOrder && (
+        <PaymentModal
+          order={pendingPaymentOrder}
+          onQR={() => { setQrChargeOrder(pendingPaymentOrder); }}
+          onNFC={() => { handleCharge(pendingPaymentOrder); }}
+          onCash={() => { handlePaymentComplete(pendingPaymentOrder); }}
+          onClose={() => { /* Cancel order — leave as Pending in queue */ setPendingPaymentOrder(null); }}
+          charging={charging === pendingPaymentOrder.id}
+        />
+      )}
+
+      {qrChargeOrder && (
+        <PaymentQRModal
+          order={qrChargeOrder}
+          onPaid={() => {
+            handlePaymentComplete(qrChargeOrder);
+            setQrChargeOrder(null);
+          }}
+          onCancel={() => setQrChargeOrder(null)}
+        />
+      )}
+
       {lastOrderNum && <SuccessFlash orderNum={lastOrderNum} onDismiss={() => setLastOrderNum(null)} />}
     </div>
   );

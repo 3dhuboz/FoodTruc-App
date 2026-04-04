@@ -147,6 +147,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </p>
             <p className="text-xs text-gray-700 mt-2">
               Powered by <span className="text-orange-400 font-bold">ChowNow</span>
+              <span className="text-gray-800 ml-2 font-mono text-[10px]">
+                v{typeof __BUILD_HASH__ !== 'undefined' ? __BUILD_HASH__ : 'dev'}
+              </span>
             </p>
           </div>
         </div>

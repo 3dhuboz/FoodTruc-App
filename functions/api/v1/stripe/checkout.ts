@@ -25,6 +25,8 @@ export const onRequest = async (context: any) => {
     const orderId = body.orderId || generateId();
     const origin = new URL(request.url).origin;
 
+    const source = body.source || 'qr'; // 'qr' or 'foh'
+
     // Build Stripe line items from order items
     const lineItems = (body.items || []).map((item: any) => ({
       price_data: {
@@ -37,14 +39,24 @@ export const onRequest = async (context: any) => {
       quantity: item.quantity || 1,
     }));
 
+    // FOH orders: customer scans QR on operator's screen → pays on their phone → simple "paid" page
+    // QR orders: customer already on their phone → redirect to order status
+    const successUrl = source === 'foh'
+      ? `${origin}/#/payment-success?order=${orderId}`
+      : `${origin}/#/order-status/${orderId}?paid=true`;
+    const cancelUrl = source === 'foh'
+      ? `${origin}/#/payment-success?cancelled=true`
+      : `${origin}/#/qr-order?cancelled=true`;
+
     // Create Stripe Checkout Session
     const params = new URLSearchParams();
     params.append('mode', 'payment');
-    params.append('success_url', `${origin}/#/order-status/${orderId}?paid=true`);
-    params.append('cancel_url', `${origin}/#/qr-order?cancelled=true`);
+    params.append('success_url', successUrl);
+    params.append('cancel_url', cancelUrl);
     params.append('metadata[orderId]', orderId);
     params.append('metadata[customerName]', body.customerName || '');
     params.append('metadata[customerPhone]', body.customerPhone || '');
+    params.append('metadata[source]', source);
     params.append('payment_method_types[]', 'card');
 
     // Add each line item
@@ -54,6 +66,21 @@ export const onRequest = async (context: any) => {
       params.append(`line_items[${i}][price_data][unit_amount]`, String(item.price_data.unit_amount));
       params.append(`line_items[${i}][quantity]`, String(item.quantity));
     });
+
+    // Stripe Connect: route payment to tenant's connected account with platform fee
+    const db = getDB(env);
+    const tenant = await db.prepare(
+      'SELECT stripe_account_id, stripe_onboarding_complete FROM tenants WHERE id = ?'
+    ).bind(tenantId).first() as any;
+
+    if (tenant?.stripe_onboarding_complete && tenant?.stripe_account_id) {
+      const platformRow = await db.prepare("SELECT data FROM settings WHERE tenant_id = 'default' AND key = 'platform'").first() as any;
+      const feePercent = platformRow?.data ? (JSON.parse(platformRow.data).platformFeePercent ?? 1.5) : 1.5;
+      const totalCents = Math.round((body.total || 0) * 100);
+      const applicationFee = Math.round(totalCents * (feePercent / 100));
+      params.append('payment_intent_data[application_fee_amount]', String(applicationFee));
+      params.append('payment_intent_data[transfer_data][destination]', tenant.stripe_account_id);
+    }
 
     const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
@@ -78,11 +105,11 @@ export const onRequest = async (context: any) => {
       `INSERT OR REPLACE INTO orders (id, tenant_id, user_id, customer_name, customer_email, customer_phone, items, total, status, cook_day, type, created_at, temperature, fulfillment_method, pickup_location, source, updated_at, square_checkout_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
-      orderId, tenantId, 'qr_customer', body.customerName || 'Customer',
+      orderId, tenantId, source === 'foh' ? 'walk_up' : 'qr_customer', body.customerName || 'Customer',
       body.customerEmail || null, body.customerPhone || null,
       JSON.stringify(body.items || []), body.total || 0,
       'Awaiting Payment', now.split('T')[0], 'TAKEAWAY', now,
-      'HOT', 'PICKUP', body.pickupLocation || '', 'qr', now,
+      'HOT', 'PICKUP', body.pickupLocation || '', source, now,
       session.id // Store Stripe session ID for webhook matching
     );
 

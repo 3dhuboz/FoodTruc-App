@@ -1,17 +1,37 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { writeFileSync } from 'fs';
+
+// Generate a short build hash from timestamp
+const buildHash = Date.now().toString(36);
+const buildTime = new Date().toISOString();
+
+// Plugin to write version.json into dist/ after build
+function versionPlugin(): Plugin {
+  return {
+    name: 'version-json',
+    closeBundle() {
+      writeFileSync('dist/version.json', JSON.stringify({ hash: buildHash, built: buildTime }));
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
+      define: {
+        __BUILD_HASH__: JSON.stringify(buildHash),
+        __BUILD_TIME__: JSON.stringify(buildTime),
+      },
       server: {
         port: 5174,
         host: '0.0.0.0',
       },
       plugins: [
         react(),
+        versionPlugin(),
         VitePWA({
           registerType: 'autoUpdate',
           workbox: {

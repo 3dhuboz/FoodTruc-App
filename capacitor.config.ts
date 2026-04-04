@@ -5,11 +5,17 @@ const config: CapacitorConfig = {
   appName: 'ChowNow',
   webDir: 'dist',
   server: {
-    // Allow loading images from Unsplash (menu item photos)
     allowNavigation: ['images.unsplash.com'],
   },
   plugins: {
-    // Stripe Terminal will be configured here after plugin install
+    StripeTerminal: {
+      tokenProviderEndpoint: '/api/v1/stripe/connection-token',
+      isTest: false,
+    },
+  },
+  android: {
+    // Allow mixed content for local dev if needed
+    allowMixedContent: true,
   },
 };
 

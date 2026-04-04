@@ -52,9 +52,9 @@ function isCacheFresh(path, maxAgeMs = 3600000) {
   } catch { return false; }
 }
 
-async function downloadImage(url, dest, resize) {
+async function downloadImage(url, dest, resize, baseUrl) {
   try {
-    const fullUrl = url.startsWith('http') ? url : `https://chownow.au${url}`;
+    const fullUrl = url.startsWith('http') ? url : `${baseUrl || 'https://chownow.au'}${url.startsWith('/') ? '' : '/'}${url}`;
     const res = await fetch(fullUrl, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) return null;
     writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
@@ -68,10 +68,10 @@ async function downloadImage(url, dest, resize) {
   }
 }
 
-async function ensureLogo(logoUrl) {
+async function ensureLogo(logoUrl, siteUrl) {
   if (!logoUrl) return null;
   if (isCacheFresh(LOGO_CACHE)) return LOGO_CACHE;
-  return downloadImage(logoUrl, LOGO_CACHE, '160x60');
+  return downloadImage(logoUrl, LOGO_CACHE, '160x60', siteUrl);
 }
 
 async function ensureSocialQR(siteUrl) {
@@ -213,8 +213,9 @@ export async function printOrderLabel(order, logoUrl, businessName, siteUrl, lab
   try {
     const pin = order.collectionPin || order.collection_pin || order.id?.slice(-4)?.toUpperCase() || '????';
     const socialUrl = labelSettings?.socialUrl || siteUrl;
+    const baseUrl = siteUrl?.startsWith('http') ? siteUrl : (siteUrl ? `https://${siteUrl}` : undefined);
     const [logoPath, socialQRPath] = await Promise.all([
-      ensureLogo(logoUrl),
+      ensureLogo(logoUrl, baseUrl),
       ensureSocialQR(socialUrl),
     ]);
 

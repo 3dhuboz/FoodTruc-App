@@ -25,6 +25,7 @@ import {
   addToOutbox, getOutboxCount,
 } from '../services/offlineStore';
 import { startSync, stopSync, onSync, getOnlineStatus, bootstrap } from '../services/syncEngine';
+import { startVersionCheck } from '../services/versionCheck';
 
 interface AppContextType {
   user: User | null;
@@ -92,8 +93,11 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const BUILD_VERSION = '2026.04.01a';
+  const BUILD_VERSION = typeof __BUILD_HASH__ !== 'undefined' ? __BUILD_HASH__ : 'dev';
   console.log(`[ChowNow] Build ${BUILD_VERSION} — Cloudflare D1 + Offline-First`);
+
+  // Start polling for new deploys (auto-refresh stale SW cache)
+  useEffect(() => { startVersionCheck(); }, []);
 
   const [isLoading, setIsLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
