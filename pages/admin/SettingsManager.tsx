@@ -814,7 +814,7 @@ const SettingsManager: React.FC = () => {
 
       {/* --- AI CONFIGURATION --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-4 flex items-center gap-2"><Wand2 size={20} className="text-bbq-gold"/> AI Configuration (Gemini)</h4>
+          <h4 className="text-xl font-bold mb-4 flex items-center gap-2"><Wand2 size={20} className="text-bbq-gold"/> AI Configuration (OpenRouter)</h4>
           <p className="text-sm text-gray-400 mb-4">Powers Pitmaster Jay chat, social content generation, AI image generation, and strategic recommendations.</p>
 
           {/* Status Card */}
@@ -825,7 +825,7 @@ const SettingsManager: React.FC = () => {
                           <Wand2 size={20} className={geminiStatus === 'connected' ? 'text-green-400' : geminiStatus === 'error' ? 'text-red-400' : 'text-gray-500'}/>
                       </div>
                       <div>
-                          <h5 className="font-bold text-white">Google Gemini AI</h5>
+                          <h5 className="font-bold text-white">OpenRouter AI</h5>
                           <p className="text-xs text-gray-400">
                               {geminiStatus === 'connected' && 'Connected — AI features active for all admins'}
                               {geminiStatus === 'idle' && 'Not connected'}
@@ -855,7 +855,7 @@ const SettingsManager: React.FC = () => {
                               if (data.choices?.[0]?.message?.content) { setGeminiStatus('connected'); toast('OpenRouter AI connection verified!', 'success'); }
                               else { setGeminiStatus('error'); toast('No response from AI.', 'error'); }
                           } catch (e: any) {
-                              console.error('Gemini test error:', e);
+                              console.error('OpenRouter test error:', e);
                               setGeminiStatus('error');
                               toast('Test failed: ' + (e?.message || e), 'error');
                           }
@@ -874,7 +874,7 @@ const SettingsManager: React.FC = () => {
                           setGeminiKey('');
                           setGeminiStatus('idle');
                           setGeminiEditing(false);
-                          toast('Gemini AI disconnected.');
+                          toast('OpenRouter AI disconnected.');
                       }} className="bg-red-600/20 text-red-400 border border-red-600/40 px-4 py-2 rounded text-sm font-bold hover:bg-red-600/30 transition">
                           Disconnect
                       </button>
@@ -896,7 +896,7 @@ const SettingsManager: React.FC = () => {
                   <div className="space-y-3">
                       <div className="flex gap-2">
                           <input type="text" autoComplete="off" value={geminiKey} onChange={e => setGeminiKey(e.target.value)}
-                              placeholder="Paste your Google Gemini API Key here..."
+                              placeholder="Paste your OpenRouter API Key (sk-or-...)..."
                               className="flex-1 bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
                           />
                           <button type="button" disabled={geminiStatus === 'saving'}
@@ -908,7 +908,7 @@ const SettingsManager: React.FC = () => {
                                   import('../../services/gemini').then(m => m.setGeminiApiKey(key));
                                   setGeminiStatus('connected');
                                   setGeminiEditing(false);
-                                  toast('Gemini key active! Syncing to cloud...', 'success');
+                                  toast('OpenRouter key active! Syncing to cloud...', 'success');
                                   // Use REST API for reliable cloud sync
                                   restSetDoc('settings', 'general', { geminiApiKey: key })
                                       .then(() => toast('Synced to cloud — all admins will now have AI access.', 'success'))
@@ -928,7 +928,7 @@ const SettingsManager: React.FC = () => {
                       </div>
                       <div className="text-xs text-gray-500 flex items-start gap-2">
                           <Info size={14} className="shrink-0 mt-0.5"/>
-                          <span>Get your free API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-bbq-gold hover:underline">Google AI Studio</a>. Shared across all admin devices.</span>
+                          <span>Get your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" className="text-bbq-gold hover:underline">openrouter.ai/keys</a>. Powers AI content, images, and recommendations.</span>
                       </div>
                   </div>
               )}
