@@ -1,19 +1,24 @@
 /**
- * Label Printer — Dymo LabelWriter 4XL via CUPS
+ * Label Printer — Dymo LabelWriter 4XL via CUPS + ImageMagick
  *
- * Sends plain text labels via `lp` through CUPS.
- * For QR stickers, generates a PNG via QR Server API and prints the image.
+ * Generates PNG labels with branding (logo, QR, socials) and prints via `lp`.
+ * Order labels: logo + PIN + items + total + thank you + QR to socials
+ * QR stickers: QR code + business name for truck signage
  *
- * Setup: sudo bash setup-dymo.sh (installs CUPS + Dymo drivers)
- * Printer name: DYMO-4XL (or auto-detected LabelWriter)
+ * Requires: printer-driver-dymo, imagemagick, cups
+ * Setup: sudo bash setup-dymo.sh
  */
 
 import { execSync } from 'child_process';
-import { writeFileSync, unlinkSync, existsSync } from 'fs';
+import { writeFileSync, unlinkSync, existsSync, mkdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-const LABEL_DIR = tmpdir();
+const LABEL_DIR = join(tmpdir(), 'chownow-labels');
+const LOGO_CACHE = join(LABEL_DIR, 'logo-cache.png');
+const SOCIAL_QR_CACHE = join(LABEL_DIR, 'social-qr.png');
+
+try { mkdirSync(LABEL_DIR, { recursive: true }); } catch {}
 
 // ─── Printer Detection ──────────────────────────────────────────
 
@@ -23,8 +28,6 @@ let printerName = '';
 export function initPrinter() {
   try {
     const output = execSync('lpstat -p 2>/dev/null', { encoding: 'utf8', timeout: 5000 });
-
-    // Look for any Dymo or LabelWriter printer
     const match = output.match(/printer (\S+) is/);
     if (match) {
       printerName = match[1];
@@ -33,18 +36,6 @@ export function initPrinter() {
       return true;
     }
   } catch {}
-
-  // Fallback: check for raw USB device
-  const usbPaths = ['/dev/usb/lp0', '/dev/usb/lp1', '/dev/usb/lp2'];
-  for (const p of usbPaths) {
-    if (existsSync(p)) {
-      printerReady = true;
-      printerName = '';
-      console.log(`[Printer] USB printer found at ${p} (raw mode)`);
-      return true;
-    }
-  }
-
   console.log('[Printer] No printer detected. Run: sudo bash setup-dymo.sh');
   return false;
 }
@@ -53,87 +44,164 @@ export function isPrinterAvailable() {
   return printerReady;
 }
 
-// ─── Print via CUPS (plain text) ────────────────────────────────
+// ─── Asset Cache ────────────────────────────────────────────────
 
-function printText(text, jobName = 'chownow-label') {
+function isCacheFresh(path, maxAgeMs = 3600000) {
   try {
-    const dest = printerName ? `-d ${printerName}` : '';
-    execSync(`echo ${JSON.stringify(text)} | lp ${dest} -t "${jobName}"`, {
-      timeout: 10000,
-      shell: '/bin/bash',
-    });
-    return true;
+    return existsSync(path) && (Date.now() - statSync(path).mtimeMs < maxAgeMs);
+  } catch { return false; }
+}
+
+async function downloadImage(url, dest, resize) {
+  try {
+    const fullUrl = url.startsWith('http') ? url : `https://chownow.au${url}`;
+    const res = await fetch(fullUrl, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+    if (resize) {
+      execSync(`convert "${dest}" -resize ${resize} -background white -gravity center -extent ${resize} "${dest}"`, { timeout: 5000 });
+    }
+    return dest;
   } catch (err) {
-    console.error(`[Printer] Print failed: ${err.message}`);
-    return false;
+    console.error('[Printer] Image download failed:', err.message);
+    return null;
   }
 }
 
-function printFile(filePath, jobName = 'chownow-label') {
+async function ensureLogo(logoUrl) {
+  if (!logoUrl) return null;
+  if (isCacheFresh(LOGO_CACHE)) return LOGO_CACHE;
+  return downloadImage(logoUrl, LOGO_CACHE, '160x60');
+}
+
+async function ensureSocialQR(siteUrl) {
+  if (!siteUrl) return null;
+  if (isCacheFresh(SOCIAL_QR_CACHE)) return SOCIAL_QR_CACHE;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(siteUrl)}&format=png`;
+  return downloadImage(qrUrl, SOCIAL_QR_CACHE, '100x100');
+}
+
+// ─── Helpers ────────────────────────────────────────────────────
+
+function esc(str) {
+  return String(str).replace(/'/g, "'\\''").replace(/[&<>\\]/g, '');
+}
+
+function printPNG(filePath, jobName = 'chownow-label') {
   try {
     const dest = printerName ? `-d ${printerName}` : '';
-    execSync(`lp ${dest} -t "${jobName}" "${filePath}"`, { timeout: 15000 });
-    setTimeout(() => { try { unlinkSync(filePath); } catch {} }, 5000);
+    execSync(`lp ${dest} -t "${jobName}" -o PageSize=w288h432 "${filePath}"`, { timeout: 15000 });
+    setTimeout(() => { try { unlinkSync(filePath); } catch {} }, 10000);
     return true;
   } catch (err) {
-    console.error(`[Printer] Print file failed: ${err.message}`);
+    console.error(`[Printer] Print failed: ${err.message}`);
     try { unlinkSync(filePath); } catch {}
     return false;
   }
 }
 
-// ─── Label Formatters ───────────────────────────────────────────
+// ─── Order Label Builder ────────────────────────────────────────
 
-function formatOrderLabel(order) {
+function buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl) {
   const pin = order.collectionPin || order.collection_pin || order.id?.slice(-4)?.toUpperCase() || '????';
   const time = new Date(order.createdAt || Date.now()).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
   const name = order.customerName || order.customer_name || 'Walk-up';
   const type = order.type || 'TAKEAWAY';
+  const biz = businessName || 'ChowNow';
 
   let items = [];
   try {
     items = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
   } catch { items = []; }
 
-  const lines = [];
-  lines.push('');
-  lines.push(`       #${pin}`);
-  lines.push('');
-  lines.push(`  ${name}`);
-  lines.push(`  ${time}  ${type}`);
-  lines.push('  --------------------------------');
+  const filePath = join(LABEL_DIR, `order-${pin}-${Date.now()}.png`);
 
+  // Start with white canvas (4x6" at 72dpi = 288x432)
+  const parts = [`convert -size 288x432 xc:white`];
+
+  // ── TOP: Collection PIN (big and bold) ──
+  parts.push(`-gravity North -font Helvetica-Bold -pointsize 58 -annotate +0+12 '#${esc(pin)}'`);
+
+  // ── Customer name + time ──
+  parts.push(`-pointsize 22 -annotate +0+78 '${esc(name)}'`);
+  parts.push(`-font Helvetica -pointsize 13 -fill gray30 -annotate +0+105 '${time}  |  ${type}'`);
+  parts.push(`-fill black`);
+
+  // ── Separator line ──
+  parts.push(`-draw 'line 15,125 273,125'`);
+
+  // ── Items list ──
+  let y = 135;
+  parts.push(`-gravity NorthWest`);
   for (const entry of items) {
+    if (y > 320) { // Don't overflow into footer
+      parts.push(`-font Helvetica -pointsize 12 -fill gray50 -annotate +20+${y} '+ more items...'`);
+      parts.push(`-fill black`);
+      break;
+    }
     const item = entry.item || entry;
     const qty = entry.quantity || 1;
     const itemName = item.name || item.toString();
-    lines.push(`  ${qty}x ${itemName}`);
+    parts.push(`-font Helvetica-Bold -pointsize 16 -annotate +20+${y} '${qty}x ${esc(itemName)}'`);
+    y += 22;
+
     if (entry.selectedOption) {
-      lines.push(`     > ${entry.selectedOption}`);
-    }
-    if (entry.packSelections) {
-      for (const [group, sels] of Object.entries(entry.packSelections)) {
-        lines.push(`     ${group}: ${sels.join(', ')}`);
-      }
+      parts.push(`-font Helvetica -pointsize 12 -fill gray40 -annotate +35+${y} '> ${esc(entry.selectedOption)}'`);
+      y += 18;
+      parts.push(`-fill black`);
     }
   }
 
-  lines.push('  --------------------------------');
-  lines.push(`  TOTAL: $${(order.total || 0).toFixed(2)}`);
-  lines.push('');
-  lines.push('  Powered by ChowNow');
-  lines.push('');
+  // ── Separator ──
+  y = Math.max(y + 5, 280);
+  parts.push(`-draw 'line 15,${y} 273,${y}'`);
+  y += 12;
 
-  return lines.join('\n');
+  // ── Total (right-aligned) ──
+  parts.push(`-gravity NorthEast -font Helvetica-Bold -pointsize 22 -annotate +20+${y} 'TOTAL $${(order.total || 0).toFixed(2)}'`);
+
+  // ── FOOTER: Thank you + QR + promo ──
+  // Thank you message
+  parts.push(`-gravity South -font Helvetica-Bold -pointsize 14 -annotate +0+75 'Thanks ${esc(name.split(' ')[0])}!'`);
+  parts.push(`-font Helvetica -pointsize 10 -fill gray30 -annotate +0+60 'We appreciate your support.'`);
+
+  // "Find us" / site URL
+  if (siteUrl) {
+    const shortUrl = siteUrl.replace('https://', '').replace('http://', '').replace(/\/$/, '');
+    parts.push(`-pointsize 9 -annotate +0+15 '${esc(shortUrl)}'`);
+  }
+  parts.push(`-pointsize 9 -fill gray50 -annotate +0+4 'Powered by ChowNow'`);
+  parts.push(`-fill black`);
+
+  // Build base image
+  let cmd = parts.join(' \\\n  ') + ` "${filePath}"`;
+
+  // Composite logo (top-right corner)
+  if (logoPath && existsSync(logoPath)) {
+    cmd += ` && composite -gravity NorthEast -geometry +8+8 "${logoPath}" "${filePath}" "${filePath}"`;
+  }
+
+  // Composite social QR (bottom-left corner)
+  if (socialQRPath && existsSync(socialQRPath)) {
+    cmd += ` && composite -gravity SouthWest -geometry +10+30 "${socialQRPath}" "${filePath}" "${filePath}"`;
+  }
+
+  try {
+    execSync(cmd, { timeout: 15000, shell: '/bin/bash' });
+    return filePath;
+  } catch (err) {
+    console.error('[Printer] ImageMagick failed:', err.message);
+    return null;
+  }
 }
 
 // ─── Public API ─────────────────────────────────────────────────
 
 /**
- * Print an order collection label.
- * Called when cook taps "Cooking" on the KDS.
+ * Print an order collection label (4x6" on Dymo 4XL).
+ * Includes: logo, PIN, items, total, thank you, social QR.
  */
-export function printOrderLabel(order) {
+export async function printOrderLabel(order, logoUrl, businessName, siteUrl) {
   if (!printerReady) {
     console.log('[Printer] No printer — skipping label for order', order.id);
     return false;
@@ -141,8 +209,15 @@ export function printOrderLabel(order) {
 
   try {
     const pin = order.collectionPin || order.collection_pin || order.id?.slice(-4)?.toUpperCase() || '????';
-    const label = formatOrderLabel(order);
-    const success = printText(label, `order-${pin}`);
+    const [logoPath, socialQRPath] = await Promise.all([
+      ensureLogo(logoUrl),
+      ensureSocialQR(siteUrl),
+    ]);
+
+    const imagePath = buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl);
+    if (!imagePath) return false;
+
+    const success = printPNG(imagePath, `order-${pin}`);
     if (success) {
       const name = order.customerName || order.customer_name || 'Walk-up';
       console.log(`[Printer] Printed label for order #${pin} (${name})`);
@@ -155,22 +230,29 @@ export function printOrderLabel(order) {
 }
 
 /**
- * Print a QR code sticker.
- * Downloads QR PNG from API, then prints the image file via CUPS.
+ * Print a QR code sticker for truck signage.
  */
 export async function printQRSticker(url, businessName) {
   if (!printerReady) return false;
 
   try {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}&format=png`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}&format=png`;
+    const qrPath = join(LABEL_DIR, `qr-dl-${Date.now()}.png`);
     const res = await fetch(qrUrl, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error(`QR API ${res.status}`);
+    writeFileSync(qrPath, Buffer.from(await res.arrayBuffer()));
 
-    const buffer = Buffer.from(await res.arrayBuffer());
     const filePath = join(LABEL_DIR, `qr-sticker-${Date.now()}.png`);
-    writeFileSync(filePath, buffer);
+    const biz = esc(businessName || 'Scan to Order');
+    execSync(`convert -size 288x288 xc:white \
+      -gravity North -font Helvetica-Bold -pointsize 20 -annotate +0+8 'Scan to Order' \
+      -gravity South -font Helvetica -pointsize 12 -annotate +0+12 '${biz}' \
+      "${filePath}" && \
+      composite -gravity Center -geometry +0+5 "${qrPath}" "${filePath}" "${filePath}"`,
+      { timeout: 10000, shell: '/bin/bash' });
 
-    const success = printFile(filePath, 'qr-sticker');
+    try { unlinkSync(qrPath); } catch {}
+    const success = printPNG(filePath, 'qr-sticker');
     if (success) console.log(`[Printer] Printed QR sticker for ${url}`);
     return success;
   } catch (err) {
@@ -180,25 +262,22 @@ export async function printQRSticker(url, businessName) {
 }
 
 /**
- * Print a test label to verify the printer works.
+ * Print a test label.
  */
 export function printTestLabel() {
   if (!printerReady) return false;
 
-  const text = [
-    '',
-    '     ChowNow',
-    '     Printer Test',
-    '',
-    '  If you can read this,',
-    '  your printer is working!',
-    '',
-    `  ${new Date().toLocaleString('en-AU')}`,
-    '',
-  ].join('\n');
-
+  const filePath = join(LABEL_DIR, `test-${Date.now()}.png`);
   try {
-    const success = printText(text, 'test-label');
+    execSync(`convert -size 288x432 xc:white \
+      -gravity Center \
+      -font Helvetica-Bold -pointsize 42 -annotate +0-60 'ChowNow' \
+      -font Helvetica -pointsize 22 -annotate +0-10 'Printer Test' \
+      -pointsize 16 -fill green4 -annotate +0+30 'Printer is working!' \
+      -fill gray50 -pointsize 12 -annotate +0+65 '${new Date().toLocaleString("en-AU")}' \
+      "${filePath}"`, { timeout: 10000, shell: '/bin/bash' });
+
+    const success = printPNG(filePath, 'test-label');
     if (success) console.log('[Printer] Test label printed');
     return success;
   } catch (err) {

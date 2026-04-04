@@ -272,7 +272,10 @@ async function handleApi(req, url) {
   if (path === '/print/order' && method === 'POST') {
     const body = await readBody(req);
     if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
-    const success = printOrderLabel(body);
+    const logoUrl = body.logoUrl || settings?.logoUrl;
+    const businessName = body.businessName || settings?.businessName;
+    const siteUrl = body.siteUrl || settings?.siteUrl || (CLOUD_URL ? `${CLOUD_URL}/#/menu` : null);
+    const success = await printOrderLabel(body, logoUrl, businessName, siteUrl);
     return json({ printed: success });
   }
   if (path === '/print/test' && method === 'POST') {
