@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS tenants (
   plan TEXT NOT NULL DEFAULT 'starter',
   stripe_customer_id TEXT,
   stripe_account_id TEXT,
+  stripe_onboarding_complete INTEGER DEFAULT 0,
   stripe_subscription_id TEXT,
   billing_status TEXT DEFAULT 'active',
   owner_email TEXT,

@@ -25,6 +25,13 @@ export const onRequest = async (context: any) => {
     const orderId = body.orderId || generateId();
     const origin = new URL(request.url).origin;
 
+    // Look up tenant's Stripe Connect account for platform fee routing
+    const db = getDB(env);
+    const tenant = await db.prepare(
+      'SELECT stripe_account_id, stripe_onboarding_complete FROM tenants WHERE id = ?'
+    ).bind(tenantId).first() as any;
+    const connectedAccountId = tenant?.stripe_onboarding_complete ? tenant.stripe_account_id : null;
+
     // Build Stripe line items from order items
     const lineItems = (body.items || []).map((item: any) => ({
       price_data: {
@@ -55,6 +62,14 @@ export const onRequest = async (context: any) => {
       params.append(`line_items[${i}][quantity]`, String(item.quantity));
     });
 
+    // Stripe Connect: route payment to tenant's connected account with 1.5% platform fee
+    if (connectedAccountId) {
+      const totalCents = lineItems.reduce((sum: number, item: any) => sum + (item.price_data.unit_amount * item.quantity), 0);
+      const applicationFee = Math.round(totalCents * 0.015); // 1.5% platform fee
+      params.append('payment_intent_data[application_fee_amount]', String(applicationFee));
+      params.append('payment_intent_data[transfer_data][destination]', connectedAccountId);
+    }
+
     const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
       headers: {
@@ -72,7 +87,6 @@ export const onRequest = async (context: any) => {
     const session = await res.json();
 
     // Pre-create the order as "Awaiting Payment" in D1
-    const db = getDB(env);
     const now = new Date().toISOString();
     db.prepare(
       `INSERT OR REPLACE INTO orders (id, tenant_id, user_id, customer_name, customer_email, customer_phone, items, total, status, cook_day, type, created_at, temperature, fulfillment_method, pickup_location, source, updated_at, square_checkout_id)

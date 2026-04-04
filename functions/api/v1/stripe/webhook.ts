@@ -10,7 +10,8 @@
  * Setup: In Stripe Dashboard → Webhooks → add endpoint:
  *   URL: https://chownow.au/api/v1/stripe/webhook
  *   Events: checkout.session.completed, customer.subscription.created,
- *           customer.subscription.deleted, invoice.payment_failed
+ *           customer.subscription.deleted, invoice.payment_failed,
+ *           account.updated
  */
 import { getDB, generateId } from '../_lib/db';
 
@@ -137,6 +138,46 @@ export const onRequest = async (context: any) => {
           } else {
             console.log(`[Webhook] Pi shipping needed for: ${businessName} (${slug}) — email: ${email}, phone: ${phone}`);
           }
+
+          // Auto-create Stripe Express connected account for payment processing
+          const stripeKey = (env as any).STRIPE_SECRET_KEY;
+          if (stripeKey) {
+            try {
+              const accountParams = new URLSearchParams();
+              accountParams.append('type', 'express');
+              accountParams.append('country', 'AU');
+              accountParams.append('email', email || '');
+              accountParams.append('capabilities[card_payments][requested]', 'true');
+              accountParams.append('capabilities[transfers][requested]', 'true');
+              accountParams.append('business_type', 'individual');
+              accountParams.append('metadata[tenant_id]', tenantId);
+              accountParams.append('metadata[slug]', slug);
+              accountParams.append('business_profile[name]', businessName);
+              accountParams.append('business_profile[mcc]', '5812');
+              accountParams.append('business_profile[url]', `https://${slug}.chownow.au`);
+
+              const accountRes = await fetch('https://api.stripe.com/v1/accounts', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${stripeKey}`,
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: accountParams.toString(),
+              });
+
+              if (accountRes.ok) {
+                const connectAccount = await accountRes.json() as any;
+                await db.prepare(
+                  'UPDATE tenants SET stripe_account_id = ?, updated_at = ? WHERE id = ?'
+                ).bind(connectAccount.id, now, tenantId).run();
+                console.log(`[Webhook] Created Express account ${connectAccount.id} for tenant ${slug}`);
+              } else {
+                console.error(`[Webhook] Failed to create Express account for ${slug}:`, await accountRes.text());
+              }
+            } catch (e: any) {
+              console.error(`[Webhook] Express account creation error for ${slug}:`, e.message);
+            }
+          }
         } else {
           console.log(`[Webhook] Tenant ${slug} already exists — skipping provisioning`);
         }
@@ -166,6 +207,41 @@ export const onRequest = async (context: any) => {
           "UPDATE tenants SET billing_status = 'past_due', updated_at = ? WHERE stripe_customer_id = ?"
         ).bind(now, customerId).run();
         console.log(`[Webhook] Tenant with customer ${customerId} → past_due`);
+      }
+    }
+
+    // ─── Connect: Account Updated (onboarding complete) ─────────
+    if (event.type === 'account.updated') {
+      const account = event.data?.object;
+      const accountId = account?.id;
+      const chargesEnabled = account?.charges_enabled === true;
+      const payoutsEnabled = account?.payouts_enabled === true;
+
+      if (accountId && chargesEnabled && payoutsEnabled) {
+        // Find the tenant with this connected account
+        const tenant = await db.prepare(
+          'SELECT id FROM tenants WHERE stripe_account_id = ?'
+        ).bind(accountId).first() as any;
+
+        if (tenant) {
+          await db.prepare(
+            'UPDATE tenants SET stripe_onboarding_complete = 1, updated_at = ? WHERE id = ?'
+          ).bind(now, tenant.id).run();
+
+          // Update settings to reflect connected status
+          const settings = await db.prepare(
+            "SELECT data FROM settings WHERE tenant_id = ? AND key = 'general'"
+          ).bind(tenant.id).first() as any;
+          if (settings?.data) {
+            const parsed = JSON.parse(settings.data);
+            parsed.stripeConnected = true;
+            await db.prepare(
+              "UPDATE settings SET data = ? WHERE tenant_id = ? AND key = 'general'"
+            ).bind(JSON.stringify(parsed), tenant.id).run();
+          }
+
+          console.log(`[Webhook] Connect account ${accountId} (tenant: ${tenant.id}) fully onboarded`);
+        }
       }
     }
 
