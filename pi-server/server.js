@@ -273,10 +273,14 @@ async function handleApi(req, url) {
     try {
       const body = await readBody(req);
       if (!isPrinterAvailable()) return json({ error: 'No printer connected', printed: false }, 503);
-      const labelSettings = body.labelSettings || settings?.labelSettings || {};
-      const logoUrl = labelSettings.logoUrl || body.logoUrl || settings?.logoUrl;
-      const businessName = body.businessName || settings?.businessName;
-      const siteUrl = labelSettings.socialUrl || body.siteUrl || settings?.siteUrl || (CLOUD_URL ? `${CLOUD_URL}/#/menu` : null);
+      // Load settings from local SQLite
+      const settingsRows = db.prepare('SELECT * FROM settings').all();
+      const appSettings = {};
+      for (const row of settingsRows) Object.assign(appSettings, parseJson(row.data, {}));
+      const labelSettings = body.labelSettings || appSettings.labelSettings || {};
+      const logoUrl = labelSettings.logoUrl || body.logoUrl || appSettings.logoUrl;
+      const businessName = body.businessName || appSettings.businessName;
+      const siteUrl = labelSettings.socialUrl || body.siteUrl || appSettings.siteUrl || (CLOUD_URL ? `${CLOUD_URL}/#/menu` : null);
       const success = await printOrderLabel(body, logoUrl, businessName, siteUrl, labelSettings);
       return json({ printed: success });
     } catch (err) {
