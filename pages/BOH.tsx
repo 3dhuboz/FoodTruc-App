@@ -123,32 +123,31 @@ const BOH: React.FC = () => {
     try {
       await updateOrderStatus(order.id, targetStatus);
 
-      // When moving to COOKING → print label + SMS customer
-      if (targetStatus === 'Cooking') {
-        const cookingPayload = { ...order, status: 'Cooking' };
-        // Fire and forget — don't block the UI
-        Promise.allSettled([
-          fetch('/api/v1/print/order', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(cookingPayload),
-          }),
-          order.customerPhone && settings.smsSettings?.enabled
-            ? fetch('/api/v1/sms/cooking-started', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ settings: settings.smsSettings, order: cookingPayload, businessName: settings.businessName }),
-              })
-            : Promise.resolve(),
-        ]).catch(() => {});
+      // When moving to COOKING → SMS customer (no print yet — label prints when Ready)
+      if (targetStatus === 'Cooking' && order.customerPhone && settings.smsSettings?.enabled) {
+        fetch('/api/v1/sms/cooking-started', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ settings: settings.smsSettings, order: { ...order, status: 'Cooking' }, businessName: settings.businessName }),
+        }).catch(() => {});
       }
 
-      // When moving to READY → notify customer via SMS + email (fire and forget — don't block cook)
-      if (targetStatus === 'Ready' && order.customerPhone && settings.smsSettings?.enabled) {
+      // When moving to READY → print label for bag + SMS + email customer
+      if (targetStatus === 'Ready') {
         const payload = { ...order, status: 'Ready', pickupLocation: order.pickupLocation || settings.businessAddress };
         Promise.allSettled([
-          fetch('/api/v1/sms/order-ready', {
+          // Print order label — attached to bag, handed to FOH
+          fetch('/api/v1/print/order', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ settings: settings.smsSettings, order: payload, businessName: settings.businessName }),
+            body: JSON.stringify(payload),
           }),
+          // SMS: order ready
+          order.customerPhone && settings.smsSettings?.enabled
+            ? fetch('/api/v1/sms/order-ready', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settings: settings.smsSettings, order: payload, businessName: settings.businessName }),
+              })
+            : Promise.resolve(),
+          // Email: order ready
           fetch('/api/v1/email/order-ready', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ settings: settings.emailSettings, order: payload, businessName: settings.businessName }),
