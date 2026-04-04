@@ -123,14 +123,22 @@ const BOH: React.FC = () => {
     try {
       await updateOrderStatus(order.id, targetStatus);
 
-      // When moving to COOKING → print order label for the pass
+      // When moving to COOKING → print label + SMS customer
       if (targetStatus === 'Cooking') {
-        // Fire and forget — don't block the UI if printer is unavailable
-        fetch('/api/v1/print/order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(order),
-        }).catch(() => {}); // Silently fail if no printer or not on Pi
+        const cookingPayload = { ...order, status: 'Cooking' };
+        // Fire and forget — don't block the UI
+        Promise.allSettled([
+          fetch('/api/v1/print/order', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cookingPayload),
+          }),
+          order.customerPhone && settings.smsSettings?.enabled
+            ? fetch('/api/v1/sms/cooking-started', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settings: settings.smsSettings, order: cookingPayload, businessName: settings.businessName }),
+              })
+            : Promise.resolve(),
+        ]).catch(() => {});
       }
 
       // When moving to READY → notify customer via SMS + email
