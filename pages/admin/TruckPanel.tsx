@@ -209,58 +209,6 @@ const TruckPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Event Mode — Offline QR via Pi */}
-      <div>
-        <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Event Mode (Offline)</h3>
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-          <div className="flex flex-col md:flex-row gap-6">
-            {/* WiFi QR Code */}
-            <div className="bg-black p-4 rounded-2xl border border-gray-700 shrink-0">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent('WIFI:T:nopass;S:StreetEats;;')}&bgcolor=000000&color=ffffff`}
-                alt="WiFi QR Code"
-                className="w-48 h-48"
-                crossOrigin="anonymous"
-              />
-            </div>
-            <div className="flex-1 space-y-4">
-              <div>
-                <h4 className="text-white font-bold text-lg">No Signal? No Problem.</h4>
-                <p className="text-gray-400 text-sm mt-1">
-                  When running at events with no mobile coverage, use the ChowNow Pi. Customers scan this WiFi QR code — their phone auto-connects to the local network and the ordering page opens automatically via captive portal. Zero internet required.
-                </p>
-              </div>
-              <div className="bg-gray-800 rounded-xl p-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">WiFi Network</span>
-                  <span className="text-white font-bold">StreetEats</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Password</span>
-                  <span className="text-green-400 font-bold">None (open)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">How it works</span>
-                  <span className="text-gray-300">Scan → auto-connect → menu opens</span>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <a
-                  href={`https://api.qrserver.com/v1/create-qr-code/?size=800x800&data=${encodeURIComponent('WIFI:T:nopass;S:StreetEats;;')}&bgcolor=000000&color=ffffff`}
-                  download="street-eats-wifi-qr.png"
-                  className="bg-gray-700 hover:bg-gray-600 text-white font-bold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 transition"
-                >
-                  <Download size={16} /> Download WiFi QR
-                </a>
-              </div>
-              <p className="text-gray-600 text-xs">
-                Requires a Raspberry Pi running the ChowNow local server. Print this QR code alongside your regular QR code — flip between them based on signal.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Tips */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6">
         <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">How It Works</h3>

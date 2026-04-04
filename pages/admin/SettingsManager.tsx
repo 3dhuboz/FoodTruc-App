@@ -58,11 +58,9 @@ const compressImage = (base64Str: string, maxWidth = 700, quality = 0.5) => {
     });
 };
 
-const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' }) => {
+const SettingsManager: React.FC = () => {
   const { settings, updateSettings, user } = useApp();
   const { toast } = useToast();
-  const isAdmin = mode === 'admin';
-  const isDev = mode === 'dev';
   const [formData, setFormData] = useState(settings);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -737,8 +735,8 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-700 pb-6 gap-4">
         <div>
-          <h3 className="text-3xl font-display font-bold text-white">{isDev ? 'Developer Tools' : 'Settings'}</h3>
-          <p className="text-gray-400">{isDev ? 'Technical configuration, API keys, and system diagnostics.' : 'Business settings, branding, and rewards.'}</p>
+          <h3 className="text-3xl font-display font-bold text-white">Settings</h3>
+          <p className="text-gray-400">Business settings, branding, integrations, and system configuration.</p>
         </div>
         <button 
           onClick={handleSaveMainSettings}
@@ -768,7 +766,7 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
         </div>
       )}
 
-      {isAdmin && (<>
+
       {/* --- GENERAL CONFIGURATION --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
           <h4 className="text-xl font-bold mb-6 flex items-center gap-2"><Settings size={20} className="text-gray-400"/> General Configuration</h4>
@@ -812,9 +810,8 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
               </div>
           </div>
       </section>
-      </>)}
 
-      {isDev && (<>
+
       {/* --- AI CONFIGURATION --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
           <h4 className="text-xl font-bold mb-4 flex items-center gap-2"><Wand2 size={20} className="text-bbq-gold"/> AI Configuration (Gemini)</h4>
@@ -1113,7 +1110,7 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
       </section>
 
       {/* --- INTEGRATION WIZARD MODAL --- */}
-      {isDev && connectorType && (
+      {connectorType && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
               <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg shadow-2xl animate-in zoom-in-95">
                   <div className="flex justify-between items-center p-4 border-b border-gray-700">
@@ -1223,11 +1220,10 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
               </div>
           </div>
       )}
-      </>)}
 
       {/* Duplicate email section removed — see unified Email Settings section below */}
 
-      {isAdmin && (<>
+
       {/* --- SITE VISUALS --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
           <h4 className="text-xl font-bold mb-6 flex items-center gap-2"><ImageIcon size={20} className="text-pink-500"/> Site Visuals</h4>
@@ -1259,9 +1255,8 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
               </div>
           </div>
       </section>
-      </>)}
 
-      {isDev && (<>
+
       {/* --- ADMIN CREDENTIALS --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
           <h4 className="text-xl font-bold mb-4 flex items-center gap-2"><Shield size={20}/> Admin Access</h4>
@@ -1286,9 +1281,8 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
               </div>
           </div>
       </section>
-      </>)}
 
-      {isAdmin && (<>
+
       {/* --- FACEBOOK --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
           <h4 className="text-xl font-bold mb-3 flex items-center gap-2"><Facebook size={20} className="text-blue-500"/> Facebook / Instagram</h4>
@@ -1425,9 +1419,8 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
               </div>
           </div>
       </section>
-      </>)}
 
-      {isDev && (<>
+
       {/* --- EMAIL SETTINGS --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
           <h4 className="text-xl font-bold mb-6 flex items-center gap-2"><MessageSquare size={20} className="text-purple-500"/> Email Settings</h4>
@@ -1759,9 +1752,8 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
               </div>
           </div>
       </section>
-      </>)}
 
-      {isAdmin && (<>
+
       {/* --- INVOICE TEMPLATE --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
           <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><FileCode size={20} className="text-amber-400"/> Invoice Template</h4>
@@ -1956,10 +1948,9 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
               </div>
           </div>
       </section>
-      </>)}
 
       {/* --- DIAGNOSTICS MODAL --- */}
-      {isDev && showDiagnostics && (
+      {showDiagnostics && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
               <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl shadow-2xl h-[80vh] flex flex-col animate-in zoom-in-95">
                   <div className="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-800/50">
