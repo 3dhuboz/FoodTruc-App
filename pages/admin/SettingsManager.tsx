@@ -58,6 +58,24 @@ const compressImage = (base64Str: string, maxWidth = 700, quality = 0.5) => {
     });
 };
 
+// Collapsible section wrapper for settings
+const Section: React.FC<{ title: string; icon: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode; badge?: string }> = ({ title, icon, defaultOpen = false, children, badge }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="bg-gray-900/50 rounded-xl border border-gray-800 overflow-hidden">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-5 hover:bg-gray-800/30 transition text-left">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h4 className="text-lg font-bold text-white">{title}</h4>
+          {badge && <span className="text-[10px] font-bold bg-green-600/20 text-green-400 px-2 py-0.5 rounded-full uppercase">{badge}</span>}
+        </div>
+        {open ? <ChevronUp size={18} className="text-gray-500" /> : <ChevronDown size={18} className="text-gray-500" />}
+      </button>
+      {open && <div className="px-5 pb-5 border-t border-gray-800/50 pt-4">{children}</div>}
+    </section>
+  );
+};
+
 const SettingsManager: React.FC = () => {
   const { settings, updateSettings, user } = useApp();
   const { toast } = useToast();
@@ -768,8 +786,7 @@ const SettingsManager: React.FC = () => {
 
 
       {/* --- GENERAL CONFIGURATION --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-6 flex items-center gap-2"><Settings size={20} className="text-gray-400"/> General Configuration</h4>
+      <Section title="General Configuration" icon={<Settings size={18} className="text-gray-400"/>} defaultOpen={true}>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
@@ -809,13 +826,11 @@ const SettingsManager: React.FC = () => {
                   <ImageSettingRow label="Logo URL" settingKey="logoUrl" prompt="BBQ restaurant logo, vector style, minimal" />
               </div>
           </div>
-      </section>
+      </Section>
 
 
       {/* --- AI CONFIGURATION --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-4 flex items-center gap-2"><Wand2 size={20} className="text-bbq-gold"/> AI Configuration (OpenRouter)</h4>
-          <p className="text-sm text-gray-400 mb-4">Powers Pitmaster Jay chat, social content generation, AI image generation, and strategic recommendations.</p>
+      <Section title="AI Configuration (OpenRouter)" icon={<Wand2 size={18} className="text-bbq-gold"/>}>
 
           {/* Status Card */}
           <div className={`border rounded-xl p-5 mb-4 ${geminiStatus === 'connected' ? 'border-green-600/40 bg-green-950/20' : geminiStatus === 'error' ? 'border-red-600/40 bg-red-950/20' : 'border-gray-700 bg-black/20'}`}>
@@ -933,12 +948,10 @@ const SettingsManager: React.FC = () => {
                   </div>
               )}
           </div>
-      </section>
+      </Section>
 
       {/* --- PAYMENT GATEWAY --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><Banknote size={20} className="text-green-400"/> Payment Gateway</h4>
-          <p className="text-sm text-gray-400 mb-6">Connect your Square account to accept card payments for orders and catering deposits.</p>
+      <Section title="Payment Gateway" icon={<Banknote size={18} className="text-green-400"/>}>
 
           {/* Square Status Card */}
           <div className={`border rounded-xl p-5 mb-6 ${settings.squareConnected ? 'border-green-600/40 bg-green-950/20' : 'border-gray-700 bg-black/20'}`}>
@@ -1056,18 +1069,10 @@ const SettingsManager: React.FC = () => {
                   </div>
               )}
           </div>
-      </section>
+      </Section>
 
       {/* --- LIVE OPS CONSOLE --- */}
-      <section className="bg-black/40 border border-gray-700 rounded-xl overflow-hidden shadow-2xl">
-          <div className="bg-gray-900/80 p-4 border-b border-gray-700 flex justify-between items-center">
-              <h4 className="font-bold text-white flex items-center gap-2">
-                  <Activity className="text-green-500" size={20} /> Live Operations Console
-              </h4>
-              <button onClick={checkSystemHealth} className="text-xs flex items-center gap-1 text-gray-400 hover:text-white transition">
-                  <RefreshCw size={12} className={healthStatus.database === 'checking' ? 'animate-spin' : ''}/> Refresh
-              </button>
-          </div>
+      <Section title="Live Operations Console" icon={<Activity size={18} className="text-green-500"/>}>
           <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
               {/* Database */}
               <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
@@ -1108,7 +1113,7 @@ const SettingsManager: React.FC = () => {
                   <div><span className="text-gray-500 text-xs block">Tunnel</span><span className="text-white font-bold">Cloudflare Tunnel</span></div>
               </div>
           </div>
-      </section>
+      </Section>
 
       {/* --- INTEGRATION WIZARD MODAL --- */}
       {connectorType && (
@@ -1226,8 +1231,7 @@ const SettingsManager: React.FC = () => {
 
 
       {/* --- SITE VISUALS --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-6 flex items-center gap-2"><ImageIcon size={20} className="text-pink-500"/> Site Visuals</h4>
+      <Section title="Site Visuals" icon={<ImageIcon size={18} className="text-pink-500"/>}>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="space-y-4">
@@ -1255,12 +1259,11 @@ const SettingsManager: React.FC = () => {
                   <ImageSettingRow label="Maintenance Mode" settingKey="maintenanceImage" prompt="BBQ smoker silhouette, closed sign, moody" />
               </div>
           </div>
-      </section>
+      </Section>
 
 
       {/* --- ADMIN CREDENTIALS --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-4 flex items-center gap-2"><Shield size={20}/> Admin Access</h4>
+      <Section title="Admin Access" icon={<Shield size={18}/>}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                   <label className="text-xs font-bold text-gray-500 uppercase">Admin Username</label>
@@ -1281,12 +1284,11 @@ const SettingsManager: React.FC = () => {
                   />
               </div>
           </div>
-      </section>
+      </Section>
 
 
       {/* --- FACEBOOK --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-3 flex items-center gap-2"><Facebook size={20} className="text-blue-500"/> Facebook / Instagram</h4>
+      <Section title="Facebook / Instagram" icon={<Facebook size={18} className="text-blue-500"/>}>
           <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 flex items-start gap-3">
               <AlertCircle size={18} className="text-blue-400 shrink-0 mt-0.5"/>
               <div>
@@ -1299,11 +1301,10 @@ const SettingsManager: React.FC = () => {
                   )}
               </div>
           </div>
-      </section>
+      </Section>
 
       {/* --- REWARDS PROGRAM --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-6 flex items-center gap-2"><Gift size={20} className="text-bbq-gold"/> Rewards Program</h4>
+      <Section title="Rewards Program" icon={<Gift size={18} className="text-bbq-gold"/>}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Program Config */}
               <div className="space-y-4">
@@ -1419,12 +1420,11 @@ const SettingsManager: React.FC = () => {
                   </div>
               </div>
           </div>
-      </section>
+      </Section>
 
 
       {/* --- EMAIL SETTINGS --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-6 flex items-center gap-2"><MessageSquare size={20} className="text-purple-500"/> Email Settings</h4>
+      <Section title="Email Settings" icon={<MessageSquare size={18} className="text-purple-500"/>}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                   <label className="flex items-center gap-3 cursor-pointer bg-black/20 p-3 rounded border border-gray-700">
@@ -1623,12 +1623,10 @@ const SettingsManager: React.FC = () => {
                   </div>
               </div>
           </div>
-      </section>
+      </Section>
 
       {/* --- SMS SETTINGS (CLICKSEND) --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><Smartphone size={20} className="text-green-400"/> SMS Settings (ClickSend)</h4>
-          <p className="text-sm text-gray-400 mb-6">Send order alerts and customer confirmations via SMS. Uses ClickSend — enter your credentials from <a href="https://dashboard.clicksend.com/account/subaccounts" target="_blank" rel="noopener noreferrer" className="text-green-400 underline hover:text-green-300">dashboard.clicksend.com</a>.</p>
+      <Section title="SMS (ClickSend)" icon={<Smartphone size={18} className="text-green-400"/>} badge={formData.smsSettings?.enabled ? 'active' : undefined}>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
@@ -1752,13 +1750,11 @@ const SettingsManager: React.FC = () => {
                   </div>
               </div>
           </div>
-      </section>
+      </Section>
 
 
       {/* --- LABEL & PRINTING --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><Printer size={20} className="text-cyan-400"/> Label & Printing</h4>
-          <p className="text-sm text-gray-400 mb-6">Customise what appears on printed order labels (Dymo 4XL). Labels are attached to bags when orders are marked Ready.</p>
+      <Section title="Label & Printing" icon={<Printer size={18} className="text-cyan-400"/>}>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
@@ -1797,23 +1793,40 @@ const SettingsManager: React.FC = () => {
                       <p className="text-xs text-gray-500 mt-1">QR code on label links here — use your website, Instagram, or Linktree</p>
                   </div>
                   <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Label Logo URL (optional)</label>
-                      <input
-                          title="Override logo for printed labels"
-                          placeholder="Uses main logo if empty"
-                          value={formData.labelSettings?.logoUrl || ''}
-                          onChange={e => setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, logoUrl: e.target.value } as any })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                      />
+                      <label className="text-xs font-bold text-gray-500 uppercase">Label Logo</label>
+                      <div className="flex gap-2">
+                          <input
+                              title="Override logo for printed labels"
+                              placeholder="Uses main logo if empty"
+                              value={formData.labelSettings?.logoUrl || ''}
+                              onChange={e => setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, logoUrl: e.target.value } as any })}
+                              className="flex-1 bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
+                          />
+                          <label className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded cursor-pointer flex items-center gap-1 text-xs font-bold transition">
+                              <Upload size={14} />
+                              <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  const reader = new FileReader();
+                                  reader.onload = async () => {
+                                      const compressed = await compressImage(reader.result as string, 200, 0.8);
+                                      setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, logoUrl: compressed } as any });
+                                  };
+                                  reader.readAsDataURL(file);
+                              }} />
+                              Upload
+                          </label>
+                      </div>
+                      {formData.labelSettings?.logoUrl && (
+                          <img src={formData.labelSettings.logoUrl} alt="Label logo" className="mt-2 h-12 rounded bg-white p-1" onError={e => (e.currentTarget.style.display = 'none')} />
+                      )}
                   </div>
               </div>
           </div>
-      </section>
+      </Section>
 
       {/* --- INVOICE TEMPLATE --- */}
-      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><FileCode size={20} className="text-amber-400"/> Invoice Template</h4>
-          <p className="text-sm text-gray-400 mb-6">Customise the look of invoices sent via Email and SMS. Payment links are auto-generated from your Square account.</p>
+      <Section title="Invoice Template" icon={<FileCode size={18} className="text-amber-400"/>}>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
@@ -2003,7 +2016,7 @@ const SettingsManager: React.FC = () => {
                   </div>
               </div>
           </div>
-      </section>
+      </Section>
 
       {/* --- DIAGNOSTICS MODAL --- */}
       {showDiagnostics && (
