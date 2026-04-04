@@ -1,7 +1,8 @@
 /**
- * SMS: Cooking Started notification.
+ * SMS: Cooking Started notification via ClickSend.
  */
 import { getTenantFromRequest } from '../_lib/tenant';
+import { sendClickSendSms, normalizePhone } from './_clicksend';
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
@@ -20,32 +21,10 @@ export const onRequest = async (context: any) => {
     const orderNum = (order.id || '').slice(-4).toUpperCase();
     const message = `🔥 ${businessName || 'Your order'} — Order #${orderNum} is now being prepared! We'll text you when it's ready. - ${businessName || 'The Team'}`;
 
-    await sendTwilioSms(settings, phone, message);
-    return json({ sent: true });
+    const { messageId } = await sendClickSendSms(settings, phone, message);
+    return json({ sent: true, messageId });
   } catch (err: any) {
     console.error('[SMS cooking-started]', err);
     return json({ error: err.message }, 500);
   }
 };
-
-function normalizePhone(raw: string): string {
-  let phone = raw.replace(/[\s\-()]/g, '');
-  if (phone.startsWith('+')) return phone;
-  if (phone.startsWith('0')) phone = phone.slice(1);
-  if (phone.startsWith('61')) return '+' + phone;
-  return '+61' + phone;
-}
-
-async function sendTwilioSms(settings: any, to: string, body: string) {
-  const { accountSid, authToken, fromNumber } = settings;
-  if (!accountSid || !authToken || !fromNumber) throw new Error('SMS not configured');
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({ To: to, From: fromNumber, Body: body }),
-  });
-  if (!res.ok) throw new Error(`Twilio ${res.status}: ${await res.text()}`);
-}

@@ -70,7 +70,7 @@ const SmsBlast: React.FC = () => {
       return;
     }
     if (!settings.smsSettings?.enabled) {
-      toast('SMS is not configured. Go to Settings > SMS to set up Twilio.', 'error');
+      toast('SMS is not configured. Go to Settings > SMS to set up ClickSend.', 'error');
       return;
     }
 
@@ -254,7 +254,7 @@ const SmsBlast: React.FC = () => {
       {!settings.smsSettings?.enabled && (
         <div className="flex items-start gap-2 p-3 bg-yellow-900/20 border border-yellow-700 rounded-lg text-sm text-yellow-300">
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
-          <span>SMS is not configured. Set up Twilio in <strong>Settings &gt; SMS Settings</strong> before sending.</span>
+          <span>SMS is not configured. Set up ClickSend in <strong>Settings &gt; SMS Settings</strong> before sending.</span>
         </div>
       )}
 

@@ -1,6 +1,5 @@
 /**
- * SMS: Order Ready notification via ClickSend.
- * Sends SMS to customer when their order is marked Ready.
+ * SMS: Test endpoint — sends a test SMS to the admin phone.
  */
 import { getTenantFromRequest } from '../_lib/tenant';
 import { sendClickSendSms, normalizePhone } from './_clicksend';
@@ -15,19 +14,18 @@ export const onRequest = async (context: any) => {
   const { tenantId } = await getTenantFromRequest(request, env);
 
   try {
-    const { settings, order, businessName } = await request.json();
-    if (!settings?.enabled || !order?.customerPhone) return json({ skipped: true });
+    const { settings, to } = await request.json();
+    if (!settings?.username || !settings?.apiKey) return json({ error: 'ClickSend credentials not configured' }, 400);
 
-    const phone = normalizePhone(order.customerPhone);
-    const pin = order.collectionPin || '#' + (order.id || '').slice(-4).toUpperCase();
-    const location = order.pickupLocation || 'the truck';
+    const phone = normalizePhone(to || settings.adminPhone);
+    if (!phone || phone.length < 8) return json({ error: 'No valid phone number provided' }, 400);
 
-    const message = `🎉 ${businessName || 'Your food'} — Order ${pin} is READY! Show "${pin}" at ${location} to collect. Thanks, ${order.customerName}!`;
+    const message = `✅ ChowNow SMS test successful! Your ClickSend integration is working. 🎉`;
 
     const { messageId } = await sendClickSendSms(settings, phone, message);
-    return json({ sent: true, messageId });
+    return json({ success: true, sid: messageId });
   } catch (err: any) {
-    console.error('[SMS order-ready]', err);
+    console.error('[SMS test]', err);
     return json({ error: err.message }, 500);
   }
 };

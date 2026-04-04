@@ -921,17 +921,17 @@ async function sendOperatorAlert(phone, message) {
       return { sent: true, via: 'ntfy' };
     } catch {}
 
-    // Method 2: Twilio SMS (if configured)
+    // Method 2: ClickSend SMS (if configured)
     const sms = settings.smsSettings || {};
-    if (sms.accountSid && sms.authToken && sms.fromNumber && phone) {
-      const auth = Buffer.from(`${sms.accountSid}:${sms.authToken}`).toString('base64');
-      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sms.accountSid}/Messages.json`, {
+    if (sms.username && sms.apiKey && phone) {
+      const auth = Buffer.from(`${sms.username}:${sms.apiKey}`).toString('base64');
+      const res = await fetch('https://rest.clicksend.com/v3/sms/send', {
         method: 'POST',
-        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `To=${encodeURIComponent(phone)}&From=${encodeURIComponent(sms.fromNumber)}&Body=${encodeURIComponent(message)}`,
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ to: phone, body: message, source: 'chownow', ...(sms.fromNumber ? { from: sms.fromNumber } : {}) }] }),
         signal: AbortSignal.timeout(10000),
       });
-      if (res.ok) return { sent: true, via: 'twilio' };
+      if (res.ok) return { sent: true, via: 'clicksend' };
     }
 
     // Method 3: Cloud relay

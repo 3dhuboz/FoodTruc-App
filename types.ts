@@ -242,8 +242,8 @@ export interface AppSettings {
   };
   smsSettings?: {
     enabled: boolean;
-    accountSid: string;
-    authToken: string;
+    username: string;
+    apiKey: string;
     fromNumber: string;
     adminPhone: string;
   };

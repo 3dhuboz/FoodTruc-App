@@ -118,7 +118,7 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
     environment: settings.squareEnvironment || 'sandbox'
   });
   const [smartPayKeys, setSmartPayKeys] = useState({ public: '', secret: '' });
-  const [smsKeys, setSmsKeys] = useState({ sid: '', token: '' });
+  const [smsKeys, setSmsKeys] = useState({ username: '', apiKey: '' });
   const [geminiKey, setGeminiKey] = useState(settings.geminiApiKey || '');
   const [geminiStatus, setGeminiStatus] = useState<'idle' | 'saving' | 'testing' | 'connected' | 'error'>( 
       settings.geminiApiKey ? 'connected' : 'idle'
@@ -126,7 +126,7 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
   const [geminiEditing, setGeminiEditing] = useState(false);
   
   // Connection Wizard
-  const [connectorType, setConnectorType] = useState<'stripe' | 'square' | 'smartpay' | 'twilio' | null>(null);
+  const [connectorType, setConnectorType] = useState<'stripe' | 'square' | 'smartpay' | 'clicksend' | null>(null);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [isChecking, setIsChecking] = useState(false);
 
@@ -551,13 +551,13 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
       }
   };
 
-  const startConnector = (type: 'stripe' | 'square' | 'smartpay' | 'twilio') => {
+  const startConnector = (type: 'stripe' | 'square' | 'smartpay' | 'clicksend') => {
       setConnectorType(type);
       setWizardStep(1);
       setStripeKeys({ pub: '', sec: '' });
       setSquareKeys({ appId: '', locationId: '', accessToken: '', environment: 'sandbox' });
       setSmartPayKeys({ public: '', secret: '' });
-      setSmsKeys({ sid: '', token: '' });
+      setSmsKeys({ username: '', apiKey: '' });
   };
   
   const handleTestPayment = async () => {
@@ -615,7 +615,7 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
       if (connectorType === 'stripe') window.open('https://dashboard.stripe.com/apikeys', '_blank');
       else if (connectorType === 'square') window.open('https://developer.squareup.com/apps', '_blank');
       else if (connectorType === 'smartpay') window.open('https://merchant.smartpay.co/settings', '_blank');
-      else window.open('https://console.twilio.com/', '_blank');
+      else window.open('https://dashboard.clicksend.com/account/subaccounts', '_blank');
       setTimeout(() => setWizardStep(2), 1000);
   };
 
@@ -1195,10 +1195,10 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
                                   </>
                               )}
 
-                              {connectorType === 'twilio' && (
+                              {connectorType === 'clicksend' && (
                                   <>
-                                    <input placeholder="Account SID (AC...)" value={smsKeys.sid} onChange={e => setSmsKeys({...smsKeys, sid: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded p-3 text-white font-mono text-sm"/>
-                                    <input placeholder="Auth Token" type="password" value={smsKeys.token} onChange={e => setSmsKeys({...smsKeys, token: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded p-3 text-white font-mono text-sm"/>
+                                    <input placeholder="ClickSend Username (email)" value={smsKeys.username} onChange={e => setSmsKeys({...smsKeys, username: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded p-3 text-white font-mono text-sm"/>
+                                    <input placeholder="API Key" type="password" value={smsKeys.apiKey} onChange={e => setSmsKeys({...smsKeys, apiKey: e.target.value})} className="w-full bg-gray-800 border border-gray-600 rounded p-3 text-white font-mono text-sm"/>
                                   </>
                               )}
 
@@ -1631,10 +1631,10 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
           </div>
       </section>
 
-      {/* --- SMS SETTINGS (TWILIO) --- */}
+      {/* --- SMS SETTINGS (CLICKSEND) --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-          <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><Smartphone size={20} className="text-green-400"/> SMS Settings (Twilio)</h4>
-          <p className="text-sm text-gray-400 mb-6">Send order alerts and customer confirmations via SMS. Uses Twilio — enter your credentials from <a href="https://console.twilio.com" target="_blank" rel="noopener noreferrer" className="text-green-400 underline hover:text-green-300">console.twilio.com</a>.</p>
+          <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><Smartphone size={20} className="text-green-400"/> SMS Settings (ClickSend)</h4>
+          <p className="text-sm text-gray-400 mb-6">Send order alerts and customer confirmations via SMS. Uses ClickSend — enter your credentials from <a href="https://dashboard.clicksend.com/account/subaccounts" target="_blank" rel="noopener noreferrer" className="text-green-400 underline hover:text-green-300">dashboard.clicksend.com</a>.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
@@ -1642,7 +1642,7 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
                       <input
                           type="checkbox"
                           checked={formData.smsSettings?.enabled || false}
-                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, enabled: e.target.checked, accountSid: formData.smsSettings?.accountSid || '', authToken: formData.smsSettings?.authToken || '', fromNumber: formData.smsSettings?.fromNumber || '', adminPhone: formData.smsSettings?.adminPhone || '' } })}
+                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, enabled: e.target.checked, username: formData.smsSettings?.username || '', apiKey: formData.smsSettings?.apiKey || '', fromNumber: formData.smsSettings?.fromNumber || '', adminPhone: formData.smsSettings?.adminPhone || '' } })}
                           className="w-5 h-5 text-green-500 rounded focus:ring-green-500"
                       />
                       <div>
@@ -1652,25 +1652,25 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
                   </label>
 
                   <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Account SID</label>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Username</label>
                       <input
-                          title="Twilio Account SID"
-                          placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                          value={formData.smsSettings?.accountSid || ''}
-                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, accountSid: e.target.value } as any })}
+                          title="ClickSend Username (email)"
+                          placeholder="you@example.com"
+                          value={formData.smsSettings?.username || ''}
+                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, username: e.target.value } as any })}
                           className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
                       />
                   </div>
 
                   <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Auth Token</label>
+                      <label className="text-xs font-bold text-gray-500 uppercase">API Key</label>
                       <input
                           type="password"
                           autoComplete="off"
-                          title="Twilio Auth Token"
-                          placeholder="Your Twilio Auth Token"
-                          value={formData.smsSettings?.authToken || ''}
-                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, authToken: e.target.value } as any })}
+                          title="ClickSend API Key"
+                          placeholder="Your ClickSend API Key"
+                          value={formData.smsSettings?.apiKey || ''}
+                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, apiKey: e.target.value } as any })}
                           className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
                       />
                   </div>
@@ -1680,13 +1680,13 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
                   <div>
                       <label className="text-xs font-bold text-gray-500 uppercase">From Number</label>
                       <input
-                          title="Twilio phone number to send from"
-                          placeholder="+61400000000"
+                          title="ClickSend sender ID or number"
+                          placeholder="+61400000000 or ChowNow"
                           value={formData.smsSettings?.fromNumber || ''}
                           onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, fromNumber: e.target.value } as any })}
                           className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Your Twilio number in E.164 format, e.g. +61400000000</p>
+                      <p className="text-xs text-gray-500 mt-1">Sender ID (e.g. your business name) or phone number in E.164 format</p>
                   </div>
 
                   <div>
@@ -1703,8 +1703,8 @@ const SettingsManager: React.FC<{ mode?: 'admin' | 'dev' }> = ({ mode = 'admin' 
                   <div className="p-3 bg-blue-900/20 rounded-lg border border-blue-700 text-xs text-blue-300 flex gap-2">
                       <Info size={16} className="shrink-0 mt-0.5"/>
                       <div>
-                          <strong className="block">Twilio Trial Account Note</strong>
-                          On a trial account you can only send to verified numbers. Upgrade to remove this restriction. Find credentials at: <span className="text-white">console.twilio.com → Account Info</span>
+                          <strong className="block">ClickSend Trial Note</strong>
+                          Trial accounts have limited credit. Top up to send unlimited SMS. Find credentials at: <span className="text-white">dashboard.clicksend.com → Developers → API Credentials</span>
                       </div>
                   </div>
 
