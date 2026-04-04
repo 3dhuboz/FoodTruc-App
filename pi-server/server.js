@@ -801,6 +801,13 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // Direct API routes (no /api/v1 prefix) — print, health, admin endpoints
+    if (url.pathname.startsWith('/print/') || url.pathname === '/health' || url.pathname === '/seed') {
+      const result = await handleApi(req, url);
+      await sendResponse(req, res, result.status, result.headers, result.body);
+      return;
+    }
+
     // ChowBox Admin Page — served from pi-server directory
     if (url.pathname === '/admin' || url.pathname === '/admin/') {
       const adminPath = join(__dirname, 'admin.html');
