@@ -124,7 +124,7 @@ function buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl, l
 
   // ── Customer name + time ──
   parts.push(`-pointsize 22 -annotate +0+78 '${esc(name)}'`);
-  parts.push(`-font Helvetica-pointsize 13 -fill gray30 -annotate +0+105 '${time}  |  ${type}'`);
+  parts.push(`-font Helvetica -pointsize 13 -fill gray30 -annotate +0+105 '${time}  |  ${type}'`);
   parts.push(`-fill black`);
 
   // ── Separator line ──
@@ -135,7 +135,7 @@ function buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl, l
   parts.push(`-gravity NorthWest`);
   for (const entry of items) {
     if (y > 320) { // Don't overflow into footer
-      parts.push(`-font Helvetica-pointsize 12 -fill gray50 -annotate +20+${y} '+ more items...'`);
+      parts.push(`-font Helvetica -pointsize 12 -fill gray50 -annotate +20+${y} '+ more items...'`);
       parts.push(`-fill black`);
       break;
     }
@@ -146,7 +146,7 @@ function buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl, l
     y += 22;
 
     if (entry.selectedOption) {
-      parts.push(`-font Helvetica-pointsize 12 -fill gray40 -annotate +35+${y} '> ${esc(entry.selectedOption)}'`);
+      parts.push(`-font Helvetica -pointsize 12 -fill gray40 -annotate +35+${y} '> ${esc(entry.selectedOption)}'`);
       y += 18;
       parts.push(`-fill black`);
     }
@@ -164,7 +164,7 @@ function buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl, l
   const thankMsg = (labelSettings?.thankYou || 'Thanks {name}!').replace('{name}', esc(name.split(' ')[0]));
   const tagline = labelSettings?.tagline || 'We appreciate your support.';
   parts.push(`-gravity South -font Helvetica-Bold -pointsize 14 -annotate +0+75 '${esc(thankMsg)}'`);
-  parts.push(`-font Helvetica-pointsize 10 -fill gray30 -annotate +0+60 '${esc(tagline)}'`);
+  parts.push(`-font Helvetica -pointsize 10 -fill gray30 -annotate +0+60 '${esc(tagline)}'`);
 
   // "Find us" / site URL
   const displayUrl = siteUrl?.replace('https://', '').replace('http://', '').replace(/\/$/, '');
@@ -250,7 +250,7 @@ export async function printQRSticker(url, businessName) {
     const biz = esc(businessName || 'Scan to Order');
     execSync(`convert -size 288x288 xc:white \
       -gravity North -font Helvetica-Bold -pointsize 20 -annotate +0+8 'Scan to Order' \
-      -gravity South -font Helvetica-pointsize 12 -annotate +0+12 '${biz}' \
+      -gravity South -font Helvetica -pointsize 12 -annotate +0+12 '${biz}' \
       "${filePath}" && \
       composite -gravity Center -geometry +0+5 "${qrPath}" "${filePath}" "${filePath}"`,
       { timeout: 10000, shell: '/bin/bash' });
@@ -276,7 +276,7 @@ export function printTestLabel() {
     execSync(`convert -size 288x432 xc:white \
       -gravity Center \
       -font Helvetica-Bold -pointsize 42 -annotate +0-60 'ChowNow' \
-      -font Helvetica-pointsize 22 -annotate +0-10 'Printer Test' \
+      -font Helvetica -pointsize 22 -annotate +0-10 'Printer Test' \
       -pointsize 16 -fill green4 -annotate +0+30 'Printer is working!' \
       -fill gray50 -pointsize 12 -annotate +0+65 '${new Date().toLocaleString("en-AU")}' \
       "${filePath}"`, { timeout: 10000, shell: '/bin/bash' });
