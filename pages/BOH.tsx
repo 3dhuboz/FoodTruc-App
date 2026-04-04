@@ -141,10 +141,10 @@ const BOH: React.FC = () => {
         ]).catch(() => {});
       }
 
-      // When moving to READY → notify customer via SMS + email
+      // When moving to READY → notify customer via SMS + email (fire and forget — don't block cook)
       if (targetStatus === 'Ready' && order.customerPhone && settings.smsSettings?.enabled) {
         const payload = { ...order, status: 'Ready', pickupLocation: order.pickupLocation || settings.businessAddress };
-        await Promise.allSettled([
+        Promise.allSettled([
           fetch('/api/v1/sms/order-ready', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ settings: settings.smsSettings, order: payload, businessName: settings.businessName }),
@@ -153,7 +153,7 @@ const BOH: React.FC = () => {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ settings: settings.emailSettings, order: payload, businessName: settings.businessName }),
           }),
-        ]);
+        ]).catch(() => {});
       }
     } finally {
       setBumping(null);

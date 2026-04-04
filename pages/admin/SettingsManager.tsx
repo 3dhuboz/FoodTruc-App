@@ -1069,43 +1069,44 @@ const SettingsManager: React.FC = () => {
               </button>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-              {/* Database Status */}
-              <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 relative overflow-hidden group">
-                  <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold text-gray-500 uppercase">Firestore DB</span><Database size={16} className="text-gray-400"/></div>
-                  <div className="flex items-end gap-2"><div className={`w-3 h-3 rounded-full ${healthStatus.database === 'online' ? 'bg-green-500 animate-pulse' : healthStatus.database === 'offline' ? 'bg-gray-500' : 'bg-red-500'}`}></div><span className="text-2xl font-bold text-white leading-none">{healthStatus.database === 'online' ? 'Active' : healthStatus.database === 'offline' ? 'Offline' : 'Error'}</span></div>
-                  <p className="text-[10px] text-gray-400 mt-2 font-mono">Latency: <span className={dbLatency && dbLatency < 200 ? 'text-green-400' : 'text-yellow-400'}>{dbLatency ? `${dbLatency}ms` : '--'}</span></p>
+              {/* Database */}
+              <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                  <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold text-gray-500 uppercase">Database (D1)</span><Database size={16} className="text-gray-400"/></div>
+                  <div className="flex items-end gap-2"><div className={`w-3 h-3 rounded-full ${navigator.onLine ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div><span className="text-2xl font-bold text-white leading-none">{navigator.onLine ? 'Connected' : 'Offline'}</span></div>
+                  <p className="text-[10px] text-gray-400 mt-2 font-mono">Cloudflare D1 (SQLite)</p>
               </div>
-              {/* Auth Status */}
-              <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 relative overflow-hidden group">
-                  <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold text-gray-500 uppercase">Auth Service</span><Shield size={16} className="text-gray-400"/></div>
-                  <div className="flex items-end gap-2"><div className={`w-3 h-3 rounded-full ${healthStatus.auth === 'online' ? 'bg-green-500' : healthStatus.auth === 'local' ? 'bg-blue-500' : 'bg-yellow-500'}`}></div><span className="text-2xl font-bold text-white leading-none">{healthStatus.auth === 'online' ? 'Online' : healthStatus.auth === 'local' ? 'Local Admin' : 'Signed Out'}</span></div>
-                  <p className="text-[10px] text-gray-400 mt-2 font-mono">{healthStatus.auth === 'local' ? 'Credential: App Settings' : 'Provider: Firebase Auth'}</p>
+              {/* SMS */}
+              <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                  <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold text-gray-500 uppercase">SMS (ClickSend)</span><Smartphone size={16} className="text-gray-400"/></div>
+                  <div className="flex items-end gap-2"><div className={`w-3 h-3 rounded-full ${formData.smsSettings?.enabled && formData.smsSettings?.apiKey ? 'bg-green-500' : 'bg-yellow-500'}`}></div><span className="text-2xl font-bold text-white leading-none">{formData.smsSettings?.enabled ? 'Active' : 'Off'}</span></div>
+                  <p className="text-[10px] text-gray-400 mt-2 font-mono">{formData.smsSettings?.username || 'Not configured'}</p>
               </div>
-              {/* Connection Status */}
-              <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 relative overflow-hidden group">
-                  <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold text-gray-500 uppercase">Network</span>{healthStatus.database === 'offline' ? <WifiOff size={16} className="text-gray-400"/> : <Wifi size={16} className="text-gray-400"/>}</div>
-                  <div className="flex items-end gap-2"><span className="text-2xl font-bold text-white leading-none">{healthStatus.database === 'offline' ? 'Offline' : 'Secure'}</span></div>
-                  <p className="text-[10px] text-gray-400 mt-2 font-mono">TLS 1.3 / HTTPS</p>
+              {/* Network */}
+              <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                  <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold text-gray-500 uppercase">Network</span>{navigator.onLine ? <Wifi size={16} className="text-gray-400"/> : <WifiOff size={16} className="text-gray-400"/>}</div>
+                  <div className="flex items-end gap-2"><span className="text-2xl font-bold text-white leading-none">{navigator.onLine ? 'Secure' : 'Offline'}</span></div>
+                  <p className="text-[10px] text-gray-400 mt-2 font-mono">Cloudflare Pages + TLS 1.3</p>
               </div>
-              {/* Last Sync */}
-              <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 relative overflow-hidden group">
+              {/* Last Check */}
+              <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
                   <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold text-gray-500 uppercase">Last Pulse</span><Server size={16} className="text-gray-400"/></div>
                   <div className="flex items-end gap-2"><span className="text-xl font-bold text-white leading-none font-mono">{lastChecked}</span></div>
                   <p className="text-[10px] text-gray-400 mt-2">Auto-sync active</p>
               </div>
           </div>
-          {/* Firebase Config Editor */}
+          {/* Stack Info */}
           <div className="p-6 border-t border-gray-700 bg-gray-900/30">
-              <div className="flex justify-between items-center mb-4"><h5 className="text-xs font-bold text-gray-500 uppercase">Firebase Configuration</h5><div className="flex gap-4"><button onClick={runDeepDiagnostics} className="text-xs flex items-center gap-1 font-bold text-bbq-gold hover:text-white transition"><Terminal size={14}/> Run Deep Diagnostics</button><button onClick={handleResetFirebaseConfig} className="text-xs text-red-400 hover:underline">Reset to Default</button></div></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div><label className="text-xs text-gray-500 block font-bold mb-1">Project ID</label><input value={fbConfig.projectId} onChange={(e) => setFbConfig({...fbConfig, projectId: e.target.value})} className="w-full bg-black/30 border border-gray-700 rounded p-2 text-white text-sm"/></div>
-                  <div><label className="text-xs text-gray-500 block font-bold mb-1">Auth Domain</label><input value={fbConfig.authDomain} onChange={(e) => setFbConfig({...fbConfig, authDomain: e.target.value})} className="w-full bg-black/30 border border-gray-700 rounded p-2 text-white text-sm"/></div>
-                  <div><label className="text-xs text-gray-500 block font-bold mb-1">API Key</label><input value={fbConfig.apiKey} onChange={(e) => setFbConfig({...fbConfig, apiKey: e.target.value})} className="w-full bg-black/30 border border-gray-700 rounded p-2 text-white text-sm font-mono" type="password"/></div>
-                  <div><label className="text-xs text-gray-500 block font-bold mb-1">Storage Bucket</label><input value={fbConfig.storageBucket} onChange={(e) => setFbConfig({...fbConfig, storageBucket: e.target.value})} className="w-full bg-black/30 border border-gray-700 rounded p-2 text-white text-sm"/></div>
-                  <div><label className="text-xs text-gray-500 block font-bold mb-1">Messaging Sender ID</label><input value={fbConfig.messagingSenderId} onChange={(e) => setFbConfig({...fbConfig, messagingSenderId: e.target.value})} className="w-full bg-black/30 border border-gray-700 rounded p-2 text-white text-sm"/></div>
-                  <div><label className="text-xs text-gray-500 block font-bold mb-1">App ID</label><input value={fbConfig.appId} onChange={(e) => setFbConfig({...fbConfig, appId: e.target.value})} className="w-full bg-black/30 border border-gray-700 rounded p-2 text-white text-sm"/></div>
+              <h5 className="text-xs font-bold text-gray-500 uppercase mb-4">System Stack</h5>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div><span className="text-gray-500 text-xs block">Frontend</span><span className="text-white font-bold">React + Vite</span></div>
+                  <div><span className="text-gray-500 text-xs block">Backend</span><span className="text-white font-bold">Cloudflare Pages</span></div>
+                  <div><span className="text-gray-500 text-xs block">Database</span><span className="text-white font-bold">D1 (SQLite)</span></div>
+                  <div><span className="text-gray-500 text-xs block">SMS</span><span className="text-white font-bold">ClickSend</span></div>
+                  <div><span className="text-gray-500 text-xs block">Payments</span><span className="text-white font-bold">Square</span></div>
+                  <div><span className="text-gray-500 text-xs block">Printer</span><span className="text-white font-bold">Dymo 4XL (CUPS)</span></div>
+                  <div><span className="text-gray-500 text-xs block">Edge Server</span><span className="text-white font-bold">ChowBox (Pi 5)</span></div>
+                  <div><span className="text-gray-500 text-xs block">Tunnel</span><span className="text-white font-bold">Cloudflare Tunnel</span></div>
               </div>
-              <button onClick={handleSaveFirebaseConfig} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm transition">Update Firebase Connection (Reloads App)</button>
           </div>
       </section>
 
