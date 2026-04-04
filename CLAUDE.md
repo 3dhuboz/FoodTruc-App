@@ -40,17 +40,35 @@ ChowNow (chownow.au) is a multi-tenant SaaS food truck POS system. Food truck ow
 - Customer app: `{slug}.chownow.au` (tenant's branded app)
 
 ## Database (D1)
-Schema at `schema.sql`, migrations in `functions/api/v1/migrate.ts` (v1-v6):
-- `tenants` — multi-tenant with Stripe billing fields
+Schema at `schema.sql`, migrations in `functions/api/v1/migrate.ts` (v1-v8):
+- `tenants` — multi-tenant with Stripe billing fields + `stripe_account_id`, `stripe_onboarding_complete`
 - `users`, `menu_items`, `orders`, `calendar_events`, `social_posts`, `gallery_posts`, `settings`, `cook_days` — all tenant-scoped
+- `orders` — includes per-status timestamps: `confirmed_at`, `cooking_at`, `ready_at`, `completed_at`, `cancelled_at`
 - `chowbox_devices` — fleet tracking (heartbeats from Pi servers)
 - `schema_versions` — migration tracking
+- Platform settings stored in `settings` table with `tenant_id='default'`, `key='platform'`
 
 ## Stripe Integration
 - Signup flow: Landing → signup form → `POST /api/v1/signup` → Stripe Checkout (subscription + ChowBox one-time)
-- Webhook at `/api/v1/stripe/webhook` handles: `customer.subscription.created` (provisions tenant), `customer.subscription.deleted`, `invoice.payment_failed`
+- Webhook at `/api/v1/stripe/webhook` handles: `customer.subscription.created` (provisions tenant + auto-creates Express account), `customer.subscription.deleted`, `invoice.payment_failed`, `account.updated` (Connect onboarding)
 - Secrets: `STRIPE_SECRET_KEY`, `STRIPE_STARTER_PRICE_ID` ($99/mo), `STRIPE_PRO_PRICE_ID` ($149/mo), `STRIPE_PI_PRICE_ID` ($299 one-time)
 - Order payments: Stripe Checkout (QR orders) + Stripe Terminal (NFC tap-to-pay)
+
+### Stripe Connect (Payment Gateway)
+- Each food truck tenant gets a **Stripe Express connected account** (auto-created on signup)
+- Customer pays → money goes to truck's Stripe account → platform fee deducted automatically
+- Platform fee: configurable via Super Admin Settings (default 1.5%)
+- Endpoints: `POST /api/v1/stripe/connect-onboard` (create Express account + onboarding URL), `GET /api/v1/stripe/connect-status` (check onboarding + dashboard link)
+- Tenant onboarding: prompted on signup success page + available in tenant Settings
+- Fallback: tenants without connected accounts still process payments (to platform account)
+
+## Platform Settings (Super Admin)
+- Super Admin at `/#/super-admin` has 4 tabs: Overview, Tenants, Fleet, **Settings**
+- Platform settings stored in D1 (`tenant_id='default'`, `key='platform'`)
+- API: `GET/PUT /api/v1/admin/settings`
+- Controls: platform fee %, admin notification email, support email, branding, signups toggle, maintenance mode
+- OpenRouter API key managed at platform level — all tenants use this key for AI features
+- Tenant-level Email/SMS/Invoice settings removed — these are platform-managed services
 
 ## Key Features Implemented
 1. **QR Ordering** — customers scan, browse menu, order from phone
@@ -62,7 +80,9 @@ Schema at `schema.sql`, migrations in `functions/api/v1/migrate.ts` (v1-v6):
 7. **Offline Mode** — IndexedDB + outbox queue, Pi creates WiFi hotspot
 8. **Multi-tenant SaaS** — signup, Stripe billing, auto-provisioning
 9. **Fleet Management** — ChowBox heartbeats, admin panel, Cloudflare Tunnel remote access
-10. **Super Admin Panel** — `/#/super-admin` with Overview, Tenants, Fleet tabs
+10. **Super Admin Panel** — `/#/super-admin` with Overview, Tenants, Fleet, Settings tabs
+11. **Stripe Connect** — each tenant gets Express account, configurable platform fee on all sales
+12. **Order Analytics** — timing metrics (cook time, wait time), CSV export, workflow insights
 
 ## Branding
 - Logo files in `public/`: `logo.png` (icon), `logo-horizontal.png` (horizontal with tagline), `logo-full.png` (stacked), `favicon.png`, `icon-512.png`
@@ -99,9 +119,7 @@ Schema at `schema.sql`, migrations in `functions/api/v1/migrate.ts` (v1-v6):
   ```
 
 ## Pending Work
-- **Stripe price IDs**: Prices updated to $99/$149/$299 in Stripe (same IDs)
 - **Landing page**: Has animated demo, scroll story, pricing, signup modal — needs ongoing polish
-- **Admin super-panel**: Basic version at `/#/super-admin` — needs more features (edit tenant, view orders, support tools)
 - **Pi boot**: Getting the Pi 5 to boot from Seagate SSD with SSH enabled has been difficult. custom.toml is the Bookworm-native method. All config files are on the boot partition.
 
 ## Deploy Commands
@@ -116,4 +134,4 @@ npx wrangler d1 execute foodtruck-db --remote --command "SQL"  # Run SQL on live
 ## Git Repo
 - GitHub: https://github.com/3dhuboz/FoodTruc-App
 - Branch: main
-- Latest significant commits cover: multi-tenant umbrella, ChowNow rebrand, SaaS signup, landing page redesign, thermal printer, fleet management, collection PINs, super admin panel
+- Latest significant commits cover: multi-tenant umbrella, ChowNow rebrand, SaaS signup, landing page redesign, thermal printer, fleet management, collection PINs, super admin panel, Stripe Connect, platform settings, order analytics

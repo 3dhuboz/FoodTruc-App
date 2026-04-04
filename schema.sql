@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS tenants (
   plan TEXT NOT NULL DEFAULT 'starter',
   stripe_customer_id TEXT,
   stripe_account_id TEXT,
+  stripe_onboarding_complete INTEGER DEFAULT 0,
   stripe_subscription_id TEXT,
   billing_status TEXT DEFAULT 'active',
   owner_email TEXT,
@@ -110,7 +111,12 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_intent_id TEXT,
   square_checkout_id TEXT,
   source TEXT DEFAULT 'walk_up',
-  updated_at TEXT DEFAULT (datetime('now'))
+  updated_at TEXT DEFAULT (datetime('now')),
+  confirmed_at TEXT,
+  cooking_at TEXT,
+  ready_at TEXT,
+  completed_at TEXT,
+  cancelled_at TEXT
 );
 
 -- ─── Calendar Events ─────────────────────────────────────────

@@ -125,6 +125,24 @@ const MIGRATIONS: { version: number; name: string; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_chowbox_tenant ON chowbox_devices(tenant_id);
     `
   },
+  {
+    version: 7,
+    name: 'stripe_connect',
+    sql: `
+      ALTER TABLE tenants ADD COLUMN stripe_onboarding_complete INTEGER DEFAULT 0;
+    `
+  },
+  {
+    version: 8,
+    name: 'order_timestamps',
+    sql: `
+      ALTER TABLE orders ADD COLUMN confirmed_at TEXT;
+      ALTER TABLE orders ADD COLUMN cooking_at TEXT;
+      ALTER TABLE orders ADD COLUMN ready_at TEXT;
+      ALTER TABLE orders ADD COLUMN completed_at TEXT;
+      ALTER TABLE orders ADD COLUMN cancelled_at TEXT;
+    `
+  },
 ];
 
 export const onRequest = async (context: any) => {

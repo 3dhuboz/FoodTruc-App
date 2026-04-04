@@ -141,12 +141,19 @@ const SettingsManager: React.FC = () => {
   );
   const [geminiEditing, setGeminiEditing] = useState(false);
 
-  // Sync API key to runtime on mount so AI features work immediately
+  // Load AI key from platform settings (managed by ChowNow admin)
   useEffect(() => {
-    if (settings.geminiApiKey) {
-      import('../../services/gemini').then(m => m.setGeminiApiKey(settings.geminiApiKey));
-    }
-  }, [settings.geminiApiKey]);
+    fetch('/api/v1/admin/settings')
+      .then(r => r.json())
+      .then(data => {
+        const platformKey = data?.settings?.geminiApiKey;
+        if (platformKey) {
+          import('../../services/gemini').then(m => m.setGeminiApiKey(platformKey));
+          setGeminiStatus('connected');
+        }
+      })
+      .catch(() => {});
+  }, []);
   
   // Connection Wizard
   const [connectorType, setConnectorType] = useState<'stripe' | 'square' | 'smartpay' | 'clicksend' | null>(null);
@@ -162,6 +169,31 @@ const SettingsManager: React.FC = () => {
       environment: settings.squareEnvironment || 'sandbox'
     });
   }, [settings]);
+
+  // Check if returning from Stripe Connect onboarding
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('stripe_onboarded=true')) {
+      // Poll connect status to update settings
+      fetch('/api/v1/stripe/connect-status')
+        .then(r => r.json())
+        .then(data => {
+          if (data.connected) {
+            updateSettings({ stripeConnected: true });
+            toast('Stripe account connected successfully!', 'success');
+          } else {
+            toast('Stripe onboarding incomplete. You can resume from Settings anytime.', 'warning');
+          }
+        })
+        .catch(() => {});
+      // Clean URL
+      window.location.hash = window.location.hash.replace(/[?&]stripe_onboarded=true/, '');
+    }
+    if (hash.includes('stripe_refresh=true')) {
+      toast('Stripe onboarding session expired. Click "Connect Stripe" to resume.', 'warning');
+      window.location.hash = window.location.hash.replace(/[?&]stripe_refresh=true/, '');
+    }
+  }, []);
 
   useEffect(() => {
      checkSystemHealth();
@@ -836,129 +868,112 @@ const SettingsManager: React.FC = () => {
       </Section>
 
 
-      {/* --- AI CONFIGURATION --- */}
-      <Section title="AI Configuration (OpenRouter)" icon={<Wand2 size={18} className="text-bbq-gold"/>}>
-
-          {/* Status Card */}
-          <div className={`border rounded-xl p-5 mb-4 ${geminiStatus === 'connected' ? 'border-green-600/40 bg-green-950/20' : geminiStatus === 'error' ? 'border-red-600/40 bg-red-950/20' : 'border-gray-700 bg-black/20'}`}>
-              <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${geminiStatus === 'connected' ? 'bg-green-600/20' : geminiStatus === 'error' ? 'bg-red-600/20' : 'bg-gray-800'}`}>
-                          <Wand2 size={20} className={geminiStatus === 'connected' ? 'text-green-400' : geminiStatus === 'error' ? 'text-red-400' : 'text-gray-500'}/>
-                      </div>
-                      <div>
-                          <h5 className="font-bold text-white">OpenRouter AI</h5>
-                          <p className="text-xs text-gray-400">
-                              {geminiStatus === 'connected' && 'Connected — AI features active for all admins'}
-                              {geminiStatus === 'idle' && 'Not connected'}
-                              {geminiStatus === 'saving' && 'Saving key...'}
-                              {geminiStatus === 'testing' && 'Testing connection...'}
-                              {geminiStatus === 'error' && 'Connection failed — check key'}
-                          </p>
-                      </div>
+      {/* --- AI STATUS (read-only — managed by platform) --- */}
+      <Section title="AI Features" icon={<Wand2 size={18} className="text-bbq-gold"/>}>
+          <div className={`border rounded-xl p-5 ${geminiStatus === 'connected' ? 'border-green-600/40 bg-green-950/20' : 'border-gray-700 bg-black/20'}`}>
+              <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${geminiStatus === 'connected' ? 'bg-green-600/20' : 'bg-gray-800'}`}>
+                      <Wand2 size={20} className={geminiStatus === 'connected' ? 'text-green-400' : 'text-gray-500'}/>
                   </div>
-                  {geminiStatus === 'connected' && <span className="flex items-center gap-1 text-green-400 text-xs font-bold"><CheckCircle size={14}/> Active</span>}
-                  {(geminiStatus === 'saving' || geminiStatus === 'testing') && <Loader2 size={16} className="text-bbq-gold animate-spin"/>}
-                  {geminiStatus === 'error' && <span className="flex items-center gap-1 text-red-400 text-xs font-bold"><AlertCircle size={14}/> Error</span>}
+                  <div>
+                      <h5 className="font-bold text-white">OpenRouter AI</h5>
+                      <p className="text-xs text-gray-400">
+                          {geminiStatus === 'connected'
+                              ? <span className="text-green-400 flex items-center gap-1"><CheckCircle size={12}/> Active — AI image generation and content features enabled</span>
+                              : 'Not configured — contact your ChowNow admin to enable AI features'}
+                      </p>
+                  </div>
               </div>
-
-              {/* Connected State */}
-              {geminiStatus === 'connected' && !geminiEditing && (
-                  <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={async () => {
-                          setGeminiStatus('testing');
-                          try {
-                              const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${geminiKey}` },
-                                body: JSON.stringify({ model: 'google/gemini-2.5-flash', messages: [{ role: 'user', content: 'Say OK' }] }),
-                              });
-                              const data = await res.json();
-                              if (data.choices?.[0]?.message?.content) { setGeminiStatus('connected'); toast('OpenRouter AI connection verified!', 'success'); }
-                              else { setGeminiStatus('error'); toast('No response from AI.', 'error'); }
-                          } catch (e: any) {
-                              console.error('OpenRouter test error:', e);
-                              setGeminiStatus('error');
-                              toast('Test failed: ' + (e?.message || e), 'error');
-                          }
-                      }} className="bg-blue-600/20 text-blue-400 border border-blue-600/40 px-4 py-2 rounded text-sm font-bold hover:bg-blue-600/30 transition">
-                          Test Connection
-                      </button>
-                      <button type="button" onClick={() => { setGeminiEditing(true); setGeminiKey(''); }}
-                          className="bg-bbq-gold/20 text-bbq-gold border border-bbq-gold/40 px-4 py-2 rounded text-sm font-bold hover:bg-bbq-gold/30 transition">
-                          Reconnect with New Key
-                      </button>
-                      <button type="button" onClick={async () => {
-                          setGeminiStatus('saving');
-                          try {
-                              await restSetDoc('settings', 'general', { geminiApiKey: '' });
-                          } catch (_) {}
-                          setGeminiKey('');
-                          setGeminiStatus('idle');
-                          setGeminiEditing(false);
-                          toast('OpenRouter AI disconnected.');
-                      }} className="bg-red-600/20 text-red-400 border border-red-600/40 px-4 py-2 rounded text-sm font-bold hover:bg-red-600/30 transition">
-                          Disconnect
-                      </button>
-                  </div>
-              )}
-
-              {/* Error State */}
-              {geminiStatus === 'error' && !geminiEditing && (
-                  <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => { setGeminiEditing(true); setGeminiKey(''); }}
-                          className="bg-bbq-gold text-black font-bold px-4 py-2 rounded text-sm hover:bg-yellow-500 transition">
-                          Enter New Key
-                      </button>
-                  </div>
-              )}
-
-              {/* Input State */}
-              {(geminiStatus === 'idle' || geminiEditing || geminiStatus === 'error') && (geminiEditing || geminiStatus !== 'error') && (
-                  <div className="space-y-3">
-                      <div className="flex gap-2">
-                          <input type="text" autoComplete="off" value={geminiKey} onChange={e => setGeminiKey(e.target.value)}
-                              placeholder="Paste your OpenRouter API Key (sk-or-...)..."
-                              className="flex-1 bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
-                          />
-                          <button type="button" disabled={geminiStatus === 'saving'}
-                              className="bg-bbq-gold text-black font-bold px-4 py-2 rounded text-sm hover:bg-yellow-500 transition whitespace-nowrap disabled:opacity-50"
-                              onClick={() => {
-                                  const key = geminiKey.trim();
-                                  if (!key) { toast('Enter a key first.', 'warning'); return; }
-                                  // Set runtime key immediately, persist to Firestore
-                                  import('../../services/gemini').then(m => m.setGeminiApiKey(key));
-                                  setGeminiStatus('connected');
-                                  setGeminiEditing(false);
-                                  toast('OpenRouter key active! Syncing to cloud...', 'success');
-                                  // Use REST API for reliable cloud sync
-                                  restSetDoc('settings', 'general', { geminiApiKey: key })
-                                      .then(() => toast('Synced to cloud — all admins will now have AI access.', 'success'))
-                                      .catch(err => { console.error('Cloud sync failed:', err); toast('Cloud sync failed — key saved locally only.', 'warning'); });
-                              }}
-                          >
-                              {geminiStatus === 'saving' ? 'Saving...' : 'Save Key'}
-                          </button>
-                          {geminiEditing && (
-                              <button type="button" onClick={() => {
-                                  setGeminiKey(settings.geminiApiKey || '');
-                                  setGeminiEditing(false);
-                              }} className="text-gray-400 hover:text-white px-3 py-2 rounded text-sm border border-gray-700 hover:border-gray-500 transition">
-                                  Cancel
-                              </button>
-                          )}
-                      </div>
-                      <div className="text-xs text-gray-500 flex items-start gap-2">
-                          <Info size={14} className="shrink-0 mt-0.5"/>
-                          <span>Get your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" className="text-bbq-gold hover:underline">openrouter.ai/keys</a>. Powers AI content, images, and recommendations.</span>
-                      </div>
-                  </div>
-              )}
           </div>
       </Section>
 
       {/* --- PAYMENT GATEWAY --- */}
       <Section title="Payment Gateway" icon={<Banknote size={18} className="text-green-400"/>}>
+
+          {/* Stripe Connect Card */}
+          <div className={`border rounded-xl p-5 mb-6 ${settings.stripeConnected ? 'border-green-600/40 bg-green-950/20' : 'border-orange-600/40 bg-orange-950/10'}`}>
+              <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${settings.stripeConnected ? 'bg-green-600/20' : 'bg-orange-600/20'}`}>
+                          <CreditCard size={20} className={settings.stripeConnected ? 'text-green-400' : 'text-orange-400'}/>
+                      </div>
+                      <div>
+                          <h5 className="font-bold text-white">Stripe Payments</h5>
+                          <p className="text-xs text-gray-400">
+                              {settings.stripeConnected
+                                  ? <span className="text-green-400 flex items-center gap-1"><CheckCircle size={12}/> Connected — Accepting payments</span>
+                                  : <span className="text-orange-400">Setup required to accept payments</span>}
+                          </p>
+                      </div>
+                  </div>
+                  {settings.stripeConnected ? (
+                      <button
+                          onClick={async () => {
+                              try {
+                                  const res = await fetch(`/api/v1/stripe/connect-status?dashboard=true`, { headers: { 'Content-Type': 'application/json' } });
+                                  const data = await res.json();
+                                  if (data.dashboardUrl) window.open(data.dashboardUrl, '_blank');
+                                  else toast('Could not load Stripe dashboard', 'error');
+                              } catch { toast('Failed to open dashboard', 'error'); }
+                          }}
+                          className="text-xs text-blue-400 hover:text-blue-300 border border-blue-800 px-3 py-1.5 rounded-lg hover:bg-blue-900/20 transition flex items-center gap-1"
+                      >
+                          <ExternalLink size={12}/> Stripe Dashboard
+                      </button>
+                  ) : (
+                      <button
+                          onClick={async () => {
+                              setIsConnecting(true);
+                              try {
+                                  const res = await fetch('/api/v1/stripe/connect-onboard', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({}),
+                                  });
+                                  const data = await res.json();
+                                  if (data.url) window.location.href = data.url;
+                                  else toast(data.error || 'Failed to start onboarding', 'error');
+                              } catch (e: any) {
+                                  toast(e.message || 'Connection failed', 'error');
+                              } finally {
+                                  setIsConnecting(false);
+                              }
+                          }}
+                          disabled={isConnecting}
+                          className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm transition flex items-center gap-2"
+                      >
+                          {isConnecting ? <><Loader2 size={14} className="animate-spin"/> Connecting...</> : <><ArrowRight size={14}/> Connect Stripe</>}
+                      </button>
+                  )}
+              </div>
+
+              {settings.stripeConnected && (
+                  <div className="border-t border-gray-700 pt-4 mt-2">
+                      <div className="flex items-center gap-4 text-sm">
+                          <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                              <span className="text-gray-400">Card payments</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                              <span className="text-gray-400">Apple Pay / Google Pay</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                              <span className="text-gray-400">Payouts to your bank</span>
+                          </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-3">A 1.5% platform fee is applied to each transaction. Payouts are handled automatically by Stripe.</p>
+                  </div>
+              )}
+
+              {!settings.stripeConnected && (
+                  <div className="text-xs text-gray-500 flex items-start gap-2 mt-2">
+                      <Info size={14} className="shrink-0 mt-0.5"/>
+                      <span>Click "Connect Stripe" to complete a quick onboarding. Stripe handles identity verification, tax forms, and payouts. You'll be redirected to Stripe and brought back here when done.</span>
+                  </div>
+              )}
+          </div>
 
           {/* Square Status Card */}
           <div className={`border rounded-xl p-5 mb-6 ${settings.squareConnected ? 'border-green-600/40 bg-green-950/20' : 'border-gray-700 bg-black/20'}`}>
@@ -1114,7 +1129,7 @@ const SettingsManager: React.FC = () => {
                   <div><span className="text-gray-500 text-xs block">Backend</span><span className="text-white font-bold">Cloudflare Pages</span></div>
                   <div><span className="text-gray-500 text-xs block">Database</span><span className="text-white font-bold">D1 (SQLite)</span></div>
                   <div><span className="text-gray-500 text-xs block">SMS</span><span className="text-white font-bold">ClickSend</span></div>
-                  <div><span className="text-gray-500 text-xs block">Payments</span><span className="text-white font-bold">Square</span></div>
+                  <div><span className="text-gray-500 text-xs block">Payments</span><span className="text-white font-bold">Stripe Connect</span></div>
                   <div><span className="text-gray-500 text-xs block">Printer</span><span className="text-white font-bold">Dymo 4XL (CUPS)</span></div>
                   <div><span className="text-gray-500 text-xs block">Edge Server</span><span className="text-white font-bold">ChowBox (Pi 5)</span></div>
                   <div><span className="text-gray-500 text-xs block">Tunnel</span><span className="text-white font-bold">Cloudflare Tunnel</span></div>
@@ -1430,600 +1445,16 @@ const SettingsManager: React.FC = () => {
       </Section>
 
 
-      {/* --- EMAIL SETTINGS --- */}
-      <Section title="Email Settings" icon={<MessageSquare size={18} className="text-purple-500"/>}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                  <label className="flex items-center gap-3 cursor-pointer bg-black/20 p-3 rounded border border-gray-700">
-                      <input 
-                          type="checkbox"
-                          checked={formData.emailSettings?.enabled || false}
-                          onChange={e => setFormData({ 
-                              ...formData, 
-                              emailSettings: { ...formData.emailSettings!, enabled: e.target.checked } 
-                          })}
-                          className="w-5 h-5 text-bbq-red rounded focus:ring-bbq-red"
-                      />
-                      <span className="font-bold text-white">Enable Email Notifications</span>
-                  </label>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Provider</label>
-                      <select 
-                          value={formData.emailSettings?.provider || 'smtp'}
-                          onChange={e => setFormData({ 
-                              ...formData, 
-                              emailSettings: { ...formData.emailSettings!, provider: e.target.value as any } 
-                          })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white"
-                      >
-                          <option value="smtp">SMTP (Custom)</option>
-                          <option value="sendgrid">SendGrid</option>
-                          <option value="mailgun">Mailgun</option>
-                      </select>
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">From Email</label>
-                      <input 
-                          value={formData.emailSettings?.fromEmail || ''}
-                          onChange={e => setFormData({ 
-                              ...formData, 
-                              emailSettings: { ...formData.emailSettings!, fromEmail: e.target.value } 
-                          })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white"
-                      />
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">From Name</label>
-                      <input 
-                          value={formData.emailSettings?.fromName || ''}
-                          onChange={e => setFormData({ 
-                              ...formData, 
-                              emailSettings: { ...formData.emailSettings!, fromName: e.target.value } 
-                          })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white"
-                      />
-                  </div>
-                  
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Admin Email (Receives Order Alerts)</label>
-                      <input 
-                          value={formData.emailSettings?.adminEmail || ''}
-                          onChange={e => setFormData({ 
-                              ...formData, 
-                              emailSettings: { ...formData.emailSettings!, adminEmail: e.target.value } 
-                          })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white"
-                      />
-                  </div>
-              </div>
-
-              <div className="space-y-4">
-                  {formData.emailSettings?.provider === 'smtp' ? (
-                      <>
-                          <div className="p-4 bg-black/20 rounded-lg border border-gray-700 space-y-4">
-                              <div>
-                                  <label className="text-xs font-bold text-gray-500 uppercase">SMTP Host</label>
-                                  <input 
-                                      value={formData.emailSettings?.smtpHost || ''}
-                                      placeholder="mail.yourdomain.com.au"
-                                      onChange={e => setFormData({ 
-                                          ...formData, 
-                                          emailSettings: { ...formData.emailSettings!, smtpHost: e.target.value } 
-                                      })}
-                                      className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white"
-                                  />
-                              </div>
-                              <div>
-                                  <label className="text-xs font-bold text-gray-500 uppercase">SMTP Port</label>
-                                  <input 
-                                      type="number"
-                                      placeholder="465"
-                                      value={formData.emailSettings?.smtpPort || ''}
-                                      onChange={e => setFormData({ 
-                                          ...formData, 
-                                          emailSettings: { ...formData.emailSettings!, smtpPort: parseInt(e.target.value) } 
-                                      })}
-                                      className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white"
-                                  />
-                              </div>
-                              <div>
-                                  <label className="text-xs font-bold text-gray-500 uppercase">SMTP User</label>
-                                  <input 
-                                      value={formData.emailSettings?.smtpUser || ''}
-                                      placeholder="Your full email address"
-                                      onChange={e => setFormData({ 
-                                          ...formData, 
-                                          emailSettings: { ...formData.emailSettings!, smtpUser: e.target.value } 
-                                      })}
-                                      className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white"
-                                  />
-                              </div>
-                              <div>
-                                  <label className="text-xs font-bold text-gray-500 uppercase">SMTP Password</label>
-                                  <input 
-                                      type="password"
-                                      autoComplete="off"
-                                      value={formData.emailSettings?.smtpPass || ''}
-                                      placeholder="Your email password"
-                                      onChange={e => setFormData({ 
-                                          ...formData, 
-                                          emailSettings: { ...formData.emailSettings!, smtpPass: e.target.value } 
-                                      })}
-                                      className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white"
-                                  />
-                              </div>
-                          </div>
-                          <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-700 text-xs text-blue-300 flex gap-2">
-                              <Info size={16} className="shrink-0 mt-0.5"/>
-                              <div>
-                                  <strong className="block">SiteGround GoGeek Guide</strong>
-                                  Use the <strong className="text-white">SSL/TLS</strong> settings from SiteGround cPanel &gt; Email Accounts &gt; Connect Devices. Port is usually <strong className="text-white">465</strong>. The 'User' is your <strong className="text-white">full email address</strong>.
-                              </div>
-                          </div>
-                      </>
-                  ) : (
-                      <div>
-                          <label className="text-xs font-bold text-gray-500 uppercase">API Key</label>
-                          <input 
-                              type="password"
-                              autoComplete="off"
-                              value={formData.emailSettings?.apiKey || ''}
-                              onChange={e => setFormData({ 
-                                  ...formData, 
-                                  emailSettings: { ...formData.emailSettings!, apiKey: e.target.value } 
-                              })}
-                              className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white"
-                          />
-                      </div>
-                  )}
-                  
-                  <div className="pt-4 border-t border-gray-700 mt-4 space-y-3">
-                      {emailTestResult && (
-                          <div className={`flex items-start gap-2 p-3 rounded-lg text-sm ${
-                              emailTestResult.ok
-                                  ? 'bg-green-900/30 border border-green-700 text-green-300'
-                                  : 'bg-red-900/30 border border-red-700 text-red-300'
-                          }`}>
-                              {emailTestResult.ok ? <CheckCircle size={16} className="shrink-0 mt-0.5"/> : <AlertCircle size={16} className="shrink-0 mt-0.5"/>}
-                              <span>{emailTestResult.msg}</span>
-                          </div>
-                      )}
-                      <button
-                          disabled={isTestingEmail}
-                          onClick={async () => {
-                              setEmailTestResult(null);
-                              setIsTestingEmail(true);
-                              try {
-                                  const res = await fetch('/api/v1/email/test', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                          settings: formData.emailSettings,
-                                          to: formData.emailSettings?.adminEmail || formData.emailSettings?.fromEmail
-                                      })
-                                  });
-                                  const contentType = res.headers.get('content-type');
-                                  if (contentType?.includes('application/json')) {
-                                      const data = await res.json();
-                                      if (res.ok && data.success) {
-                                          setEmailTestResult({ ok: true, msg: `Test email sent! Check your inbox. Message ID: ${data.messageId}` });
-                                      } else {
-                                          setEmailTestResult({ ok: false, msg: data.error || 'Unknown error from server' });
-                                      }
-                                  } else {
-                                      const text = await res.text();
-                                      setEmailTestResult({ ok: false, msg: `Unexpected server response (${res.status}): ${text.slice(0, 120)}` });
-                                  }
-                              } catch (e: any) {
-                                  setEmailTestResult({ ok: false, msg: `Network error — is the dev server running? ${e.message}` });
-                              } finally {
-                                  setIsTestingEmail(false);
-                              }
-                          }}
-                          className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold py-2 rounded text-sm transition flex items-center justify-center gap-2"
-                      >
-                          {isTestingEmail ? <><Loader2 size={15} className="animate-spin"/> Sending...</> : 'Send Test Email'}
-                      </button>
-                  </div>
-              </div>
+      {/* --- EMAIL, SMS & INVOICES (managed by platform) --- */}
+      <Section title="Email, SMS & Invoices" icon={<MessageSquare size={18} className="text-purple-500"/>}>
+          <div className="border border-gray-700 bg-black/20 rounded-xl p-5 text-center">
+              <MessageSquare size={32} className="text-gray-600 mx-auto mb-3" />
+              <h5 className="text-white font-bold mb-1">Managed by ChowNow</h5>
+              <p className="text-gray-500 text-sm">Email notifications, SMS alerts, and invoice templates are configured at the platform level. Your customers will receive branded communications automatically.</p>
           </div>
       </Section>
 
-      {/* --- SMS SETTINGS (CLICKSEND) --- */}
-      <Section title="SMS (ClickSend)" icon={<Smartphone size={18} className="text-green-400"/>} badge={formData.smsSettings?.enabled ? 'active' : undefined}>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                  <label className="flex items-center gap-3 cursor-pointer bg-black/20 p-3 rounded border border-gray-700">
-                      <input
-                          type="checkbox"
-                          checked={formData.smsSettings?.enabled || false}
-                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, enabled: e.target.checked, username: formData.smsSettings?.username || '', apiKey: formData.smsSettings?.apiKey || '', fromNumber: formData.smsSettings?.fromNumber || '', adminPhone: formData.smsSettings?.adminPhone || '' } })}
-                          className="w-5 h-5 text-green-500 rounded focus:ring-green-500"
-                      />
-                      <div>
-                          <span className="font-bold text-white block">Enable SMS Notifications</span>
-                          <span className="text-xs text-gray-400">Sends order alerts to admin and confirmation to customers.</span>
-                      </div>
-                  </label>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Username</label>
-                      <input
-                          title="ClickSend Username (email)"
-                          placeholder="you@example.com"
-                          value={formData.smsSettings?.username || ''}
-                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, username: e.target.value } as any })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
-                      />
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">API Key</label>
-                      <input
-                          type="password"
-                          autoComplete="off"
-                          title="ClickSend API Key"
-                          placeholder="Your ClickSend API Key"
-                          value={formData.smsSettings?.apiKey || ''}
-                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, apiKey: e.target.value } as any })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
-                      />
-                  </div>
-              </div>
-
-              <div className="space-y-4">
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">From Number</label>
-                      <input
-                          title="ClickSend sender ID or number"
-                          placeholder="+61400000000 or ChowNow"
-                          value={formData.smsSettings?.fromNumber || ''}
-                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, fromNumber: e.target.value } as any })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Sender ID (e.g. your business name) or phone number in E.164 format</p>
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Admin Phone (Receives Order Alerts)</label>
-                      <input
-                          title="Admin phone number"
-                          placeholder="+61400000000"
-                          value={formData.smsSettings?.adminPhone || ''}
-                          onChange={e => setFormData({ ...formData, smsSettings: { ...formData.smsSettings!, adminPhone: e.target.value } as any })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
-                      />
-                  </div>
-
-                  <div className="p-3 bg-blue-900/20 rounded-lg border border-blue-700 text-xs text-blue-300 flex gap-2">
-                      <Info size={16} className="shrink-0 mt-0.5"/>
-                      <div>
-                          <strong className="block">ClickSend Trial Note</strong>
-                          Trial accounts have limited credit. Top up to send unlimited SMS. Find credentials at: <span className="text-white">dashboard.clicksend.com → Developers → API Credentials</span>
-                      </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-gray-700 space-y-3">
-                      {smsTestResult && (
-                          <div className={`flex items-start gap-2 p-3 rounded-lg text-sm ${
-                              smsTestResult.ok
-                                  ? 'bg-green-900/30 border border-green-700 text-green-300'
-                                  : 'bg-red-900/30 border border-red-700 text-red-300'
-                          }`}>
-                              {smsTestResult.ok ? <CheckCircle size={16} className="shrink-0 mt-0.5"/> : <AlertCircle size={16} className="shrink-0 mt-0.5"/>}
-                              <span>{smsTestResult.msg}</span>
-                          </div>
-                      )}
-                      <button
-                          disabled={isTestingSms}
-                          onClick={async () => {
-                              setSmsTestResult(null);
-                              setIsTestingSms(true);
-                              try {
-                                  const res = await fetch('/api/v1/sms/test', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                          settings: formData.smsSettings,
-                                          to: formData.smsSettings?.adminPhone
-                                      })
-                                  });
-                                  const contentType = res.headers.get('content-type');
-                                  if (contentType?.includes('application/json')) {
-                                      const data = await res.json();
-                                      if (res.ok && data.success) {
-                                          setSmsTestResult({ ok: true, msg: `Test SMS sent! Check your phone. SID: ${data.sid}` });
-                                      } else {
-                                          setSmsTestResult({ ok: false, msg: data.error || 'Unknown error from server' });
-                                      }
-                                  } else {
-                                      const text = await res.text();
-                                      setSmsTestResult({ ok: false, msg: `Unexpected server response (${res.status}): ${text.slice(0, 120)}` });
-                                  }
-                              } catch (e: any) {
-                                  setSmsTestResult({ ok: false, msg: `Network error — is the dev server running? ${e.message}` });
-                              } finally {
-                                  setIsTestingSms(false);
-                              }
-                          }}
-                          className="w-full bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white font-bold py-2 rounded text-sm transition flex items-center justify-center gap-2"
-                      >
-                          {isTestingSms ? <><Loader2 size={15} className="animate-spin"/> Sending SMS...</> : 'Send Test SMS'}
-                      </button>
-                  </div>
-              </div>
-          </div>
-      </Section>
-
-
-      {/* --- LABEL & PRINTING --- */}
-      <Section title="Label & Printing" icon={<Printer size={18} className="text-cyan-400"/>}>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Thank You Message</label>
-                      <input
-                          title="Thank you message on label"
-                          placeholder="Thanks {name}!"
-                          value={formData.labelSettings?.thankYou || ''}
-                          onChange={e => setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, thankYou: e.target.value, tagline: formData.labelSettings?.tagline || '', socialUrl: formData.labelSettings?.socialUrl || '', logoUrl: formData.labelSettings?.logoUrl || '' } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Use {'{name}'} to insert customer's first name</p>
-                  </div>
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Tagline</label>
-                      <input
-                          title="Tagline below thank you"
-                          placeholder="We appreciate your support."
-                          value={formData.labelSettings?.tagline || ''}
-                          onChange={e => setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, tagline: e.target.value } as any })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                      />
-                  </div>
-              </div>
-              <div className="space-y-4">
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Social / Website QR URL</label>
-                      <input
-                          title="URL encoded in the QR code on the label"
-                          placeholder="https://smokyjoes.chownow.au"
-                          value={formData.labelSettings?.socialUrl || ''}
-                          onChange={e => setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, socialUrl: e.target.value } as any })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">QR code on label links here — use your website, Instagram, or Linktree</p>
-                  </div>
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Label Logo</label>
-                      <div className="flex gap-2">
-                          <input
-                              title="Override logo for printed labels"
-                              placeholder="Uses main logo if empty"
-                              value={formData.labelSettings?.logoUrl || ''}
-                              onChange={e => setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, logoUrl: e.target.value } as any })}
-                              className="flex-1 bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                          />
-                          <label className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded cursor-pointer flex items-center gap-1 text-xs font-bold transition">
-                              <Upload size={14} />
-                              <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                                  const file = e.target.files?.[0];
-                                  if (!file) return;
-                                  const reader = new FileReader();
-                                  reader.onload = async () => {
-                                      const compressed = await compressImage(reader.result as string, 200, 0.8);
-                                      setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, logoUrl: compressed } as any });
-                                  };
-                                  reader.readAsDataURL(file);
-                              }} />
-                              Upload
-                          </label>
-                      </div>
-                      {formData.labelSettings?.logoUrl && (
-                          <img src={formData.labelSettings.logoUrl} alt="Label logo" className="mt-2 h-12 rounded bg-white p-1" onError={e => (e.currentTarget.style.display = 'none')} />
-                      )}
-                  </div>
-              </div>
-          </div>
-      </Section>
-
-      {/* --- INVOICE TEMPLATE --- */}
-      <Section title="Invoice Template" icon={<FileCode size={18} className="text-amber-400"/>}>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Payment Button Label</label>
-                      <input
-                          title="Payment button text"
-                          placeholder="Pay Now"
-                          value={formData.invoiceSettings?.paymentLabel || 'Pay Now'}
-                          onChange={e => setFormData({ ...formData, invoiceSettings: { ...formData.invoiceSettings!, paymentLabel: e.target.value } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Text shown on the payment button in email invoices.</p>
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Invoice Logo</label>
-                      <div className="flex gap-2 mb-2">
-                          <input
-                              title="Logo URL"
-                              placeholder="Paste a URL or upload an image..."
-                              value={formData.invoiceSettings?.logoUrl || ''}
-                              onChange={e => setFormData({ ...formData, invoiceSettings: { ...formData.invoiceSettings!, logoUrl: e.target.value } })}
-                              className="flex-1 bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
-                          />
-                          <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              id="invoice-logo-upload"
-                              onChange={async (e) => {
-                                  const file = e.target.files?.[0];
-                                  if (!file) return;
-                                  const reader = new FileReader();
-                                  reader.onloadend = async () => {
-                                      const compressed = await compressImage(reader.result as string, 400, 0.8);
-                                      setFormData(prev => ({ ...prev, invoiceSettings: { ...prev.invoiceSettings!, logoUrl: compressed } }));
-                                  };
-                                  reader.readAsDataURL(file);
-                              }}
-                          />
-                          <button
-                              onClick={() => document.getElementById('invoice-logo-upload')?.click()}
-                              className="bg-gray-800 border border-gray-600 p-2 rounded hover:bg-gray-700 text-gray-300"
-                              title="Upload Logo"
-                          >
-                              <Upload size={16}/>
-                          </button>
-                      </div>
-                      {formData.invoiceSettings?.logoUrl && (
-                          <div className="w-full h-20 rounded-lg overflow-hidden border border-gray-700 relative group bg-white/5 flex items-center justify-center">
-                              <img src={formData.invoiceSettings.logoUrl} className="max-h-full max-w-full object-contain p-2" alt="Invoice Logo"/>
-                              <button
-                                  onClick={() => setFormData(prev => ({ ...prev, invoiceSettings: { ...prev.invoiceSettings!, logoUrl: '' } }))}
-                                  className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition hover:bg-red-600"
-                              >
-                                  <X size={12}/>
-                              </button>
-                          </div>
-                      )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                      <div>
-                          <label className="text-xs font-bold text-gray-500 uppercase">Header Color</label>
-                          <div className="flex items-center gap-2">
-                              <input
-                                  type="color"
-                                  title="Header color"
-                                  value={formData.invoiceSettings?.headerColor || '#d9381e'}
-                                  onChange={e => setFormData({ ...formData, invoiceSettings: { ...formData.invoiceSettings!, headerColor: e.target.value } })}
-                                  className="w-10 h-10 rounded cursor-pointer border border-gray-700 bg-transparent"
-                              />
-                              <input
-                                  title="Header color hex"
-                                  value={formData.invoiceSettings?.headerColor || '#d9381e'}
-                                  onChange={e => setFormData({ ...formData, invoiceSettings: { ...formData.invoiceSettings!, headerColor: e.target.value } })}
-                                  className="flex-1 bg-black/40 border border-gray-700 rounded p-2 text-white text-sm font-mono"
-                              />
-                          </div>
-                      </div>
-                      <div>
-                          <label className="text-xs font-bold text-gray-500 uppercase">Accent Color</label>
-                          <div className="flex items-center gap-2">
-                              <input
-                                  type="color"
-                                  title="Accent color"
-                                  value={formData.invoiceSettings?.accentColor || '#eab308'}
-                                  onChange={e => setFormData({ ...formData, invoiceSettings: { ...formData.invoiceSettings!, accentColor: e.target.value } })}
-                                  className="w-10 h-10 rounded cursor-pointer border border-gray-700 bg-transparent"
-                              />
-                              <input
-                                  title="Accent color hex"
-                                  value={formData.invoiceSettings?.accentColor || '#eab308'}
-                                  onChange={e => setFormData({ ...formData, invoiceSettings: { ...formData.invoiceSettings!, accentColor: e.target.value } })}
-                                  className="flex-1 bg-black/40 border border-gray-700 rounded p-2 text-white text-sm font-mono"
-                              />
-                          </div>
-                      </div>
-                  </div>
-              </div>
-
-              <div className="space-y-4">
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Thank You / Intro Message</label>
-                      <textarea
-                          title="Invoice intro message"
-                          rows={2}
-                          placeholder="Here's your invoice. Please review..."
-                          value={formData.invoiceSettings?.thankYouMessage || ''}
-                          onChange={e => setFormData({ ...formData, invoiceSettings: { ...formData.invoiceSettings!, thankYouMessage: e.target.value } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm resize-none"
-                      />
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Bank / Payment Details (shown if no payment link)</label>
-                      <textarea
-                          title="Bank details"
-                          rows={3}
-                          placeholder="BSB: 000-000&#10;Account: 12345678&#10;Name: Your Business"
-                          value={formData.invoiceSettings?.bankDetails || ''}
-                          onChange={e => setFormData({ ...formData, invoiceSettings: { ...formData.invoiceSettings!, bankDetails: e.target.value } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm resize-none font-mono"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Displayed when no payment URL is set. Each line appears as-is.</p>
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">Footer Note</label>
-                      <textarea
-                          title="Invoice footer note"
-                          rows={2}
-                          placeholder="Thank you for your business!..."
-                          value={formData.invoiceSettings?.footerNote || ''}
-                          onChange={e => setFormData({ ...formData, invoiceSettings: { ...formData.invoiceSettings!, footerNote: e.target.value } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm resize-none"
-                      />
-                  </div>
-
-                  <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase">SMS Template</label>
-                      <textarea
-                          title="SMS invoice template"
-                          rows={3}
-                          value={formData.invoiceSettings?.smsTemplate || 'Hi {name}, you have an invoice for ${total} from {business}. Order #{orderNum}.{payLink}\n\nCheers!'}
-                          onChange={e => setFormData({ ...formData, invoiceSettings: { ...formData.invoiceSettings!, smsTemplate: e.target.value } })}
-                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm resize-none font-mono"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Variables: {'{name}'} {'{total}'} {'{business}'} {'{orderNum}'} {'{payLink}'}</p>
-                  </div>
-              </div>
-          </div>
-
-          {/* Live Preview */}
-          <div className="mt-6 pt-6 border-t border-gray-700">
-              <h5 className="text-sm font-bold text-gray-400 uppercase mb-3">Email Preview</h5>
-              <div className="bg-white rounded-xl overflow-hidden max-w-md mx-auto shadow-2xl">
-                  <div style={{ background: formData.invoiceSettings?.headerColor || '#d9381e' }} className="p-5 text-center">
-                      {formData.invoiceSettings?.logoUrl && (
-                          <img src={formData.invoiceSettings.logoUrl} alt="Logo" className="h-10 mx-auto mb-2" />
-                      )}
-                      <h3 className="text-white font-bold text-lg">Invoice from {formData.businessName || 'Your Business'}</h3>
-                  </div>
-                  <div className="p-5 text-gray-800 text-sm space-y-3">
-                      <p>Hey <strong>Customer Name</strong>,</p>
-                      <p className="text-gray-600">{formData.invoiceSettings?.thankYouMessage || "Here's your invoice."}</p>
-                      <div className="bg-gray-100 rounded-lg p-4">
-                          <p className="font-bold text-xs text-gray-500 uppercase mb-2">Order Summary</p>
-                          <p className="text-sm">1x Brisket Burger — <strong>$18.00</strong></p>
-                          <p className="text-sm">2x Loaded Fries — <strong>$24.00</strong></p>
-                          <hr className="my-2 border-gray-300" />
-                          <p className="text-lg font-bold">Total: $42.00</p>
-                      </div>
-                      {formData.invoiceSettings?.paymentUrl ? (
-                          <div className="text-center py-2">
-                              <span style={{ background: formData.invoiceSettings?.accentColor || '#eab308' }} className="inline-block text-black font-bold px-8 py-3 rounded-lg text-sm">
-                                  {formData.invoiceSettings?.paymentLabel || 'Pay Now'} — $42.00
-                              </span>
-                          </div>
-                      ) : formData.invoiceSettings?.bankDetails ? (
-                          <div className="bg-gray-100 rounded-lg p-4 font-mono text-xs whitespace-pre-line">{formData.invoiceSettings.bankDetails}</div>
-                      ) : (
-                          <p style={{ color: formData.invoiceSettings?.accentColor || '#eab308' }} className="text-center font-bold text-lg">Amount Due: $42.00</p>
-                      )}
-                      <p className="text-xs text-gray-400 mt-4">{formData.invoiceSettings?.footerNote || 'Thank you for your business!'}</p>
-                  </div>
-              </div>
-          </div>
-      </Section>
+      {/* Email/SMS/Invoice sections removed — managed at platform level via Super Admin */}
 
       {/* --- DIAGNOSTICS MODAL --- */}
       {showDiagnostics && (

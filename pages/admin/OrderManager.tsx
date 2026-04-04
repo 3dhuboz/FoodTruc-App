@@ -29,6 +29,8 @@ const normalizePhone = (raw: string): string => {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceContact, setInvoiceContact] = useState({ email: '', phone: '' });
 
+  // Analytics moved to dedicated Analytics tab
+
   // Split orders
   const pendingRequests = orders.filter(o => o.status === 'Pending');
   const activeOrders = orders.filter(o => o.status !== 'Pending' && o.status !== 'Rejected' && o.status !== 'Cancelled');

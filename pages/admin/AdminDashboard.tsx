@@ -1,14 +1,15 @@
 
 import React, { useState } from 'react';
-import { Utensils, CalendarCheck, Settings, CalendarDays, Cloud, WifiOff, ChefHat } from 'lucide-react';
+import { Utensils, CalendarCheck, Settings, CalendarDays, Cloud, WifiOff, ChefHat, BarChart3 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import OrderManager from './OrderManager';
 import MenuManager from './MenuManager';
 import SettingsManager from './SettingsManager';
 import Planner from './Planner';
 import TruckPanel from './TruckPanel';
+import AnalyticsDashboard from './AnalyticsDashboard';
 
-type TabId = 'orders' | 'truck' | 'planner' | 'menu' | 'settings';
+type TabId = 'orders' | 'truck' | 'planner' | 'menu' | 'settings' | 'analytics';
 
 interface TabDef { id: TabId; icon: React.ElementType; label: string }
 
@@ -16,8 +17,9 @@ const TABS: TabDef[] = [
   { id: 'orders',   icon: CalendarCheck, label: 'Orders' },
   { id: 'truck',    icon: ChefHat,       label: 'Truck Mode' },
   { id: 'planner',  icon: CalendarDays,  label: 'Planner' },
-  { id: 'menu',     icon: Utensils,      label: 'Menu' },
-  { id: 'settings', icon: Settings,      label: 'Settings' },
+  { id: 'menu',      icon: Utensils,      label: 'Menu' },
+  { id: 'analytics', icon: BarChart3,    label: 'Analytics' },
+  { id: 'settings',  icon: Settings,     label: 'Settings' },
 ];
 
 const AdminDashboard: React.FC = () => {
@@ -93,11 +95,12 @@ const AdminDashboard: React.FC = () => {
 
         {/* Page content */}
         <div className="flex-1 p-5 md:p-6 overflow-auto">
-          {activeTab === 'orders'   && <OrderManager />}
-          {activeTab === 'truck'    && <TruckPanel />}
-          {activeTab === 'planner'  && <Planner />}
-          {activeTab === 'menu'     && <MenuManager />}
-          {activeTab === 'settings' && <SettingsManager />}
+          {activeTab === 'orders'    && <OrderManager />}
+          {activeTab === 'truck'     && <TruckPanel />}
+          {activeTab === 'planner'   && <Planner />}
+          {activeTab === 'menu'      && <MenuManager />}
+          {activeTab === 'analytics' && <AnalyticsDashboard />}
+          {activeTab === 'settings'  && <SettingsManager />}
         </div>
       </div>
     </div>

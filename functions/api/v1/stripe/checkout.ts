@@ -3,7 +3,7 @@
  * Customer pays on Stripe's hosted page (Apple Pay, Google Pay, card).
  * After payment, redirects back to our order status page.
  *
- * Body: { orderId, items: [{name, quantity, price}], total, customerName, customerPhone }
+ * Body: { orderId, items: [{name, quantity, price}], total, customerName, customerPhone, source? }
  * Returns: { url: string } — redirect the customer here
  */
 import { getDB, generateId, rowToOrder } from '../_lib/db';
@@ -24,8 +24,14 @@ export const onRequest = async (context: any) => {
     const body = await request.json();
     const orderId = body.orderId || generateId();
     const origin = new URL(request.url).origin;
-
     const source = body.source || 'qr'; // 'qr' or 'foh'
+
+    // Look up tenant's Stripe Connect account for platform fee routing
+    const db = getDB(env);
+    const tenant = await db.prepare(
+      'SELECT stripe_account_id, stripe_onboarding_complete FROM tenants WHERE id = ?'
+    ).bind(tenantId).first() as any;
+    const connectedAccountId = tenant?.stripe_onboarding_complete ? tenant.stripe_account_id : null;
 
     // Build Stripe line items from order items
     const lineItems = (body.items || []).map((item: any) => ({
@@ -39,8 +45,8 @@ export const onRequest = async (context: any) => {
       quantity: item.quantity || 1,
     }));
 
-    // FOH orders: customer scans QR on operator's screen → pays on their phone → simple "paid" page
-    // QR orders: customer already on their phone → redirect to order status
+    // FOH orders: customer scans QR on operator's screen -> pays on their phone -> simple "paid" page
+    // QR orders: customer already on their phone -> redirect to order status
     const successUrl = source === 'foh'
       ? `${origin}/#/payment-success?order=${orderId}`
       : `${origin}/#/order-status/${orderId}?paid=true`;
@@ -68,18 +74,13 @@ export const onRequest = async (context: any) => {
     });
 
     // Stripe Connect: route payment to tenant's connected account with platform fee
-    const db = getDB(env);
-    const tenant = await db.prepare(
-      'SELECT stripe_account_id, stripe_onboarding_complete FROM tenants WHERE id = ?'
-    ).bind(tenantId).first() as any;
-
-    if (tenant?.stripe_onboarding_complete && tenant?.stripe_account_id) {
+    if (connectedAccountId) {
       const platformRow = await db.prepare("SELECT data FROM settings WHERE tenant_id = 'default' AND key = 'platform'").first() as any;
       const feePercent = platformRow?.data ? (JSON.parse(platformRow.data).platformFeePercent ?? 1.5) : 1.5;
-      const totalCents = Math.round((body.total || 0) * 100);
+      const totalCents = lineItems.reduce((sum: number, item: any) => sum + (item.price_data.unit_amount * item.quantity), 0);
       const applicationFee = Math.round(totalCents * (feePercent / 100));
       params.append('payment_intent_data[application_fee_amount]', String(applicationFee));
-      params.append('payment_intent_data[transfer_data][destination]', tenant.stripe_account_id);
+      params.append('payment_intent_data[transfer_data][destination]', connectedAccountId);
     }
 
     const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
@@ -99,7 +100,6 @@ export const onRequest = async (context: any) => {
     const session = await res.json();
 
     // Pre-create the order as "Awaiting Payment" in D1
-    const db = getDB(env);
     const now = new Date().toISOString();
     db.prepare(
       `INSERT OR REPLACE INTO orders (id, tenant_id, user_id, customer_name, customer_email, customer_phone, items, total, status, cook_day, type, created_at, temperature, fulfillment_method, pickup_location, source, updated_at, square_checkout_id)
