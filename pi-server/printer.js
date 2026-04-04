@@ -102,7 +102,7 @@ function printPNG(filePath, jobName = 'chownow-label') {
 
 // ─── Order Label Builder ────────────────────────────────────────
 
-function buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl) {
+function buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl, labelSettings) {
   const pin = order.collectionPin || order.collection_pin || order.id?.slice(-4)?.toUpperCase() || '????';
   const time = new Date(order.createdAt || Date.now()).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
   const name = order.customerName || order.customer_name || 'Walk-up';
@@ -161,14 +161,15 @@ function buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl) {
   parts.push(`-gravity NorthEast -font Helvetica-Bold -pointsize 22 -annotate +20+${y} 'TOTAL $${(order.total || 0).toFixed(2)}'`);
 
   // ── FOOTER: Thank you + QR + promo ──
-  // Thank you message
-  parts.push(`-gravity South -font Helvetica-Bold -pointsize 14 -annotate +0+75 'Thanks ${esc(name.split(' ')[0])}!'`);
-  parts.push(`-font Helvetica -pointsize 10 -fill gray30 -annotate +0+60 'We appreciate your support.'`);
+  const thankMsg = (labelSettings?.thankYou || 'Thanks {name}!').replace('{name}', esc(name.split(' ')[0]));
+  const tagline = labelSettings?.tagline || 'We appreciate your support.';
+  parts.push(`-gravity South -font Helvetica-Bold -pointsize 14 -annotate +0+75 '${esc(thankMsg)}'`);
+  parts.push(`-font Helvetica -pointsize 10 -fill gray30 -annotate +0+60 '${esc(tagline)}'`);
 
   // "Find us" / site URL
-  if (siteUrl) {
-    const shortUrl = siteUrl.replace('https://', '').replace('http://', '').replace(/\/$/, '');
-    parts.push(`-pointsize 9 -annotate +0+15 '${esc(shortUrl)}'`);
+  const displayUrl = siteUrl?.replace('https://', '').replace('http://', '').replace(/\/$/, '');
+  if (displayUrl) {
+    parts.push(`-pointsize 9 -annotate +0+15 '${esc(displayUrl)}'`);
   }
   parts.push(`-pointsize 9 -fill gray50 -annotate +0+4 'Powered by ChowNow'`);
   parts.push(`-fill black`);
@@ -201,7 +202,7 @@ function buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl) {
  * Print an order collection label (4x6" on Dymo 4XL).
  * Includes: logo, PIN, items, total, thank you, social QR.
  */
-export async function printOrderLabel(order, logoUrl, businessName, siteUrl) {
+export async function printOrderLabel(order, logoUrl, businessName, siteUrl, labelSettings) {
   if (!printerReady) {
     console.log('[Printer] No printer — skipping label for order', order.id);
     return false;
@@ -209,12 +210,13 @@ export async function printOrderLabel(order, logoUrl, businessName, siteUrl) {
 
   try {
     const pin = order.collectionPin || order.collection_pin || order.id?.slice(-4)?.toUpperCase() || '????';
+    const socialUrl = labelSettings?.socialUrl || siteUrl;
     const [logoPath, socialQRPath] = await Promise.all([
       ensureLogo(logoUrl),
-      ensureSocialQR(siteUrl),
+      ensureSocialQR(socialUrl),
     ]);
 
-    const imagePath = buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl);
+    const imagePath = buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl, labelSettings);
     if (!imagePath) return false;
 
     const success = printPNG(imagePath, `order-${pin}`);

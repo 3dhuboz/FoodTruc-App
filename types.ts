@@ -265,4 +265,10 @@ export interface AppSettings {
     bankDetails: string;
     smsTemplate: string;
   };
+  labelSettings?: {
+    thankYou: string;
+    tagline: string;
+    socialUrl: string;
+    logoUrl: string;
+  };
 }

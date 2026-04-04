@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../components/Toast';
-import { CreditCard, Save, CheckCircle, ExternalLink, Loader2, X, AlertCircle, Monitor, Facebook, ChevronDown, ChevronUp, HelpCircle, ArrowRight, Gift, Wand2, Database, Server, Wifi, Banknote, Power, Eye, EyeOff, LayoutTemplate, MessageSquare, Utensils, Smartphone, Shield, Plus, Trash2, Activity, RefreshCw, Lock, WifiOff, Edit2, RotateCcw, Terminal, AlertTriangle, Copy, FileCode, Home, Music, Megaphone, Truck, Settings, Image as ImageIcon, Upload, Info } from 'lucide-react';
+import { CreditCard, Save, CheckCircle, ExternalLink, Loader2, X, AlertCircle, Monitor, Facebook, ChevronDown, ChevronUp, HelpCircle, ArrowRight, Gift, Wand2, Database, Server, Wifi, Banknote, Power, Eye, EyeOff, LayoutTemplate, MessageSquare, Utensils, Smartphone, Shield, Plus, Trash2, Activity, RefreshCw, Lock, WifiOff, Edit2, RotateCcw, Terminal, AlertTriangle, Copy, FileCode, Home, Music, Megaphone, Truck, Settings, Image as ImageIcon, Upload, Info, Printer } from 'lucide-react';
 import { generateMarketingImage } from '../../services/gemini';
 import { restSetDoc, restDeleteDoc } from '../../services/firestoreRest';
 import { RewardPrize, AppSettings } from '../../types';
@@ -1754,6 +1754,61 @@ const SettingsManager: React.FC = () => {
           </div>
       </section>
 
+
+      {/* --- LABEL & PRINTING --- */}
+      <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
+          <h4 className="text-xl font-bold mb-2 flex items-center gap-2"><Printer size={20} className="text-cyan-400"/> Label & Printing</h4>
+          <p className="text-sm text-gray-400 mb-6">Customise what appears on printed order labels (Dymo 4XL). Labels are attached to bags when orders are marked Ready.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Thank You Message</label>
+                      <input
+                          title="Thank you message on label"
+                          placeholder="Thanks {name}!"
+                          value={formData.labelSettings?.thankYou || ''}
+                          onChange={e => setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, thankYou: e.target.value, tagline: formData.labelSettings?.tagline || '', socialUrl: formData.labelSettings?.socialUrl || '', logoUrl: formData.labelSettings?.logoUrl || '' } })}
+                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Use {'{name}'} to insert customer's first name</p>
+                  </div>
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Tagline</label>
+                      <input
+                          title="Tagline below thank you"
+                          placeholder="We appreciate your support."
+                          value={formData.labelSettings?.tagline || ''}
+                          onChange={e => setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, tagline: e.target.value } as any })}
+                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
+                      />
+                  </div>
+              </div>
+              <div className="space-y-4">
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Social / Website QR URL</label>
+                      <input
+                          title="URL encoded in the QR code on the label"
+                          placeholder="https://smokyjoes.chownow.au"
+                          value={formData.labelSettings?.socialUrl || ''}
+                          onChange={e => setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, socialUrl: e.target.value } as any })}
+                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">QR code on label links here — use your website, Instagram, or Linktree</p>
+                  </div>
+                  <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Label Logo URL (optional)</label>
+                      <input
+                          title="Override logo for printed labels"
+                          placeholder="Uses main logo if empty"
+                          value={formData.labelSettings?.logoUrl || ''}
+                          onChange={e => setFormData({ ...formData, labelSettings: { ...formData.labelSettings!, logoUrl: e.target.value } as any })}
+                          className="w-full bg-black/40 border border-gray-700 rounded p-2 text-white text-sm"
+                      />
+                  </div>
+              </div>
+          </div>
+      </section>
 
       {/* --- INVOICE TEMPLATE --- */}
       <section className="bg-gray-900/50 p-6 rounded-xl border border-gray-800">

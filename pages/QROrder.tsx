@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { MenuItem, CartItem, Order } from '../types';
-import { Plus, Minus, ShoppingCart, X, ChefHat, CheckCircle, ChevronDown, WifiOff, Clock, Home } from 'lucide-react';
+import { Plus, Minus, ShoppingCart, X, ChefHat, CheckCircle, ChevronDown, WifiOff, Clock, Home, Package, Check, Star } from 'lucide-react';
 
 const newOrderId = () => `qr_${Date.now().toString(36)}`;
 
@@ -201,10 +201,14 @@ const QROrder: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
 
-  const availableMenu = useMemo(() => menu.filter(i => i.available && !i.isPack), [menu]);
+  const availableMenu = useMemo(() => menu.filter(i => i.available), [menu]);
+  const packs = useMemo(() => availableMenu.filter(i => i.isPack), [availableMenu]);
+  const regularItems = useMemo(() => availableMenu.filter(i => !i.isPack), [availableMenu]);
+  const [packSelections, setPackSelections] = useState<Record<string, string[]>>({});
+  const [selectedPack, setSelectedPack] = useState<MenuItem | null>(null);
   const categories = useMemo(() => {
-    const preferred = ['Burgers', 'Tacos', 'Sides', 'Kids', 'Drinks', 'Desserts', 'Specials', 'Family Packs'];
-    const raw = [...new Set(availableMenu.map(i => i.category))];
+    const preferred = ['Burgers', 'Meats', 'Sides', 'Drinks', 'Rubs & Sauces', 'Specials'];
+    const raw = [...new Set(regularItems.map(i => i.category))];
     const sorted = raw.sort((a, b) => {
       const ai = preferred.indexOf(a);
       const bi = preferred.indexOf(b);
@@ -214,14 +218,34 @@ const QROrder: React.FC = () => {
       return a.localeCompare(b);
     });
     return ['All', ...sorted];
-  }, [availableMenu]);
+  }, [regularItems]);
   const filtered = useMemo(() => (
-    activeCategory === 'All' ? availableMenu : availableMenu.filter(i => i.category === activeCategory)
-  ), [availableMenu, activeCategory]);
+    activeCategory === 'All' ? regularItems : regularItems.filter(i => i.category === activeCategory)
+  ), [regularItems, activeCategory]);
 
   const cartQty = (id: string) => cart.find(c => c.id === id)?.quantity || 0;
   const total = cart.reduce((sum, c) => sum + c.price * c.quantity, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
+
+  // Pack helpers
+  const togglePackOption = (group: string, option: string, limit: number) => {
+    setPackSelections(prev => {
+      const current = prev[group] || [];
+      if (current.includes(option)) return { ...prev, [group]: current.filter(o => o !== option) };
+      if (current.length >= limit) return prev;
+      return { ...prev, [group]: [...current, option] };
+    });
+  };
+  const isPackComplete = (pack: MenuItem) => {
+    if (!pack.packGroups) return true;
+    return pack.packGroups.every(g => (packSelections[g.name]?.length || 0) >= g.limit);
+  };
+  const addPackToCart = (pack: MenuItem) => {
+    if (!isPackComplete(pack)) return;
+    setCart(prev => [...prev, { ...pack, quantity: 1, packSelections: { ...packSelections } } as any]);
+    setSelectedPack(null);
+    setPackSelections({});
+  };
 
   const addItem = (item: MenuItem) => {
     setCart(prev => {
@@ -365,8 +389,44 @@ const QROrder: React.FC = () => {
         ))}
       </div>
 
-      {/* Menu Grid — 2-column cards */}
-      <div className="px-4 py-4">
+      {/* ── Featured Packs / Meal Deals ── */}
+      {packs.length > 0 && (
+        <div className="px-4 pt-4 pb-2">
+          <div className="flex items-center gap-2 mb-3">
+            <Star size={16} className="text-orange-400" />
+            <h2 className="text-white font-black text-base uppercase tracking-wide">Meal Deals</h2>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+            {packs.map(pack => (
+              <button key={pack.id} onClick={() => { setSelectedPack(pack); setPackSelections({}); }}
+                className="shrink-0 w-64 bg-gradient-to-br from-orange-600/20 to-orange-900/10 border border-orange-500/30 rounded-2xl overflow-hidden text-left active:scale-[0.97] transition">
+                {pack.image && (
+                  <img src={pack.image} alt="" className="w-full h-32 object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
+                )}
+                <div className="p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Package size={14} className="text-orange-400" />
+                    <span className="text-[10px] font-black text-orange-400 uppercase tracking-wider">Meal Deal</span>
+                  </div>
+                  <div className="text-white font-bold text-base leading-tight">{pack.name}</div>
+                  {pack.packGroups && (
+                    <div className="text-gray-400 text-xs mt-1">
+                      {pack.packGroups.map(g => `${g.limit}x ${g.name}`).join(' + ')}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-orange-400 font-black text-lg">${pack.price.toFixed(2)}</span>
+                    <span className="bg-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-full">Build Yours</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Menu Grid ── */}
+      <div className="px-4 py-3">
         <div className="grid grid-cols-2 gap-3">
           {filtered.map(item => {
             const qty = cartQty(item.id);
@@ -375,24 +435,31 @@ const QROrder: React.FC = () => {
                 className={`bg-gray-900 rounded-2xl border overflow-hidden text-left transition active:scale-[0.97] ${
                   qty > 0 ? 'border-orange-500 ring-1 ring-orange-500/20' : 'border-gray-800'
                 }`}>
-                {item.image && (
+                {item.image ? (
                   <div className="relative">
-                    <img src={item.image} alt="" className="w-full h-28 object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
+                    <img src={item.image} alt="" className="w-full h-36 object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
+                    {qty > 0 && (
+                      <span className="absolute top-2 right-2 bg-orange-500 text-white text-xs font-black w-6 h-6 rounded-full flex items-center justify-center shadow-lg">{qty}</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-full h-24 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                    <ChefHat size={28} className="text-gray-700" />
                     {qty > 0 && (
                       <span className="absolute top-2 right-2 bg-orange-500 text-white text-xs font-black w-6 h-6 rounded-full flex items-center justify-center shadow-lg">{qty}</span>
                     )}
                   </div>
                 )}
                 <div className="p-3">
-                  <div className="text-white font-semibold text-sm leading-tight line-clamp-2">{item.name}</div>
+                  <div className="text-white font-bold text-sm leading-tight line-clamp-2">{item.name}</div>
                   {item.description && (
-                    <div className="text-gray-500 text-xs line-clamp-1 mt-0.5">{item.description}</div>
+                    <div className="text-gray-500 text-xs line-clamp-2 mt-1">{item.description}</div>
                   )}
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-orange-400 font-bold text-sm">${item.price.toFixed(2)}</span>
+                  <div className="flex items-center justify-between mt-2.5">
+                    <span className="text-orange-400 font-black text-base">${item.price.toFixed(2)}</span>
                     {qty === 0 && (
-                      <span className="w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center text-white">
-                        <Plus size={14} />
+                      <span className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
+                        <Plus size={16} />
                       </span>
                     )}
                   </div>
@@ -402,6 +469,72 @@ const QROrder: React.FC = () => {
           })}
         </div>
       </div>
+
+      {/* ── Pack Selection Modal ── */}
+      {selectedPack && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/70" onClick={() => setSelectedPack(null)}>
+          <div className="bg-gray-900 rounded-t-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            {selectedPack.image && (
+              <div className="relative h-40 shrink-0">
+                <img src={selectedPack.image} alt="" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent" />
+                <button onClick={() => setSelectedPack(null)} className="absolute top-4 left-4 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center text-white"><X size={16} /></button>
+              </div>
+            )}
+            <div className="p-5 overflow-y-auto flex-1 space-y-5">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Package size={14} className="text-orange-400" />
+                  <span className="text-xs font-black text-orange-400 uppercase">Meal Deal</span>
+                </div>
+                <h2 className="text-white font-black text-2xl">{selectedPack.name}</h2>
+                {selectedPack.description && <p className="text-gray-400 text-sm mt-1">{selectedPack.description}</p>}
+                <p className="text-orange-400 font-black text-xl mt-2">${selectedPack.price.toFixed(2)}</p>
+              </div>
+
+              {selectedPack.packGroups?.map(group => (
+                <div key={group.name}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-white font-bold text-sm">{group.name}</h3>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      (packSelections[group.name]?.length || 0) >= group.limit ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'
+                    }`}>
+                      {packSelections[group.name]?.length || 0}/{group.limit}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {group.options.map(option => {
+                      const selected = packSelections[group.name]?.includes(option);
+                      return (
+                        <button key={option} onClick={() => togglePackOption(group.name, option, group.limit)}
+                          className={`w-full flex items-center gap-3 p-3 rounded-xl border transition text-left ${
+                            selected ? 'border-orange-500 bg-orange-500/10' : 'border-gray-700 bg-gray-800/50'
+                          }`}>
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            selected ? 'border-orange-500 bg-orange-500' : 'border-gray-600'
+                          }`}>
+                            {selected && <Check size={14} className="text-white" />}
+                          </div>
+                          <span className={`text-sm font-medium ${selected ? 'text-white' : 'text-gray-300'}`}>{option}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-5 border-t border-gray-800">
+              <button onClick={() => addPackToCart(selectedPack)} disabled={!isPackComplete(selectedPack)}
+                className={`w-full py-4 rounded-2xl font-black text-lg transition ${
+                  isPackComplete(selectedPack) ? 'bg-orange-500 text-white active:scale-95' : 'bg-gray-700 text-gray-500'
+                }`}>
+                {isPackComplete(selectedPack) ? `Add to Order — $${selectedPack.price.toFixed(2)}` : 'Select your options'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Cart Button */}
       {cartCount > 0 && !showCart && !showCheckout && !detailItem && (

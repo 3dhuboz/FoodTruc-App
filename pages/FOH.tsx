@@ -332,7 +332,7 @@ const FOH: React.FC = () => {
     }
   };
 
-  const availableMenu = useMemo(() => menu.filter(i => i.available && !i.isPack), [menu]);
+  const availableMenu = useMemo(() => menu.filter(i => i.available), [menu]);
   const categories = useMemo(() => ['All', ...new Set(availableMenu.map(i => i.category))], [availableMenu]);
   const filtered = useMemo(() => {
     let items = availableMenu;
