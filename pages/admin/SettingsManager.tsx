@@ -142,9 +142,21 @@ const SettingsManager: React.FC = () => {
   const [geminiEditing, setGeminiEditing] = useState(false);
 
   // Sync API key to runtime on mount so AI features work immediately
+  // Falls back to platform-level key if tenant doesn't have one
   useEffect(() => {
     if (settings.geminiApiKey) {
       import('../../services/gemini').then(m => m.setGeminiApiKey(settings.geminiApiKey));
+    } else {
+      // Fetch platform key as fallback
+      fetch('/api/v1/admin/settings')
+        .then(r => r.json())
+        .then(data => {
+          const platformKey = data?.settings?.geminiApiKey;
+          if (platformKey) {
+            import('../../services/gemini').then(m => m.setGeminiApiKey(platformKey));
+          }
+        })
+        .catch(() => {});
     }
   }, [settings.geminiApiKey]);
   

@@ -109,7 +109,11 @@ export const onRequest = async (context: any) => {
           console.log(`[Webhook] Tenant provisioned: ${businessName} (${slug}.chownow.au)`);
 
           // Notify admin to build & ship Pi
-          const adminEmail = (env as any).ADMIN_NOTIFICATION_EMAIL;
+          // Check platform settings for admin email (falls back to env var)
+          const platformRow = await db.prepare("SELECT data FROM settings WHERE tenant_id = 'default' AND key = 'platform'").first() as any;
+          const platformCfg = platformRow?.data ? JSON.parse(platformRow.data) : {};
+          const adminEmail = platformCfg.adminNotificationEmail || (env as any).ADMIN_NOTIFICATION_EMAIL;
+          const emailFromName = platformCfg.emailFromName || 'ChowNow';
           const sendgridKey = (env as any).SENDGRID_API_KEY;
           if (adminEmail && sendgridKey) {
             fetch('https://api.sendgrid.com/v3/mail/send', {
@@ -117,7 +121,7 @@ export const onRequest = async (context: any) => {
               headers: { 'Authorization': `Bearer ${sendgridKey}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 personalizations: [{ to: [{ email: adminEmail }] }],
-                from: { email: 'noreply@chownow.au', name: 'ChowNow' },
+                from: { email: 'noreply@chownow.au', name: emailFromName },
                 subject: `🆕 New Signup: ${businessName} — Build & Ship Pi`,
                 content: [{
                   type: 'text/html',

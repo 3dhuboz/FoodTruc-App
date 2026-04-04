@@ -62,10 +62,13 @@ export const onRequest = async (context: any) => {
       params.append(`line_items[${i}][quantity]`, String(item.quantity));
     });
 
-    // Stripe Connect: route payment to tenant's connected account with 1.5% platform fee
+    // Stripe Connect: route payment to tenant's connected account with platform fee
     if (connectedAccountId) {
+      // Read platform fee from settings (default 1.5%)
+      const platformRow = await db.prepare("SELECT data FROM settings WHERE tenant_id = 'default' AND key = 'platform'").first() as any;
+      const feePercent = platformRow?.data ? (JSON.parse(platformRow.data).platformFeePercent ?? 1.5) : 1.5;
       const totalCents = lineItems.reduce((sum: number, item: any) => sum + (item.price_data.unit_amount * item.quantity), 0);
-      const applicationFee = Math.round(totalCents * 0.015); // 1.5% platform fee
+      const applicationFee = Math.round(totalCents * (feePercent / 100));
       params.append('payment_intent_data[application_fee_amount]', String(applicationFee));
       params.append('payment_intent_data[transfer_data][destination]', connectedAccountId);
     }

@@ -4,7 +4,8 @@ import {
   ExternalLink, ChefHat, BarChart3, Clock, Package, CreditCard,
   Search, Filter, ArrowRight, CheckCircle, XCircle, AlertTriangle,
   X, Save, Eye, Edit2, Copy, ChevronLeft, ChevronRight,
-  Pause, Play, RotateCcw, Download
+  Pause, Play, RotateCcw, Download, Settings, Mail, DollarSign,
+  Palette, Power, Key, Loader2, EyeOff
 } from 'lucide-react';
 
 interface Tenant {
@@ -457,25 +458,63 @@ async function sendDeviceCommand(deviceId: string, command: string): Promise<boo
 
 // ─── Main Super Admin ────────────────────────────────────────
 const SuperAdmin: React.FC = () => {
-  const [tab, setTab] = useState<'tenants' | 'fleet' | 'overview'>('overview');
+  const [tab, setTab] = useState<'tenants' | 'fleet' | 'overview' | 'settings'>('overview');
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [devices, setDevices] = useState<ChowBoxDevice[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
 
+  // Platform Settings State
+  const [platformSettings, setPlatformSettings] = useState<any>({});
+  const [platformStatus, setPlatformStatus] = useState<any>({});
+  const [platformForm, setPlatformForm] = useState<any>({});
+  const [savingPlatform, setSavingPlatform] = useState(false);
+  const [platformSaveMsg, setPlatformSaveMsg] = useState('');
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+
   const fetchData = async () => {
     try {
-      const [tRes, dRes] = await Promise.all([
+      const [tRes, dRes, sRes] = await Promise.all([
         fetch('/api/v1/admin/tenants'),
         fetch('/api/v1/admin/fleet'),
+        fetch('/api/v1/admin/settings'),
       ]);
       const tData = await tRes.json();
       const dData = await dRes.json();
+      const sData = await sRes.json();
       setTenants(tData.tenants || []);
       setDevices(dData.devices || []);
+      if (sData.settings) {
+        setPlatformSettings(sData.settings);
+        setPlatformForm(sData.settings);
+      }
+      if (sData.status) setPlatformStatus(sData.status);
     } catch {}
     setLoading(false);
+  };
+
+  const savePlatformSettings = async () => {
+    setSavingPlatform(true);
+    setPlatformSaveMsg('');
+    try {
+      const res = await fetch('/api/v1/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: platformForm }),
+      });
+      const data = await res.json();
+      if (data.saved) {
+        setPlatformSettings(data.settings);
+        setPlatformSaveMsg('Saved');
+        setTimeout(() => setPlatformSaveMsg(''), 2000);
+      } else {
+        setPlatformSaveMsg('Error');
+      }
+    } catch {
+      setPlatformSaveMsg('Error');
+    }
+    setSavingPlatform(false);
   };
 
   useEffect(() => { fetchData(); const t = setInterval(fetchData, 15000); return () => clearInterval(t); }, []);
@@ -514,6 +553,7 @@ const SuperAdmin: React.FC = () => {
             { id: 'overview' as const, label: 'Overview', icon: BarChart3 },
             { id: 'tenants' as const, label: 'Tenants', icon: Users },
             { id: 'fleet' as const, label: 'Fleet', icon: Cpu },
+            { id: 'settings' as const, label: 'Settings', icon: Settings },
           ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition ${tab === t.id ? 'bg-orange-500 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
@@ -710,6 +750,219 @@ const SuperAdmin: React.FC = () => {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {tab === 'settings' && (
+          <div className="space-y-6">
+            {/* Save Bar */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-black text-white">Platform Settings</h2>
+              <div className="flex items-center gap-3">
+                {platformSaveMsg && (
+                  <span className={`text-sm font-bold ${platformSaveMsg === 'Saved' ? 'text-green-400' : 'text-red-400'}`}>{platformSaveMsg}</span>
+                )}
+                <button onClick={savePlatformSettings} disabled={savingPlatform}
+                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-bold px-5 py-2 rounded-lg text-sm transition">
+                  {savingPlatform ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {savingPlatform ? 'Saving...' : 'Save Settings'}
+                </button>
+              </div>
+            </div>
+
+            {/* 1. Platform Status */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Key size={16} className="text-blue-400" /> Platform Status</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {[
+                  { label: 'Stripe API', ok: platformStatus.stripeConfigured, hint: 'STRIPE_SECRET_KEY' },
+                  { label: 'SendGrid', ok: platformStatus.sendgridConfigured, hint: 'SENDGRID_API_KEY' },
+                  { label: 'Admin Key', ok: platformStatus.adminKeyConfigured, hint: 'ADMIN_API_KEY' },
+                  { label: 'Starter Price', ok: platformStatus.starterPriceConfigured, hint: 'STRIPE_STARTER_PRICE_ID' },
+                  { label: 'Pro Price', ok: platformStatus.proPriceConfigured, hint: 'STRIPE_PRO_PRICE_ID' },
+                  { label: 'ChowBox Price', ok: platformStatus.piPriceConfigured, hint: 'STRIPE_PI_PRICE_ID' },
+                ].map(s => (
+                  <div key={s.label} className={`border rounded-lg p-3 ${s.ok ? 'border-green-800/40 bg-green-950/20' : 'border-red-800/40 bg-red-950/20'}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      {s.ok ? <CheckCircle size={14} className="text-green-400" /> : <XCircle size={14} className="text-red-400" />}
+                      <span className="text-white text-sm font-bold">{s.label}</span>
+                    </div>
+                    <p className="text-gray-600 text-[10px] font-mono">{s.hint}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-gray-600 text-xs mt-3">Secrets are managed via <code className="bg-gray-800 px-1 rounded">wrangler pages secret put</code>. Status shown here is read-only.</p>
+            </div>
+
+            {/* 2. Revenue & Pricing */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2"><DollarSign size={16} className="text-green-400" /> Revenue & Pricing</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Platform Fee (%)</label>
+                  <input type="number" step="0.1" min="0" max="20"
+                    value={platformForm.platformFeePercent ?? 1.5}
+                    onChange={e => setPlatformForm({ ...platformForm, platformFeePercent: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:border-orange-500 focus:outline-none" />
+                  <p className="text-gray-600 text-xs mt-1">Applied to every order processed through Stripe Connect</p>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Starter Plan</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-lg font-bold">${platformForm.starterPlanPrice ?? 99}</span>
+                    <span className="text-gray-500 text-sm">/month</span>
+                  </div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1 mt-3">Pro Plan</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-lg font-bold">${platformForm.proPlanPrice ?? 149}</span>
+                    <span className="text-gray-500 text-sm">/month</span>
+                  </div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1 mt-3">ChowBox</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-lg font-bold">${platformForm.chowboxPrice ?? 299}</span>
+                    <span className="text-gray-500 text-sm">one-time</span>
+                  </div>
+                  <p className="text-gray-600 text-xs mt-2">Prices are set in Stripe Dashboard. Values here are for display only.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Email & Notifications */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Mail size={16} className="text-purple-400" /> Email & Notifications</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Admin Notification Email</label>
+                  <input type="email"
+                    value={platformForm.adminNotificationEmail ?? ''}
+                    onChange={e => setPlatformForm({ ...platformForm, adminNotificationEmail: e.target.value })}
+                    placeholder="admin@chownow.au"
+                    className="w-full bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:border-orange-500 focus:outline-none" />
+                  <p className="text-gray-600 text-xs mt-1">New signup alerts are sent here</p>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Support Email</label>
+                  <input type="email"
+                    value={platformForm.supportEmail ?? ''}
+                    onChange={e => setPlatformForm({ ...platformForm, supportEmail: e.target.value })}
+                    placeholder="support@chownow.au"
+                    className="w-full bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:border-orange-500 focus:outline-none" />
+                  <p className="text-gray-600 text-xs mt-1">Shown on the site for customer queries</p>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">From Name</label>
+                  <input type="text"
+                    value={platformForm.emailFromName ?? 'ChowNow'}
+                    onChange={e => setPlatformForm({ ...platformForm, emailFromName: e.target.value })}
+                    className="w-full bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:border-orange-500 focus:outline-none" />
+                  <p className="text-gray-600 text-xs mt-1">Sender name on outgoing emails</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Branding & Site Content */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Palette size={16} className="text-pink-400" /> Branding & Site Content</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Platform Name</label>
+                  <input type="text"
+                    value={platformForm.businessName ?? 'ChowNow'}
+                    onChange={e => setPlatformForm({ ...platformForm, businessName: e.target.value })}
+                    className="w-full bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:border-orange-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Tagline</label>
+                  <input type="text"
+                    value={platformForm.tagline ?? ''}
+                    onChange={e => setPlatformForm({ ...platformForm, tagline: e.target.value })}
+                    className="w-full bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:border-orange-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Brand Color</label>
+                  <div className="flex items-center gap-3">
+                    <input type="color"
+                      value={platformForm.brandColor ?? '#f97316'}
+                      onChange={e => setPlatformForm({ ...platformForm, brandColor: e.target.value })}
+                      className="w-10 h-10 rounded cursor-pointer bg-transparent border-0" />
+                    <span className="text-white text-sm font-mono">{platformForm.brandColor ?? '#f97316'}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Footer Text</label>
+                  <input type="text"
+                    value={platformForm.footerText ?? ''}
+                    onChange={e => setPlatformForm({ ...platformForm, footerText: e.target.value })}
+                    className="w-full bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:border-orange-500 focus:outline-none" />
+                </div>
+              </div>
+              <div className="mt-4">
+                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Hero Headline</label>
+                <input type="text"
+                  value={platformForm.heroHeadline ?? ''}
+                  onChange={e => setPlatformForm({ ...platformForm, heroHeadline: e.target.value })}
+                  className="w-full bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:border-orange-500 focus:outline-none" />
+              </div>
+              <div className="mt-3">
+                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Hero Subtext</label>
+                <textarea rows={2}
+                  value={platformForm.heroSubtext ?? ''}
+                  onChange={e => setPlatformForm({ ...platformForm, heroSubtext: e.target.value })}
+                  className="w-full bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:border-orange-500 focus:outline-none resize-none" />
+              </div>
+            </div>
+
+            {/* 5. API Keys (Platform-Shared) */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Key size={16} className="text-yellow-400" /> Platform API Keys</h3>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Gemini API Key</label>
+                <div className="flex gap-2">
+                  <input
+                    type={showGeminiKey ? 'text' : 'password'}
+                    value={platformForm.geminiApiKey ?? ''}
+                    onChange={e => setPlatformForm({ ...platformForm, geminiApiKey: e.target.value })}
+                    placeholder="AIzaSy..."
+                    className="flex-1 bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm font-mono focus:border-orange-500 focus:outline-none" />
+                  <button onClick={() => setShowGeminiKey(!showGeminiKey)}
+                    className="bg-gray-800 hover:bg-gray-700 p-2.5 rounded-lg text-gray-400 hover:text-white transition">
+                    {showGeminiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <p className="text-gray-600 text-xs mt-1">Used for AI image generation across all tenants. Get yours from <a href="https://aistudio.google.com/apikey" target="_blank" className="text-blue-400 hover:underline">Google AI Studio</a>.</p>
+              </div>
+              <p className="text-gray-600 text-xs mt-3">Stripe and SendGrid keys are managed as Cloudflare secrets — see Platform Status above.</p>
+            </div>
+
+            {/* 6. Controls */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Power size={16} className="text-red-400" /> Controls</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-bold text-sm">Signups Enabled</p>
+                    <p className="text-gray-500 text-xs">Allow new food truck owners to sign up</p>
+                  </div>
+                  <button
+                    onClick={() => setPlatformForm({ ...platformForm, signupEnabled: !platformForm.signupEnabled })}
+                    className={`w-12 h-6 rounded-full transition-colors relative ${platformForm.signupEnabled ? 'bg-green-500' : 'bg-gray-700'}`}>
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${platformForm.signupEnabled ? 'left-6' : 'left-0.5'}`} />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-bold text-sm">Maintenance Mode</p>
+                    <p className="text-gray-500 text-xs">Show maintenance page on landing site</p>
+                  </div>
+                  <button
+                    onClick={() => setPlatformForm({ ...platformForm, maintenanceMode: !platformForm.maintenanceMode })}
+                    className={`w-12 h-6 rounded-full transition-colors relative ${platformForm.maintenanceMode ? 'bg-orange-500' : 'bg-gray-700'}`}>
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${platformForm.maintenanceMode ? 'left-6' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
