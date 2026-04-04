@@ -136,10 +136,17 @@ const SettingsManager: React.FC = () => {
   const [smartPayKeys, setSmartPayKeys] = useState({ public: '', secret: '' });
   const [smsKeys, setSmsKeys] = useState({ username: '', apiKey: '' });
   const [geminiKey, setGeminiKey] = useState(settings.geminiApiKey || '');
-  const [geminiStatus, setGeminiStatus] = useState<'idle' | 'saving' | 'testing' | 'connected' | 'error'>( 
+  const [geminiStatus, setGeminiStatus] = useState<'idle' | 'saving' | 'testing' | 'connected' | 'error'>(
       settings.geminiApiKey ? 'connected' : 'idle'
   );
   const [geminiEditing, setGeminiEditing] = useState(false);
+
+  // Sync API key to runtime on mount so AI features work immediately
+  useEffect(() => {
+    if (settings.geminiApiKey) {
+      import('../../services/gemini').then(m => m.setGeminiApiKey(settings.geminiApiKey));
+    }
+  }, [settings.geminiApiKey]);
   
   // Connection Wizard
   const [connectorType, setConnectorType] = useState<'stripe' | 'square' | 'smartpay' | 'clicksend' | null>(null);
