@@ -43,7 +43,8 @@ db.exec(`
     record_id TEXT NOT NULL,
     payload TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    synced INTEGER NOT NULL DEFAULT 0
+    synced INTEGER NOT NULL DEFAULT 0,
+    retries INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_sync_unsynced ON sync_queue(synced) WHERE synced = 0;
 `);

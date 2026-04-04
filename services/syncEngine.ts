@@ -79,28 +79,45 @@ async function flushOutbox(): Promise<void> {
   try {
     const items = await getOutboxItems();
     if (items.length === 0) { isSyncing = false; return; }
+    console.log(`[Sync] Flushing ${items.length} outbox items...`);
 
+    let synced = 0;
     for (const item of items) {
       try {
         switch (item.action) {
-          case 'CREATE_ORDER':
+          case 'CREATE_ORDER': {
             const created = await createOrderApi(item.payload);
             await cacheOrder(created);
             break;
+          }
           case 'UPDATE_ORDER':
-          case 'UPDATE_STATUS':
+          case 'UPDATE_STATUS': {
             const updated = await updateOrderApi(item.payload.id, item.payload);
             await cacheOrder(updated);
             break;
+          }
         }
         await removeOutboxItem(item.id);
+        synced++;
         emit({ type: 'outbox_synced', data: item });
       } catch (err) {
-        // If this specific item fails, skip it (will retry next cycle)
-        console.warn(`[Sync] Outbox item ${item.id} failed:`, err);
+        // Track retries — give up after 50
+        const retries = (item.retries || 0) + 1;
+        if (retries > 50) {
+          console.error(`[Sync] Outbox item ${item.id} failed after 50 retries — removing`);
+          await removeOutboxItem(item.id);
+        } else {
+          // Update retry count in IndexedDB (best effort)
+          try {
+            const { updateOutboxRetries } = await import('./offlineStore');
+            await updateOutboxRetries(item.id, retries);
+          } catch {}
+          console.warn(`[Sync] Outbox item ${item.id} failed (attempt ${retries}):`, err);
+        }
         emit({ type: 'outbox_failed', data: { item, error: err } });
       }
     }
+    if (synced > 0) console.log(`[Sync] Flushed ${synced}/${items.length} outbox items`);
   } finally {
     isSyncing = false;
   }
@@ -108,13 +125,21 @@ async function flushOutbox(): Promise<void> {
 
 // ─── Pull fresh data from API ────────────────────────────────
 
+let lastOrderSync = '';
+
 async function pullOrders(): Promise<void> {
   if (!isOnline) return;
   try {
-    const orders = await fetchOrders();
-    await cacheOrders(orders);
-    await setLastSync('orders', new Date().toISOString());
-    emit({ type: 'orders_updated', data: orders });
+    // Incremental sync: only fetch orders updated since last pull
+    const params: any = {};
+    if (lastOrderSync) params.since = lastOrderSync;
+    const orders = await fetchOrders(params);
+    if (orders.length > 0) {
+      await cacheOrders(orders); // Merges into existing cache
+      emit({ type: 'orders_updated', data: orders });
+    }
+    lastOrderSync = new Date().toISOString();
+    await setLastSync('orders', lastOrderSync);
   } catch (err) {
     emit({ type: 'sync_error', data: { collection: 'orders', error: err } });
   }

@@ -140,7 +140,20 @@ async function handleApi(req, url) {
 
   // ── Orders ──
   if (path === '/orders' && method === 'GET') {
-    const rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC').all();
+    // Support incremental fetch: ?since=ISO_TIMESTAMP returns only orders updated after that time
+    // Support today filter: ?today=true returns only today's orders
+    const params = new URL(req.url, `http://${req.headers.host || 'localhost'}`).searchParams;
+    const since = params.get('since');
+    const today = params.get('today');
+    let rows;
+    if (since) {
+      rows = db.prepare('SELECT * FROM orders WHERE updated_at > ? ORDER BY created_at DESC').all(since);
+    } else if (today === 'true') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      rows = db.prepare("SELECT * FROM orders WHERE cook_day = ? OR created_at LIKE ? ORDER BY created_at DESC").all(todayStr, `${todayStr}%`);
+    } else {
+      rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 500').all();
+    }
     return json(rows.map(rowToOrder));
   }
   if (path === '/orders' && method === 'POST') {
@@ -181,21 +194,41 @@ async function handleApi(req, url) {
       const fields = []; const binds = [];
       const map = {
         status: 'status', customerName: 'customer_name', customerPhone: 'customer_phone',
-        pickupTime: 'pickup_time', pickupLocation: 'pickup_location',
+        customerEmail: 'customer_email', pickupTime: 'pickup_time', pickupLocation: 'pickup_location',
+        items: null, total: 'total', type: 'type', temperature: 'temperature',
+        fulfillmentMethod: 'fulfillment_method', deliveryAddress: 'delivery_address',
+        deliveryFee: 'delivery_fee', collectionPin: 'collection_pin',
+        paymentIntentId: 'payment_intent_id', squareCheckoutId: 'square_checkout_id',
+        source: 'source', depositAmount: 'deposit_amount', cookDay: 'cook_day',
       };
       for (const [key, col] of Object.entries(map)) {
-        if (body[key] !== undefined) { fields.push(`${col} = ?`); binds.push(body[key]); }
+        if (body[key] !== undefined) {
+          if (key === 'items') {
+            fields.push('items = ?'); binds.push(JSON.stringify(body[key]));
+          } else {
+            fields.push(`${col} = ?`); binds.push(body[key]);
+          }
+        }
       }
+      // Track workflow timestamps
+      const now = new Date().toISOString();
+      if (body.status === 'Confirmed') { fields.push('confirmed_at = ?'); binds.push(now); }
+      if (body.status === 'Cooking')   { fields.push('cooking_at = ?'); binds.push(now); }
+      if (body.status === 'Ready')     { fields.push('ready_at = ?'); binds.push(now); }
+      if (body.status === 'Completed') { fields.push('completed_at = ?'); binds.push(now); }
+      if (body.status === 'Cancelled') { fields.push('cancelled_at = ?'); binds.push(now); }
       if (fields.length === 0) return json({ error: 'No fields' }, 400);
-      fields.push('updated_at = ?'); binds.push(new Date().toISOString());
+      fields.push('updated_at = ?'); binds.push(now);
       binds.push(id);
       db.prepare(`UPDATE orders SET ${fields.join(', ')} WHERE id = ?`).run(...binds);
-      queueSync('UPDATE', 'orders', id, body);
+      queueSync('UPDATE', 'orders', id, { ...body, updatedAt: now });
       const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
       return json(rowToOrder(row));
     }
     if (method === 'DELETE') {
+      const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
       db.prepare('DELETE FROM orders WHERE id = ?').run(id);
+      queueSync('DELETE', 'orders', id, { id });
       return json(null, 204);
     }
   }
@@ -609,62 +642,73 @@ async function flushSyncQueue() {
   const items = db.prepare('SELECT * FROM sync_queue WHERE synced = 0 ORDER BY created_at').all();
   if (items.length === 0) return;
 
-  // Only log periodically to avoid spam
-  const now = Date.now();
-  if (now - lastSyncLog > 30000) {
-    console.log(`[Sync] ${items.length} items in queue — flushing one at a time`);
-    lastSyncLog = now;
-  }
+  console.log(`[Sync] Flushing ${items.length} queued items to cloud...`);
+  let synced = 0;
+  let failed = 0;
 
-  // Process ONE item per cycle — small request, survives flaky connections
-  const item = items[0];
-  try {
-    const payload = JSON.parse(item.payload);
-
-    if (item.table_name === 'orders') {
-      const endpoint = item.action === 'CREATE'
-        ? `${CLOUD_URL}/api/v1/orders`
-        : `${CLOUD_URL}/api/v1/orders/${item.record_id}`;
-      const method = item.action === 'CREATE' ? 'POST' : 'PUT';
-
-      const res = await fetch(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(5000), // 5s timeout — fail fast on bad signal
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    }
-
-    // Notification queue items (SMS/email)
-    if (item.action === 'NOTIFY') {
+  // Process ALL items — dump everything to cloud on reconnect
+  for (const item of items) {
+    try {
       const payload = JSON.parse(item.payload);
-      await fetch(`${CLOUD_URL}/api/v1${item.table_name}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(5000),
-      }).catch(() => {}); // Notifications are best-effort
-    }
 
-    // Mark as synced
-    db.prepare('UPDATE sync_queue SET synced = 1 WHERE id = ?').run(item.id);
-    console.log(`[Sync] ✅ Synced: ${item.action} ${item.table_name} ${item.record_id.slice(-6)}`);
-  } catch (err) {
-    // Increment retry count — give up after 100 retries
-    const retries = (item.retries || 0) + 1;
-    if (retries > 100) {
-      db.prepare('UPDATE sync_queue SET synced = 1 WHERE id = ?').run(item.id); // Mark as done, won't retry
-      console.error(`[Sync] ❌ Gave up on ${item.id} after 100 retries`);
+      if (item.table_name === 'orders') {
+        if (item.action === 'DELETE') {
+          // Sync deletion to cloud
+          await fetch(`${CLOUD_URL}/api/v1/orders/${item.record_id}`, {
+            method: 'DELETE',
+            signal: AbortSignal.timeout(5000),
+          });
+        } else {
+          const endpoint = item.action === 'CREATE'
+            ? `${CLOUD_URL}/api/v1/orders`
+            : `${CLOUD_URL}/api/v1/orders/${item.record_id}`;
+          const method = item.action === 'CREATE' ? 'POST' : 'PUT';
+
+          const res = await fetch(endpoint, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(5000),
+          });
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        }
+      }
+
+      // Notification queue items (SMS/email)
+      if (item.action === 'NOTIFY') {
+        await fetch(`${CLOUD_URL}/api/v1${item.table_name}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(5000),
+        }).catch(() => {}); // Notifications are best-effort
+      }
+
+      // Mark as synced
+      db.prepare('UPDATE sync_queue SET synced = 1 WHERE id = ?').run(item.id);
+      synced++;
+    } catch (err) {
+      failed++;
+      // Track retries — give up after 100
+      const retries = (item.retries || 0) + 1;
+      db.prepare('UPDATE sync_queue SET retries = ? WHERE id = ?').run(retries, item.id);
+      if (retries > 100) {
+        db.prepare('UPDATE sync_queue SET synced = 1 WHERE id = ?').run(item.id);
+        console.error(`[Sync] ❌ Gave up on ${item.id} after 100 retries`);
+      }
+      // Stop batch if we hit a connection error — retry next cycle
+      if (failed >= 3) {
+        console.log(`[Sync] ⚠️ 3 failures — pausing flush. ${synced} synced, ${items.length - synced} remaining.`);
+        break;
+      }
     }
-    // Will retry next cycle (5s)
   }
 
-  // Clean up old synced items periodically
-  if (Math.random() < 0.01) { // 1% chance per cycle to avoid constant cleanup
-    db.prepare("DELETE FROM sync_queue WHERE synced = 1 AND created_at < datetime('now', '-1 hour')").run();
-  }
+  if (synced > 0) console.log(`[Sync] ✅ Dumped ${synced}/${items.length} items to cloud`);
+
+  // Clean up old synced items
+  db.prepare("DELETE FROM sync_queue WHERE synced = 1 AND created_at < datetime('now', '-1 hour')").run();
 }
 
 async function pullFromCloud() {

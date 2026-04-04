@@ -164,6 +164,13 @@ export async function addToOutbox(action: OutboxItem['action'], payload: any): P
 export const getOutboxItems = () => getAllFromStore<OutboxItem>('outbox');
 export const removeOutboxItem = (id: string) => deleteFromStore('outbox', id);
 
+export async function updateOutboxRetries(id: string, retries: number): Promise<void> {
+  const item = await getFromStore<OutboxItem>('outbox', id);
+  if (item) {
+    await putToStore('outbox', { ...item, retries });
+  }
+}
+
 export async function getOutboxCount(): Promise<number> {
   const items = await getOutboxItems();
   return items.length;
