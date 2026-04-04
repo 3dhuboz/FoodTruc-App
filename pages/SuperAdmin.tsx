@@ -11,6 +11,7 @@ interface Tenant {
   id: string; name: string; slug: string; subdomain: string;
   plan: string; status: string; billing_status: string;
   stripe_customer_id: string; stripe_subscription_id: string;
+  stripe_account_id: string; stripe_onboarding_complete: number;
   owner_email: string; owner_phone: string;
   logo_url: string; primary_color: string;
   business_address: string; phone: string; email: string; timezone: string;
@@ -268,7 +269,7 @@ const TenantDrawer: React.FC<{
                 </div>
               </div>
 
-              {/* Billing Info */}
+              {/* Billing & Connect Info */}
               {tenant.stripe_customer_id && (
                 <div className="mt-5 bg-gray-900 border border-gray-800 rounded-lg p-4">
                   <h4 className="text-gray-400 text-xs uppercase tracking-widest mb-2 flex items-center gap-1"><CreditCard size={12} /> Stripe</h4>
@@ -277,6 +278,25 @@ const TenantDrawer: React.FC<{
                     {tenant.stripe_subscription_id && (
                       <div><span className="text-gray-500">Subscription:</span> <span className="text-white font-mono text-xs">{tenant.stripe_subscription_id}</span></div>
                     )}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-800">
+                    <h5 className="text-gray-400 text-xs uppercase tracking-widest mb-2">Connect (Payments)</h5>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500">Status:</span>
+                        {tenant.stripe_onboarding_complete ? (
+                          <span className="text-green-400 flex items-center gap-1 text-xs font-bold"><CheckCircle size={12} /> Live — accepting payments</span>
+                        ) : tenant.stripe_account_id ? (
+                          <span className="text-yellow-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle size={12} /> Onboarding incomplete</span>
+                        ) : (
+                          <span className="text-red-400 flex items-center gap-1 text-xs font-bold"><XCircle size={12} /> Not connected</span>
+                        )}
+                      </div>
+                      {tenant.stripe_account_id && (
+                        <div><span className="text-gray-500">Account:</span> <span className="text-white font-mono text-xs">{tenant.stripe_account_id}</span></div>
+                      )}
+                      <div><span className="text-gray-500">Platform fee:</span> <span className="text-white text-xs">1.5%</span></div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -468,6 +488,7 @@ const SuperAdmin: React.FC = () => {
   const ordersToday = tenants.reduce((s, t) => s + (t.orders_today || 0), 0);
   const onlineDevices = devices.filter(d => d.is_currently_online).length;
   const activeTenants = tenants.filter(t => t.status === 'active').length;
+  const stripeLive = tenants.filter(t => t.stripe_onboarding_complete).length;
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -504,7 +525,7 @@ const SuperAdmin: React.FC = () => {
         {/* Overview Tab */}
         {tab === 'overview' && (
           <div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                 <div className="text-gray-500 text-xs uppercase tracking-widest mb-1">Active Tenants</div>
                 <div className="text-3xl font-black text-white">{activeTenants}</div>
@@ -520,6 +541,10 @@ const SuperAdmin: React.FC = () => {
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                 <div className="text-gray-500 text-xs uppercase tracking-widest mb-1">ChowBoxes Online</div>
                 <div className="text-3xl font-black text-blue-400">{onlineDevices}/{devices.length}</div>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <div className="text-gray-500 text-xs uppercase tracking-widest mb-1">Stripe Live</div>
+                <div className="text-3xl font-black text-green-400">{stripeLive}/{activeTenants}</div>
               </div>
             </div>
 
@@ -538,6 +563,9 @@ const SuperAdmin: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-4 text-sm">
                     <span className="text-gray-400">{t.plan}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${t.stripe_onboarding_complete ? 'bg-green-500/10 text-green-400' : t.stripe_account_id ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'}`}>
+                      {t.stripe_onboarding_complete ? 'Stripe Live' : t.stripe_account_id ? 'Onboarding' : 'No Stripe'}
+                    </span>
                     <span className="text-orange-400 font-bold">{t.total_orders} orders</span>
                     <span className="text-gray-500">{timeAgo(t.created_at)}</span>
                     <ArrowRight size={14} className="text-gray-600" />
@@ -575,6 +603,10 @@ const SuperAdmin: React.FC = () => {
                           {t.status}
                         </span>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 font-bold">{t.plan}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${t.stripe_onboarding_complete ? 'bg-green-500/10 text-green-400' : t.stripe_account_id ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'}`}>
+                          <CreditCard size={10} className="inline mr-1" />
+                          {t.stripe_onboarding_complete ? 'Stripe Live' : t.stripe_account_id ? 'Onboarding' : 'No Stripe'}
+                        </span>
                       </div>
                       <p className="text-gray-500 text-sm mt-0.5">{t.slug}.chownow.au</p>
                     </div>
