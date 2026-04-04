@@ -175,7 +175,7 @@ function buildOrderLabel(order, logoPath, socialQRPath, businessName, siteUrl, l
   parts.push(`-fill black`);
 
   // Build base image
-  let cmd = parts.join(' \\\n  ') + ` "${filePath}"`;
+  let cmd = parts.join(' ') + ` "${filePath}"`;
 
   // Composite logo (top-right corner)
   if (logoPath && existsSync(logoPath)) {
