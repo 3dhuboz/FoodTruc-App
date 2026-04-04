@@ -141,24 +141,19 @@ const SettingsManager: React.FC = () => {
   );
   const [geminiEditing, setGeminiEditing] = useState(false);
 
-  // Sync API key to runtime on mount so AI features work immediately
-  // Falls back to platform-level key if tenant doesn't have one
+  // Load AI key from platform settings (managed by ChowNow admin)
   useEffect(() => {
-    if (settings.geminiApiKey) {
-      import('../../services/gemini').then(m => m.setGeminiApiKey(settings.geminiApiKey));
-    } else {
-      // Fetch platform key as fallback
-      fetch('/api/v1/admin/settings')
-        .then(r => r.json())
-        .then(data => {
-          const platformKey = data?.settings?.geminiApiKey;
-          if (platformKey) {
-            import('../../services/gemini').then(m => m.setGeminiApiKey(platformKey));
-          }
-        })
-        .catch(() => {});
-    }
-  }, [settings.geminiApiKey]);
+    fetch('/api/v1/admin/settings')
+      .then(r => r.json())
+      .then(data => {
+        const platformKey = data?.settings?.geminiApiKey;
+        if (platformKey) {
+          import('../../services/gemini').then(m => m.setGeminiApiKey(platformKey));
+          setGeminiStatus('connected');
+        }
+      })
+      .catch(() => {});
+  }, []);
   
   // Connection Wizard
   const [connectorType, setConnectorType] = useState<'stripe' | 'square' | 'smartpay' | 'clicksend' | null>(null);
@@ -873,124 +868,22 @@ const SettingsManager: React.FC = () => {
       </Section>
 
 
-      {/* --- AI CONFIGURATION --- */}
-      <Section title="AI Configuration (OpenRouter)" icon={<Wand2 size={18} className="text-bbq-gold"/>}>
-
-          {/* Status Card */}
-          <div className={`border rounded-xl p-5 mb-4 ${geminiStatus === 'connected' ? 'border-green-600/40 bg-green-950/20' : geminiStatus === 'error' ? 'border-red-600/40 bg-red-950/20' : 'border-gray-700 bg-black/20'}`}>
-              <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${geminiStatus === 'connected' ? 'bg-green-600/20' : geminiStatus === 'error' ? 'bg-red-600/20' : 'bg-gray-800'}`}>
-                          <Wand2 size={20} className={geminiStatus === 'connected' ? 'text-green-400' : geminiStatus === 'error' ? 'text-red-400' : 'text-gray-500'}/>
-                      </div>
-                      <div>
-                          <h5 className="font-bold text-white">OpenRouter AI</h5>
-                          <p className="text-xs text-gray-400">
-                              {geminiStatus === 'connected' && 'Connected — AI features active for all admins'}
-                              {geminiStatus === 'idle' && 'Not connected'}
-                              {geminiStatus === 'saving' && 'Saving key...'}
-                              {geminiStatus === 'testing' && 'Testing connection...'}
-                              {geminiStatus === 'error' && 'Connection failed — check key'}
-                          </p>
-                      </div>
+      {/* --- AI STATUS (read-only — managed by platform) --- */}
+      <Section title="AI Features" icon={<Wand2 size={18} className="text-bbq-gold"/>}>
+          <div className={`border rounded-xl p-5 ${geminiStatus === 'connected' ? 'border-green-600/40 bg-green-950/20' : 'border-gray-700 bg-black/20'}`}>
+              <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${geminiStatus === 'connected' ? 'bg-green-600/20' : 'bg-gray-800'}`}>
+                      <Wand2 size={20} className={geminiStatus === 'connected' ? 'text-green-400' : 'text-gray-500'}/>
                   </div>
-                  {geminiStatus === 'connected' && <span className="flex items-center gap-1 text-green-400 text-xs font-bold"><CheckCircle size={14}/> Active</span>}
-                  {(geminiStatus === 'saving' || geminiStatus === 'testing') && <Loader2 size={16} className="text-bbq-gold animate-spin"/>}
-                  {geminiStatus === 'error' && <span className="flex items-center gap-1 text-red-400 text-xs font-bold"><AlertCircle size={14}/> Error</span>}
+                  <div>
+                      <h5 className="font-bold text-white">OpenRouter AI</h5>
+                      <p className="text-xs text-gray-400">
+                          {geminiStatus === 'connected'
+                              ? <span className="text-green-400 flex items-center gap-1"><CheckCircle size={12}/> Active — AI image generation and content features enabled</span>
+                              : 'Not configured — contact your ChowNow admin to enable AI features'}
+                      </p>
+                  </div>
               </div>
-
-              {/* Connected State */}
-              {geminiStatus === 'connected' && !geminiEditing && (
-                  <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={async () => {
-                          setGeminiStatus('testing');
-                          try {
-                              const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${geminiKey}` },
-                                body: JSON.stringify({ model: 'google/gemini-2.5-flash', messages: [{ role: 'user', content: 'Say OK' }] }),
-                              });
-                              const data = await res.json();
-                              if (data.choices?.[0]?.message?.content) { setGeminiStatus('connected'); toast('OpenRouter AI connection verified!', 'success'); }
-                              else { setGeminiStatus('error'); toast('No response from AI.', 'error'); }
-                          } catch (e: any) {
-                              console.error('OpenRouter test error:', e);
-                              setGeminiStatus('error');
-                              toast('Test failed: ' + (e?.message || e), 'error');
-                          }
-                      }} className="bg-blue-600/20 text-blue-400 border border-blue-600/40 px-4 py-2 rounded text-sm font-bold hover:bg-blue-600/30 transition">
-                          Test Connection
-                      </button>
-                      <button type="button" onClick={() => { setGeminiEditing(true); setGeminiKey(''); }}
-                          className="bg-bbq-gold/20 text-bbq-gold border border-bbq-gold/40 px-4 py-2 rounded text-sm font-bold hover:bg-bbq-gold/30 transition">
-                          Reconnect with New Key
-                      </button>
-                      <button type="button" onClick={async () => {
-                          setGeminiStatus('saving');
-                          try {
-                              await restSetDoc('settings', 'general', { geminiApiKey: '' });
-                          } catch (_) {}
-                          setGeminiKey('');
-                          setGeminiStatus('idle');
-                          setGeminiEditing(false);
-                          toast('OpenRouter AI disconnected.');
-                      }} className="bg-red-600/20 text-red-400 border border-red-600/40 px-4 py-2 rounded text-sm font-bold hover:bg-red-600/30 transition">
-                          Disconnect
-                      </button>
-                  </div>
-              )}
-
-              {/* Error State */}
-              {geminiStatus === 'error' && !geminiEditing && (
-                  <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => { setGeminiEditing(true); setGeminiKey(''); }}
-                          className="bg-bbq-gold text-black font-bold px-4 py-2 rounded text-sm hover:bg-yellow-500 transition">
-                          Enter New Key
-                      </button>
-                  </div>
-              )}
-
-              {/* Input State */}
-              {(geminiStatus === 'idle' || geminiEditing || geminiStatus === 'error') && (geminiEditing || geminiStatus !== 'error') && (
-                  <div className="space-y-3">
-                      <div className="flex gap-2">
-                          <input type="text" autoComplete="off" value={geminiKey} onChange={e => setGeminiKey(e.target.value)}
-                              placeholder="Paste your OpenRouter API Key (sk-or-...)..."
-                              className="flex-1 bg-black/40 border border-gray-700 rounded p-2 text-white font-mono text-sm"
-                          />
-                          <button type="button" disabled={geminiStatus === 'saving'}
-                              className="bg-bbq-gold text-black font-bold px-4 py-2 rounded text-sm hover:bg-yellow-500 transition whitespace-nowrap disabled:opacity-50"
-                              onClick={() => {
-                                  const key = geminiKey.trim();
-                                  if (!key) { toast('Enter a key first.', 'warning'); return; }
-                                  // Set runtime key immediately, persist to Firestore
-                                  import('../../services/gemini').then(m => m.setGeminiApiKey(key));
-                                  setGeminiStatus('connected');
-                                  setGeminiEditing(false);
-                                  toast('OpenRouter key active! Syncing to cloud...', 'success');
-                                  // Use REST API for reliable cloud sync
-                                  restSetDoc('settings', 'general', { geminiApiKey: key })
-                                      .then(() => toast('Synced to cloud — all admins will now have AI access.', 'success'))
-                                      .catch(err => { console.error('Cloud sync failed:', err); toast('Cloud sync failed — key saved locally only.', 'warning'); });
-                              }}
-                          >
-                              {geminiStatus === 'saving' ? 'Saving...' : 'Save Key'}
-                          </button>
-                          {geminiEditing && (
-                              <button type="button" onClick={() => {
-                                  setGeminiKey(settings.geminiApiKey || '');
-                                  setGeminiEditing(false);
-                              }} className="text-gray-400 hover:text-white px-3 py-2 rounded text-sm border border-gray-700 hover:border-gray-500 transition">
-                                  Cancel
-                              </button>
-                          )}
-                      </div>
-                      <div className="text-xs text-gray-500 flex items-start gap-2">
-                          <Info size={14} className="shrink-0 mt-0.5"/>
-                          <span>Get your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" className="text-bbq-gold hover:underline">openrouter.ai/keys</a>. Powers AI content, images, and recommendations.</span>
-                      </div>
-                  </div>
-              )}
           </div>
       </Section>
 

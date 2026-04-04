@@ -917,20 +917,20 @@ const SuperAdmin: React.FC = () => {
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
               <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Key size={16} className="text-yellow-400" /> Platform API Keys</h3>
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Gemini API Key</label>
+                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">OpenRouter API Key</label>
                 <div className="flex gap-2">
                   <input
                     type={showGeminiKey ? 'text' : 'password'}
                     value={platformForm.geminiApiKey ?? ''}
                     onChange={e => setPlatformForm({ ...platformForm, geminiApiKey: e.target.value })}
-                    placeholder="AIzaSy..."
+                    placeholder="sk-or-v1-..."
                     className="flex-1 bg-black/40 border border-gray-700 rounded-lg p-2.5 text-white text-sm font-mono focus:border-orange-500 focus:outline-none" />
                   <button onClick={() => setShowGeminiKey(!showGeminiKey)}
                     className="bg-gray-800 hover:bg-gray-700 p-2.5 rounded-lg text-gray-400 hover:text-white transition">
                     {showGeminiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <p className="text-gray-600 text-xs mt-1">Used for AI image generation across all tenants. Get yours from <a href="https://aistudio.google.com/apikey" target="_blank" className="text-blue-400 hover:underline">Google AI Studio</a>.</p>
+                <p className="text-gray-600 text-xs mt-1">Powers AI image generation and content across all tenants. Get yours from <a href="https://openrouter.ai/keys" target="_blank" className="text-blue-400 hover:underline">OpenRouter</a>.</p>
               </div>
               <p className="text-gray-600 text-xs mt-3">Stripe and SendGrid keys are managed as Cloudflare secrets — see Platform Status above.</p>
             </div>
