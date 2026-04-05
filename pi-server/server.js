@@ -893,6 +893,14 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ── Portal redirect routes — 302 to Pi IP with hash route ──
+    // These work in captive portal WebViews because HTTP redirects happen at protocol level
+    const goRoutes = { '/go/order': '/#/qr-order', '/go/staff': '/#/portal', '/go/admin': '/#/portal' };
+    if (goRoutes[url.pathname]) {
+      res.writeHead(302, { 'Location': 'http://192.168.50.1' + goRoutes[url.pathname], 'Cache-Control': 'no-cache' });
+      res.end(); return;
+    }
+
     // Operator Setup Page — served at /setup
     if (url.pathname === '/setup' || url.pathname === '/setup/') {
       const setupPath = join(__dirname, 'operator.html');

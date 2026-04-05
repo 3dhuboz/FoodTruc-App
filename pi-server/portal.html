@@ -29,31 +29,26 @@
   <h1 id="biz-name">ChowBox</h1>
   <div class="sub">Powered by ChowNow</div>
 
-  <button class="btn btn-order" onclick="go('qr-order')">Order Food</button>
+  <a href="/go/order" class="btn btn-order">Order Food</a>
 
   <div class="row">
-    <button class="btn btn-secondary" onclick="go('portal')">
+    <a href="/go/staff" class="btn btn-secondary">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6.6a5.11 5.11 0 0 1 .36-1.57 5 5 0 0 1 8.46 0c.13.52.22 1.04.36 1.57A4 4 0 0 1 18 13.87V21H6z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>
       Staff
-    </button>
-    <button class="btn btn-secondary" onclick="go('portal')">
+    </a>
+    <a href="/go/admin" class="btn btn-secondary">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       Admin
-    </button>
+    </a>
   </div>
 
   <div class="footer">Powered by ChowNow</div>
 </div>
 
 <script>
-// Load business name
-fetch('http://192.168.50.1/api/v1/settings').then(function(r){return r.json()}).then(function(s){
+fetch('/api/v1/settings').then(function(r){return r.json()}).then(function(s){
   if(s&&s.businessName)document.getElementById('biz-name').textContent=s.businessName;
 }).catch(function(){});
-
-function go(route) {
-  window.location.replace('http://192.168.50.1/#/' + route);
-}
 </script>
 </body>
 </html>
