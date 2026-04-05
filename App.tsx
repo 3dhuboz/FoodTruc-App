@@ -34,6 +34,7 @@ const BOH = React.lazy(() => import('./pages/BOH'));
 const FOH = React.lazy(() => import('./pages/FOH'));
 const QROrder = React.lazy(() => import('./pages/QROrder'));
 const OrderStatus = React.lazy(() => import('./pages/OrderStatus'));
+const CaptivePortal = React.lazy(() => import('./pages/CaptivePortal'));
 
 const PageLoader = () => (
   <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>
@@ -96,6 +97,9 @@ const AppRoutes = () => {
         {/* Customer QR Ordering - No auth required */}
         <Route path="/qr-order" element={<Suspense fallback={<PageLoader />}><QROrder /></Suspense>} />
         <Route path="/order-status/:orderId" element={<Suspense fallback={<PageLoader />}><OrderStatus /></Suspense>} />
+
+        {/* Captive Portal - ChowBox WiFi landing page */}
+        <Route path="/portal" element={<Suspense fallback={<PageLoader />}><CaptivePortal /></Suspense>} />
         {/* Landing Page - ChowNow SaaS product page */}
         <Route path="/landing" element={<Suspense fallback={<PageLoader />}><Landing /></Suspense>} />
         <Route path="/signup-success" element={<Suspense fallback={<PageLoader />}><SignupSuccess /></Suspense>} />
@@ -171,6 +175,7 @@ const TenantGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Route path="/qr-order" element={<AppProvider><QROrder /></AppProvider>} />
             <Route path="/boh" element={<AppProvider><BOH /></AppProvider>} />
             <Route path="/foh" element={<AppProvider><FOH /></AppProvider>} />
+            <Route path="/portal" element={<AppProvider><CaptivePortal /></AppProvider>} />
             <Route path="*" element={<Landing />} />
           </Routes>
         </HashRouter>

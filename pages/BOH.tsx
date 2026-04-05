@@ -2,35 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Order } from '../types';
 import { Lock, Bell, BellOff, Wifi, WifiOff } from 'lucide-react';
-
-// ─── PIN Gate ────────────────────────────────────────────────
-const PinGate: React.FC<{ pin: string; onUnlock: () => void }> = ({ pin, onUnlock }) => {
-  const [entered, setEntered] = useState('');
-  const [shake, setShake] = useState(false);
-  const handleDigit = (d: string) => {
-    const next = entered + d;
-    if (next.length < pin.length) { setEntered(next); return; }
-    if (next === pin) { onUnlock(); return; }
-    setShake(true); setEntered('');
-    setTimeout(() => setShake(false), 500);
-  };
-  return (
-    <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-8">
-      <div className="text-white text-3xl font-black tracking-wider">KITCHEN</div>
-      <div className={`flex gap-3 ${shake ? 'animate-bounce' : ''}`}>
-        {Array.from({ length: pin.length }).map((_, i) => (
-          <div key={i} className={`w-4 h-4 rounded-full border-2 ${i < entered.length ? 'bg-orange-400 border-orange-400' : 'border-gray-700'}`} />
-        ))}
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d, i) => (
-          <button key={i} onClick={() => d === '⌫' ? setEntered(e => e.slice(0, -1)) : d ? handleDigit(d) : undefined} disabled={!d}
-            className={`w-20 h-20 rounded-2xl text-2xl font-bold ${d ? 'bg-gray-900 text-white hover:bg-gray-800 active:scale-95' : 'invisible'}`}>{d}</button>
-        ))}
-      </div>
-    </div>
-  );
-};
+import PinGate from '../components/PinGate';
 
 // ─── Elapsed time formatting ─────────────────────────────────
 const formatTime = (createdAt: string): { text: string; urgency: 'fresh' | 'normal' | 'late' | 'overdue' } => {
@@ -186,7 +158,7 @@ const BOH: React.FC = () => {
     }
   };
 
-  if (!unlocked) return <PinGate pin={staffPin} onUnlock={() => setUnlocked(true)} />;
+  if (!unlocked) return <PinGate pin={staffPin} onUnlock={() => setUnlocked(true)} title="KITCHEN" />;
 
   return (
     <div className="h-screen bg-black text-white flex flex-col overflow-hidden select-none">

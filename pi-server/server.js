@@ -876,7 +876,7 @@ const server = createServer(async (req, res) => {
       // If accessed via AP interface (10.0.0.1) → show operator setup
       // If accessed via other interface → show QR ordering
       const captiveHost = req.headers.host?.split(':')[0] || '10.0.0.1';
-      const orderUrl = captiveHost === '10.0.0.1' ? `http://10.0.0.1/setup` : `http://${captiveHost}/#/qr-order`;
+      const orderUrl = captiveHost === '10.0.0.1' ? `http://10.0.0.1/#/portal` : `http://${captiveHost}/#/qr-order`;
       // Some phones need a non-redirect response to trigger the captive portal popup
       // Return a small HTML page that also redirects via meta + JS
       const html = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${orderUrl}"><title>ChowBox</title></head><body style="background:#030712;color:#f97316;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h1 style="font-size:28px;margin-bottom:16px;">ChowBox</h1><p style="color:#9ca3af;">Loading menu...</p><a href="${orderUrl}" style="display:inline-block;margin-top:20px;background:#f97316;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">Tap to Order</a></div><script>location.href="${orderUrl}"</script></body></html>`;
