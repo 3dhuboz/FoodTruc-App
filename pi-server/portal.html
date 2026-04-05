@@ -11,14 +11,20 @@
   .logo { width: 80px; height: 80px; margin: 0 auto 16px; background: rgba(249,115,22,0.15); border-radius: 20px; display: flex; align-items: center; justify-content: center; }
   .logo svg { width: 40px; height: 40px; color: #f97316; }
   h1 { font-size: 28px; font-weight: 900; color: white; margin-bottom: 4px; }
-  .sub { color: #6b7280; font-size: 13px; margin-bottom: 32px; }
-  .btn { display: block; width: 100%; padding: 20px; border-radius: 16px; border: none; font-weight: 700; font-size: 18px; cursor: pointer; text-align: center; transition: transform 0.1s; -webkit-appearance: none; }
-  .btn:active { transform: scale(0.98); }
-  .btn-order { background: #f97316; color: white; margin-bottom: 12px; font-size: 22px; padding: 24px; box-shadow: 0 8px 24px rgba(249,115,22,0.25); }
+  .sub { color: #6b7280; font-size: 13px; margin-bottom: 28px; }
+  .instruction { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+  .instruction p { color: #9ca3af; font-size: 15px; margin-bottom: 12px; }
+  .ip { font-size: 32px; font-weight: 900; color: #f97316; font-family: monospace; letter-spacing: 2px; user-select: all; -webkit-user-select: all; }
+  .hint { color: #6b7280; font-size: 12px; margin-top: 8px; }
+  .btn { display: block; width: 100%; padding: 20px; border-radius: 16px; border: none; font-weight: 700; font-size: 18px; cursor: pointer; text-align: center; text-decoration: none; -webkit-appearance: none; }
+  .btn-order { background: #f97316; color: white; margin-bottom: 12px; font-size: 20px; box-shadow: 0 8px 24px rgba(249,115,22,0.25); }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-  .btn-secondary { background: #111827; color: white; border: 1px solid #1f2937; font-size: 14px; padding: 18px 12px; }
-  .btn-secondary svg { display: block; margin: 0 auto 8px; color: #f97316; }
-  .footer { color: #374151; font-size: 11px; margin-top: 24px; }
+  .btn-secondary { background: #111827; color: white; border: 1px solid #1f2937; font-size: 14px; padding: 16px 12px; }
+  .btn-secondary svg { display: block; margin: 0 auto 6px; color: #f97316; }
+  .footer { color: #374151; font-size: 11px; margin-top: 20px; }
+  /* Hide captive-only content when in real browser */
+  .captive-only { display: block; }
+  .browser-only { display: none; }
 </style>
 </head>
 <body>
@@ -29,25 +35,46 @@
   <h1 id="biz-name">ChowBox</h1>
   <div class="sub">Powered by ChowNow</div>
 
-  <a href="/go/order" class="btn btn-order">Order Food</a>
+  <!-- Shown in captive portal WebView -->
+  <div class="captive-only" id="captive-content">
+    <div class="instruction">
+      <p>Open your browser and go to:</p>
+      <div class="ip">192.168.50.1</div>
+      <div class="hint">Long-press to copy</div>
+    </div>
+  </div>
 
-  <div class="row">
-    <a href="/go/staff" class="btn btn-secondary">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6.6a5.11 5.11 0 0 1 .36-1.57 5 5 0 0 1 8.46 0c.13.52.22 1.04.36 1.57A4 4 0 0 1 18 13.87V21H6z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>
-      Staff
-    </a>
-    <a href="/go/admin" class="btn btn-secondary">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      Admin
-    </a>
+  <!-- Shown in real browser (Chrome/Safari) -->
+  <div class="browser-only" id="browser-content">
+    <a href="/#/qr-order" class="btn btn-order">Order Food</a>
+    <div class="row">
+      <a href="/#/portal" class="btn btn-secondary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6.6a5.11 5.11 0 0 1 .36-1.57 5 5 0 0 1 8.46 0c.13.52.22 1.04.36 1.57A4 4 0 0 1 18 13.87V21H6z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>
+        Staff
+      </a>
+      <a href="/#/portal" class="btn btn-secondary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Admin
+      </a>
+    </div>
   </div>
 
   <div class="footer">Powered by ChowNow</div>
 </div>
 
 <script>
+// Detect if we're in a real browser vs captive WebView
+// Real browser: hostname is 192.168.50.1 (accessed directly)
+// Captive WebView: hostname is connectivitycheck.gstatic.com or similar
+var isRealBrowser = location.hostname === '192.168.50.1' || location.hostname === '10.0.0.1' || location.hostname === 'localhost';
+if (isRealBrowser) {
+  document.getElementById('captive-content').style.display = 'none';
+  document.getElementById('browser-content').style.display = 'block';
+}
+
+// Load business name
 fetch('/api/v1/settings').then(function(r){return r.json()}).then(function(s){
-  if(s&&s.businessName)document.getElementById('biz-name').textContent=s.businessName;
+  if(s&&s.businessName) document.getElementById('biz-name').textContent = s.businessName;
 }).catch(function(){});
 </script>
 </body>
