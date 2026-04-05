@@ -774,7 +774,7 @@ const normalizePhone = (raw: string): string => {
                     <h4 className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-2 flex items-center gap-2"><Clock size={12}/> Cooking Now ({cookingDateOrders.length})</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {cookingDateOrders.map(order => (
-                        <div key={order.id} className="bg-black/30 border border-orange-800 rounded-lg p-3 flex justify-between items-center">
+                        <div key={order.id} className="bg-black/30 border border-orange-800 rounded-lg p-3 flex justify-between items-center cursor-pointer hover:bg-black/50 transition" onClick={() => handleEditClick(order)}>
                           <div>
                             <div className="font-bold text-white flex items-center gap-1.5">{order.customerName}
                               {order.type === 'CATERING' && <span className="text-[10px] bg-purple-900/50 text-purple-300 border border-purple-700 px-1.5 rounded-full">CAT</span>}
@@ -785,7 +785,7 @@ const normalizePhone = (raw: string): string => {
                               <span className="flex items-center gap-1">{order.temperature === 'HOT' ? <Flame size={10} className="text-orange-500"/> : <Snowflake size={10} className="text-blue-400"/>} {order.temperature}</span>
                             </div>
                           </div>
-                          <button onClick={() => handleMarkReady(order)} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg whitespace-nowrap">
+                          <button onClick={(e) => { e.stopPropagation(); handleMarkReady(order); }} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg whitespace-nowrap">
                             <Check size={16}/> READY
                           </button>
                         </div>
@@ -799,7 +799,7 @@ const normalizePhone = (raw: string): string => {
                     <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-2"><CreditCard size={12}/> Paid &amp; Waiting ({paidDateOrders.length})</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {paidDateOrders.map(order => (
-                        <div key={order.id} className="bg-black/30 border border-gray-700 rounded-lg p-3 flex justify-between items-center">
+                        <div key={order.id} className="bg-black/30 border border-gray-700 rounded-lg p-3 flex justify-between items-center cursor-pointer hover:bg-black/50 transition" onClick={() => handleEditClick(order)}>
                           <div>
                             <div className="font-bold text-white text-sm flex items-center gap-1.5">{order.customerName}
                               {order.type === 'CATERING' && <span className="text-[10px] bg-purple-900/50 text-purple-300 border border-purple-700 px-1.5 rounded-full">CAT</span>}
@@ -807,7 +807,7 @@ const normalizePhone = (raw: string): string => {
                             <div className="text-xs text-gray-400 truncate max-w-[220px]">{order.items.map(i => `${i.quantity}x ${i.item.name}`).join(', ')}</div>
                             <div className="text-xs text-gray-500 mt-1">{order.pickupTime}</div>
                           </div>
-                          <button onClick={() => handleStartCooking(order)} className="bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded font-bold text-xs flex items-center gap-1">
+                          <button onClick={(e) => { e.stopPropagation(); handleStartCooking(order); }} className="bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded font-bold text-xs flex items-center gap-1">
                             <Flame size={14}/> Start
                           </button>
                         </div>
@@ -821,12 +821,12 @@ const normalizePhone = (raw: string): string => {
                     <h4 className="text-xs font-bold text-green-400 uppercase tracking-wider mb-2 flex items-center gap-2"><CheckCircle size={12}/> Ready for Pickup ({readyDateOrders.length})</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {readyDateOrders.map(order => (
-                        <div key={order.id} className="bg-green-900/20 border border-green-800 rounded-lg p-3 flex justify-between items-center">
+                        <div key={order.id} className="bg-green-900/20 border border-green-800 rounded-lg p-3 flex justify-between items-center cursor-pointer hover:bg-green-900/30 transition" onClick={() => handleEditClick(order)}>
                           <div>
                             <div className="font-bold text-green-200 text-sm">{order.customerName}</div>
                             <div className="text-xs text-gray-400">{order.pickupTime} · {order.customerPhone}</div>
                           </div>
-                          <button onClick={() => handleMarkCollected(order)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded font-bold text-xs flex items-center gap-1"><CheckCircle size={12}/> Collected</button>
+                          <button onClick={(e) => { e.stopPropagation(); handleMarkCollected(order); }} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded font-bold text-xs flex items-center gap-1"><CheckCircle size={12}/> Collected</button>
                         </div>
                       ))}
                     </div>
