@@ -861,24 +861,23 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // ── Captive portal — return expected responses so NO popup appears ──
-    // Phone thinks internet works → no "Sign in to network" prompt
-    if (url.pathname === '/generate_204') { res.writeHead(204); res.end(); return; }
-    if (url.pathname === '/hotspot-detect.html') {
-      const h = '<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>';
-      res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': Buffer.byteLength(h) }); res.end(h); return;
-    }
-    if (['/ncsi.txt','/connecttest.txt','/success.txt','/canonical.html','/redirect'].includes(url.pathname)) {
-      res.writeHead(204); res.end(); return;
+    // ── Captive portal — serve portal.html so phone shows "Sign in" with our page ──
+    // Phone checks these URLs after connecting. Returning non-standard response
+    // triggers the captive portal popup which loads portal.html with working form buttons.
+    const captiveUrls = ['/generate_204', '/hotspot-detect.html', '/ncsi.txt', '/connecttest.txt', '/success.txt', '/canonical.html', '/redirect'];
+    if (captiveUrls.includes(url.pathname)) {
+      const portalPath = join(__dirname, 'portal.html');
+      if (existsSync(portalPath)) {
+        const html = readFileSync(portalPath, 'utf-8');
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
+        res.end(html); return;
+      }
     }
 
-    // ── DNS-hijacked traffic — redirect to Pi IP with portal ──
-    // When AP client opens Chrome and goes to any URL (google.com etc),
-    // DNS hijack resolves to Pi. Redirect them to the real Pi IP so React SPA loads.
-    const reqHost = req.headers.host?.split(':')[0] || '';
-    const isLocalHost = ['192.168.50.1','10.0.0.1','localhost','127.0.0.1'].includes(reqHost);
-    if (!isLocalHost && !url.pathname.startsWith('/api/')) {
-      res.writeHead(302, { 'Location': 'http://192.168.50.1/#/portal', 'Cache-Control': 'no-cache' });
+    // ── Portal redirect routes — server-side redirects for captive WebView form submissions ──
+    if (url.pathname === '/go/order' || url.pathname === '/go/staff' || url.pathname === '/go/admin') {
+      const routes = { '/go/order': '/#/qr-order', '/go/staff': '/#/portal', '/go/admin': '/#/portal' };
+      res.writeHead(302, { 'Location': 'http://192.168.50.1' + routes[url.pathname], 'Cache-Control': 'no-cache' });
       res.end(); return;
     }
 
