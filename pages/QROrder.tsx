@@ -343,7 +343,8 @@ const QROrder: React.FC = () => {
         </div>
       )}
 
-      {/* Demo Banner */}
+      {/* Demo Banner — only on platform site (chownow.au), not tenant subdomains */}
+      {(window.location.hostname === 'chownow.au' || window.location.hostname === 'www.chownow.au' || window.location.hostname === 'localhost') && (
       <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-5 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -360,6 +361,7 @@ const QROrder: React.FC = () => {
           </a>
         </div>
       </div>
+      )}
 
       {/* Header */}
       <div className="bg-gray-950 border-b border-gray-800 px-5 pt-6 pb-4">
