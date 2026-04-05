@@ -185,7 +185,8 @@ const Menu: React.FC = () => {
   // Derived State
   const selectedEvent = orderEvents.find(e => e.date === selectedOrderDate);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
-  
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
   // Feedback State for buttons
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
 
@@ -223,16 +224,6 @@ const Menu: React.FC = () => {
   };
   
   const handleItemClick = (item: MenuItem) => {
-      // Allow adding Merch/Rubs without a date
-      const isShippable = ['Rubs & Sauces', 'Merch'].includes(item.category);
-
-      if (!selectedOrderDate && !isShippable && user?.role !== 'ADMIN') {
-          // Prompt for date only if it's FOOD
-          const el = document.getElementById('date-selector-bar');
-          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          toast('Please select a pickup date above to order fresh food.', 'warning');
-          return;
-      }
       setSelectedItem(item);
   };
 
@@ -279,145 +270,22 @@ const Menu: React.FC = () => {
       {/* LEFT CONTENT (Menu) - SPANS 3 COLUMNS */}
       <div className="lg:col-span-3 space-y-8">
         
-        {/* --- FAMILY PACKS HERO COLLAGE --- */}
-        <div className="rounded-3xl overflow-hidden relative border border-white/10 shadow-2xl group min-h-[450px] flex flex-col md:flex-row">
-            
-            {/* Text Content (Left) */}
-            <div className="relative z-20 p-8 md:p-12 flex flex-col justify-center items-start w-full md:w-1/2 bg-gradient-to-r from-purple-900/95 to-black/80">
-               <div className="bg-yellow-500 text-black font-black uppercase tracking-widest text-xs px-3 py-1 rounded mb-4 shadow-[0_0_20px_rgba(234,179,8,0.5)] animate-pulse">
-                  Best Value
-               </div>
-               <h2 className="text-5xl md:text-7xl font-display font-bold text-white mb-4 leading-none drop-shadow-xl">
-                  FEED THE <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">WHOLE MOB</span>
-               </h2>
-               <p className="text-gray-200 text-lg md:text-xl font-medium max-w-lg mb-8 leading-relaxed">
-                  Save time and money with our curated Family Packs. Brisket, Ribs, Sides, and Drinks bundled for the ultimate feast.
-               </p>
-               <button 
-                  onClick={() => {
-                      const id = getCatId('Family Packs');
-                      const el = document.getElementById(id);
-                      if (el) {
-                          el.scrollIntoView({ behavior: 'smooth' });
-                      }
-                  }}
-                  className="bg-white text-black font-bold uppercase tracking-widest px-8 py-4 rounded-full flex items-center gap-3 hover:bg-gray-200 transition-all shadow-xl"
-               >
-                  <Package size={20} /> View Packs
-               </button>
-            </div>
-
-            {/* Image Collage (Right) - UPDATED TO SUPPORT SINGLE HERO IMAGE */}
-            <div className="relative w-full md:w-1/2 min-h-[300px] md:min-h-full">
-                {settings.menuHeroImage ? (
-                    // Single Hero Image
-                    <div className="absolute inset-0">
-                        <img 
-                            src={settings.menuHeroImage} 
-                            className="w-full h-full object-cover" 
-                            alt="Menu Hero"
-                            onError={handleImageError}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent md:bg-gradient-to-r"></div>
-                    </div>
-                ) : (
-                    // Default Collage
-                    <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-2 p-2 bg-black">
-                        {/* Large Image (Left half of grid) */}
-                        <div className="row-span-2 relative overflow-hidden rounded-xl">
-                            <img 
-                              src={packImages[0]} 
-                              className="w-full h-full object-cover hover:scale-105 transition duration-700" 
-                              alt="BBQ Platter"
-                              onError={handleImageError}
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                        </div>
-                        {/* Top Right */}
-                        <div className="relative overflow-hidden rounded-xl">
-                            <img 
-                              src={packImages[1]} 
-                              className="w-full h-full object-cover hover:scale-105 transition duration-700"
-                              alt="Brisket Tray"
-                              onError={handleImageError}
-                            />
-                        </div>
-                        {/* Bottom Right */}
-                        <div className="relative overflow-hidden rounded-xl">
-                            <img 
-                              src={packImages[2]} 
-                              className="w-full h-full object-cover hover:scale-105 transition duration-700"
-                              alt="Ribs"
-                              onError={handleImageError}
-                            />
-                        </div>
-                    </div>
-                )}
-                {/* Overlay Gradient to blend with text side */}
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-900/95 via-transparent to-transparent md:block hidden pointer-events-none"></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-purple-900/95 via-transparent to-transparent md:hidden block pointer-events-none"></div>
-            </div>
-        </div>
-
-        {/* --- DATE SELECTOR BAR (Sticky) --- */}
-        <div id="date-selector-bar" className="sticky top-20 md:top-24 z-30 bg-bbq-charcoal/95 backdrop-blur-md border-y border-gray-700 p-4 -mx-4 md:mx-0 md:rounded-xl shadow-2xl flex flex-col md:flex-row justify-between items-center gap-4 transition-all">
-            <div className="flex items-center gap-3 w-full md:w-auto">
-               <div className={`p-2 rounded-lg text-white transition-colors ${selectedOrderDate ? 'bg-bbq-red' : 'bg-gray-700'}`}>
-                   <Calendar size={24} />
-               </div>
-               <div>
-                   <div className="text-[10px] uppercase font-bold text-gray-400 tracking-widest">
-                       {selectedOrderDate ? 'Ordering For' : 'Menu Mode'}
-                   </div>
-                   <div className="text-white font-bold text-lg leading-none flex items-center gap-2">
-                       {selectedEvent ? (
-                           <>
-                              {new Date(selectedEvent.date).toLocaleDateString('en-AU', {weekday:'long', month:'short', day:'numeric'})}
-                              <button onClick={() => setSelectedOrderDate(null)} className="bg-gray-800 rounded-full p-0.5 hover:bg-gray-600 transition" title="Clear Date">
-                                  <X size={12}/>
-                              </button>
-                           </>
-                       ) : (
-                           'Viewing Full Menu'
-                       )}
-                   </div>
-               </div>
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto max-w-full w-full md:w-auto pb-2 md:pb-0 custom-scrollbar">
-                {orderEvents.map(evt => (
+        {/* --- CATEGORY FILTER BAR (Sticky) --- */}
+        <div className="sticky top-20 md:top-24 z-30 bg-bbq-charcoal/95 backdrop-blur-md border-y border-gray-700 py-3 px-4 -mx-4 md:mx-0 md:rounded-xl shadow-2xl">
+            <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar">
+                <button
+                  onClick={() => setActiveCategory(null)}
+                  className={`whitespace-nowrap px-4 py-2 rounded-full font-bold text-sm transition ${!activeCategory ? 'bg-orange-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                >All</button>
+                {sortedCategories.map(cat => (
                     <button
-                      key={evt.id}
-                      onClick={() => handleDateSelect(evt.date)}
-                      className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm transition border ${selectedOrderDate === evt.date ? 'bg-white text-black border-white shadow-lg transform scale-105' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500 hover:text-white'}`}
-                    >
-                        {new Date(evt.date).toLocaleDateString('en-AU', {month:'short', day:'numeric'})}
-                        <span className="text-[10px] ml-1 opacity-70 block">{evt.location}</span>
-                    </button>
+                      key={cat as string}
+                      onClick={() => setActiveCategory(cat as string)}
+                      className={`whitespace-nowrap px-4 py-2 rounded-full font-bold text-sm transition ${activeCategory === cat ? 'bg-orange-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                    >{cat as string}</button>
                 ))}
             </div>
         </div>
-
-        {/* CUTOFF WARNING */}
-        <div className="bg-red-900/30 border border-red-800 p-3 rounded-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2 mx-auto max-w-2xl">
-            <AlertCircle className="text-red-500 shrink-0" size={20}/>
-            <p className="text-red-200 text-xs font-bold leading-relaxed">
-                IMPORTANT: Orders close strictly at 9:00 AM the day BEFORE cooking to ensure stock availability. Don't miss out!
-            </p>
-        </div>
-
-        {/* --- INFO BANNER (If No Date) --- */}
-        {!selectedOrderDate && (
-            <div className="bg-blue-900/20 border border-blue-800/50 p-4 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-3">
-                    <div className="bg-blue-500/20 p-2 rounded-full text-blue-400 shrink-0"><ShoppingBag size={20}/></div>
-                    <div>
-                        <p className="text-white font-bold text-sm">Browsing Full Menu</p>
-                        <p className="text-xs text-blue-300">Select a date above to order food. Pantry items (Rubs/Sauces) can be ordered anytime.</p>
-                    </div>
-                </div>
-            </div>
-        )}
 
         {/* --- MENU GRID --- */}
         {availableMenu.length === 0 ? (
@@ -425,7 +293,7 @@ const Menu: React.FC = () => {
                 <p className="text-gray-500 text-lg">Menu items loading or not available for this selection.</p>
             </div>
         ) : (
-          sortedCategories.map(cat => (
+          sortedCategories.filter(cat => !activeCategory || cat === activeCategory).map(cat => (
               <div key={cat} id={getCatId(cat as string)} className="space-y-6 pt-8 scroll-mt-32">
               <div className="flex items-center gap-4">
                   <h3 className="text-3xl font-display font-bold text-white uppercase tracking-wide flex items-center gap-3">
@@ -513,49 +381,13 @@ const Menu: React.FC = () => {
       <div className="hidden lg:block lg:col-span-1">
           <div className="sticky top-24 space-y-4">
               
-              {/* Collection Reminder Card */}
+              {/* Order Info Card */}
               <div className="bg-gradient-to-br from-gray-900 to-black p-5 rounded-xl border border-gray-700 shadow-xl">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                      <Clock size={14} className="text-bbq-gold"/> Next Collection
+                      <Utensils size={14} className="text-bbq-gold"/> Order Info
                   </h4>
-                  {selectedEvent ? (() => {
-                      const pickupDate = new Date(selectedEvent.date);
-                      pickupDate.setDate(pickupDate.getDate() + 1);
-                      return (
-                          <div>
-                              <p className="text-white font-display text-2xl font-bold">{pickupDate.toLocaleDateString('en-AU', {weekday: 'long'})}</p>
-                              <p className="text-bbq-gold font-bold">{pickupDate.toLocaleDateString('en-AU', {month:'long', day:'numeric'})}</p>
-                              <p className="text-xs text-gray-500 mt-1">{selectedEvent.location}</p>
-                              <div className="mt-2 text-[10px] text-red-400 font-bold uppercase bg-red-900/20 px-2 py-1 rounded inline-block border border-red-900/30">
-                                  Order by {new Date(selectedEvent.date).toLocaleDateString('en-AU', {weekday:'short'})} 5pm
-                              </div>
-                          </div>
-                      );
-                  })() : (
-                      orderEvents.length > 0 ? (() => {
-                          const nextEvt = orderEvents[0];
-                          const pickupDate = new Date(nextEvt.date);
-                          pickupDate.setDate(pickupDate.getDate() + 1);
-                          return (
-                              <div>
-                                  <p className="text-white font-display text-2xl font-bold">{pickupDate.toLocaleDateString('en-AU', {weekday: 'long'})}</p>
-                                  <p className="text-bbq-gold font-bold">{pickupDate.toLocaleDateString('en-AU', {month:'long', day:'numeric'})}</p>
-                                  <p className="text-xs text-gray-500 mt-1">{nextEvt.location}</p>
-                                  <div className="mt-2 text-[10px] text-red-400 font-bold uppercase bg-red-900/20 px-2 py-1 rounded inline-block border border-red-900/30">
-                                      Order by {new Date(nextEvt.date).toLocaleDateString('en-AU', {weekday:'short'})} 5pm
-                                  </div>
-                                  <button 
-                                      onClick={() => handleDateSelect(nextEvt.date)}
-                                      className="mt-3 text-xs bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 w-full"
-                                  >
-                                      Select This Date
-                                  </button>
-                              </div>
-                          );
-                      })() : (
-                          <p className="text-gray-500 text-sm">No upcoming cook dates scheduled.</p>
-                      )
-                  )}
+                  <p className="text-white font-bold text-sm">Order ahead and skip the queue</p>
+                  <p className="text-gray-400 text-xs mt-1">We'll text you when it's ready for pickup.</p>
               </div>
 
               {/* Your Tray (Desktop) */}
