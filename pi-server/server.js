@@ -874,11 +874,17 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    // ── Portal redirect routes — server-side redirects for captive WebView form submissions ──
+    // ── Portal navigation — serve React SPA directly (no redirect, stays in captive WebView) ──
     if (url.pathname === '/go/order' || url.pathname === '/go/staff' || url.pathname === '/go/admin') {
-      const routes = { '/go/order': '/#/qr-order', '/go/staff': '/#/portal', '/go/admin': '/#/portal' };
-      res.writeHead(302, { 'Location': 'http://192.168.50.1' + routes[url.pathname], 'Cache-Control': 'no-cache' });
-      res.end(); return;
+      const routes = { '/go/order': '/qr-order', '/go/staff': '/portal', '/go/admin': '/portal' };
+      const indexPath = join(__dirname, '..', 'dist', 'index.html');
+      if (existsSync(indexPath)) {
+        let html = readFileSync(indexPath, 'utf-8');
+        // Inject script to set hash route before React loads
+        html = html.replace('<head>', `<head><script>location.hash='${routes[url.pathname]}'</script>`);
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
+        res.end(html); return;
+      }
     }
 
     // Operator Setup Page — served at /setup
