@@ -93,7 +93,7 @@ export const generateMarketingImage = async (prompt: string): Promise<string | n
       body: JSON.stringify({
         model: IMAGE_MODEL,
         modalities: ['image', 'text'],
-        messages: [{ role: 'user', content: `Generate a photorealistic image of this exact food item: ${prompt}. Shot from above at a slight angle on a rustic wooden board or dark slate plate. Warm natural lighting, shallow depth of field, steam rising if hot. No text, no logos, no watermarks. Just the food, beautifully styled and ready to eat.` }],
+        messages: [{ role: 'user', content: `Generate a single photorealistic product photo for a food truck menu. The item is: ${prompt}. Rules: photograph ONLY the food/product itself — no people, no signs, no stalls, no text, no logos, no brand names, no watermarks, no labels. If it's a sauce, rub, or condiment, show it in a small bowl or jar. If it's a drink, show just the cup/glass. Place on a dark rustic surface. Overhead angle, warm golden lighting, shallow depth of field. Tight crop, just the product.` }],
       }),
       signal: AbortSignal.timeout(60000), // 60s timeout for image generation
     });
