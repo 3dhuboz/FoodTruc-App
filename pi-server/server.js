@@ -861,18 +861,18 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // ── Captive portal — tell phones "internet works" so no popup appears ──
-    // Phones check these URLs after connecting to WiFi. Return expected responses
-    // so the OS thinks internet is working. DNS hijack (dnsmasq) ensures all
-    // domains resolve to this server, so users see the portal when they open any browser.
-    if (url.pathname === '/generate_204') { res.writeHead(204); res.end(); return; }
-    if (url.pathname === '/hotspot-detect.html') {
-      const html = '<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>';
-      res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': Buffer.byteLength(html) });
-      res.end(html); return;
-    }
-    if (['/ncsi.txt', '/connecttest.txt', '/success.txt', '/canonical.html', '/redirect'].includes(url.pathname)) {
-      res.writeHead(204); res.end(); return;
+    // ── Captive portal — serve portal.html directly in the popup ──
+    // Phones check these URLs after connecting. By NOT returning the expected
+    // response (204/Success), the phone knows it's a captive portal and shows
+    // "Sign in to network" automatically. We serve portal.html as the response.
+    const captiveUrls = ['/generate_204', '/hotspot-detect.html', '/ncsi.txt', '/connecttest.txt', '/success.txt', '/canonical.html', '/redirect'];
+    if (captiveUrls.includes(url.pathname)) {
+      const portalPath = join(__dirname, 'portal.html');
+      if (existsSync(portalPath)) {
+        const html = readFileSync(portalPath, 'utf-8');
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
+        res.end(html); return;
+      }
     }
 
     // ── Portal page — served for AP clients on root or unknown hosts ──
