@@ -223,9 +223,12 @@ const Landing: React.FC = () => {
             <a href="#faq" className="text-sm text-gray-400 hover:text-white transition font-medium">FAQ</a>
             <a href="/#/demo" className="text-sm text-gray-400 hover:text-white transition font-medium">Demo</a>
           </div>
-          <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-bold px-5 py-2 rounded-full text-sm transition active:scale-95">
-            Get Started
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={() => { const slug = prompt('Enter your truck name (e.g. smokyjoes):'); if (slug) window.location.href = `https://${slug.trim().toLowerCase()}.chownow.au/#/login`; }} className="text-sm text-gray-400 hover:text-white transition font-medium hidden md:inline bg-transparent border-none cursor-pointer">Log In</button>
+            <button onClick={() => setSignupPlan('pro')} className="bg-orange-500 hover:bg-orange-400 text-white font-bold px-5 py-2 rounded-full text-sm transition active:scale-95">
+              Get Started
+            </button>
+          </div>
         </div>
       </nav>
 
