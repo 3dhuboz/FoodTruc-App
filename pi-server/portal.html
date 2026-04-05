@@ -51,16 +51,8 @@ fetch('http://192.168.50.1/api/v1/settings').then(function(r){return r.json()}).
   if(s&&s.businessName)document.getElementById('biz-name').textContent=s.businessName;
 }).catch(function(){});
 
-// Navigate — try opening in system browser first (escapes captive WebView), fallback to direct nav
 function go(route) {
-  var url = 'http://192.168.50.1/#/' + route;
-  // Android captive portal: try intent to open Chrome
-  try {
-    window.location.href = 'intent://' + '192.168.50.1/#/' + route + '#Intent;scheme=http;package=com.android.chrome;end';
-    return;
-  } catch(e) {}
-  // iOS / fallback: direct navigation
-  window.location.replace(url);
+  window.location.replace('http://192.168.50.1/#/' + route);
 }
 </script>
 </body>
