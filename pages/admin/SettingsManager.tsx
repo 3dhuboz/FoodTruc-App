@@ -160,14 +160,20 @@ const SettingsManager: React.FC = () => {
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [isChecking, setIsChecking] = useState(false);
 
+  // Load form data from settings ONCE on mount — don't re-sync from context
+  // while user is editing (sync engine pulls every 30s and would overwrite form changes)
+  const initializedRef = React.useRef(false);
   useEffect(() => {
-    setFormData(settings);
-    setSquareKeys({ 
-      appId: settings.squareApplicationId || '', 
-      locationId: settings.squareLocationId || '',
-      accessToken: settings.squareAccessToken || '',
-      environment: settings.squareEnvironment || 'sandbox'
-    });
+    if (!initializedRef.current && settings.businessName) {
+      setFormData(settings);
+      setSquareKeys({
+        appId: settings.squareApplicationId || '',
+        locationId: settings.squareLocationId || '',
+        accessToken: settings.squareAccessToken || '',
+        environment: settings.squareEnvironment || 'sandbox'
+      });
+      initializedRef.current = true;
+    }
   }, [settings]);
 
   // Check if returning from Stripe Connect onboarding
