@@ -68,6 +68,26 @@ const DEVICE_ID = getDeviceId();
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
+// ─── Auto-migrate: ensure all columns exist on every boot ────
+// This prevents "no such column" errors when code updates add new fields.
+// Safe to run repeatedly — ALTER TABLE fails silently if column already exists.
+function autoMigrate() {
+  const migrations = [
+    // Order workflow timestamps (added 2026-04-05)
+    'ALTER TABLE orders ADD COLUMN confirmed_at TEXT',
+    'ALTER TABLE orders ADD COLUMN cooking_at TEXT',
+    'ALTER TABLE orders ADD COLUMN ready_at TEXT',
+    'ALTER TABLE orders ADD COLUMN completed_at TEXT',
+    'ALTER TABLE orders ADD COLUMN cancelled_at TEXT',
+    // Sync queue retry tracking
+    'ALTER TABLE sync_queue ADD COLUMN retries INTEGER DEFAULT 0',
+  ];
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch {} // Column already exists — ignore
+  }
+}
+autoMigrate();
+
 function generateId() {
   return crypto.randomUUID();
 }
