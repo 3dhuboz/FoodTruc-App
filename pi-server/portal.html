@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ChowBox</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; background: #000; color: #f3f4f6; display: flex; align-items: center; justify-content: center; }
+  .container { width: 100%; max-width: 400px; padding: 24px; text-align: center; }
+  .logo { width: 80px; height: 80px; margin: 0 auto 16px; background: rgba(249,115,22,0.15); border-radius: 20px; display: flex; align-items: center; justify-content: center; }
+  .logo svg { width: 40px; height: 40px; color: #f97316; }
+  h1 { font-size: 28px; font-weight: 900; color: white; margin-bottom: 4px; }
+  .sub { color: #6b7280; font-size: 13px; margin-bottom: 32px; }
+  .btn { display: block; width: 100%; padding: 20px; border-radius: 16px; border: none; font-weight: 700; font-size: 18px; cursor: pointer; text-decoration: none; text-align: center; transition: transform 0.1s; }
+  .btn:active { transform: scale(0.98); }
+  .btn-order { background: #f97316; color: white; margin-bottom: 12px; font-size: 22px; padding: 24px; box-shadow: 0 8px 24px rgba(249,115,22,0.25); }
+  .btn-order:hover { background: #ea580c; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .btn-secondary { background: #111827; color: white; border: 1px solid #1f2937; font-size: 14px; padding: 18px 12px; }
+  .btn-secondary:hover { background: #1f2937; }
+  .btn-secondary svg { display: block; margin: 0 auto 8px; color: #f97316; }
+  .footer { color: #374151; font-size: 11px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2l1.578 4.735A2 2 0 0 0 6.474 8H17.526a2 2 0 0 0 1.896-1.265L21 2"/><path d="M6 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"/><path d="M5 2h14"/><path d="M10 12h4"/></svg>
+  </div>
+  <h1 id="biz-name">ChowBox</h1>
+  <div class="sub">Powered by ChowNow</div>
+
+  <a href="/#/qr-order" class="btn btn-order">Order Food</a>
+
+  <div class="row">
+    <a href="/#/portal" class="btn btn-secondary" onclick="return openFull(this)">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6.6a5.11 5.11 0 0 1 .36-1.57 5 5 0 0 1 8.46 0c.13.52.22 1.04.36 1.57A4 4 0 0 1 18 13.87V21H6z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>
+      Staff
+    </a>
+    <a href="/#/portal" class="btn btn-secondary" onclick="return openFull(this)">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Admin
+    </a>
+  </div>
+
+  <div class="footer">Powered by ChowNow</div>
+</div>
+
+<script>
+// Load business name from settings
+fetch('/api/v1/settings').then(r => r.json()).then(s => {
+  if (s && s.businessName) document.getElementById('biz-name').textContent = s.businessName;
+}).catch(() => {});
+
+// Open Staff/Admin links in full browser (not captive portal WebView)
+function openFull(el) {
+  // Try to open in external browser
+  var url = 'http://' + location.hostname + el.getAttribute('href');
+  if (window.open(url, '_system') || window.open(url, '_blank')) return false;
+  // Fallback: navigate directly
+  location.href = el.getAttribute('href');
+  return false;
+}
+</script>
+</body>
+</html>

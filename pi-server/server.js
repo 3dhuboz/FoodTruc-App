@@ -861,39 +861,55 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // Captive portal detection — redirect to QR ordering page
-    // These URLs are checked by phones/OS to detect captive portals
-    const captiveUrls = [
-      '/generate_204',           // Android
-      '/hotspot-detect.html',    // Apple
-      '/ncsi.txt',               // Windows
-      '/connecttest.txt',        // Windows
-      '/redirect',               // Firefox
-      '/canonical.html',         // Chrome
-      '/success.txt',            // Various
-    ];
-    if (captiveUrls.some(u => url.pathname === u)) {
-      // Check which interface received this request (Host header is unreliable — Android sends connectivitycheck.gstatic.com)
-      const localAddr = req.socket?.localAddress || '';
-      const isAP = localAddr === '192.168.50.1' || localAddr === '10.0.0.1' || localAddr === '::ffff:192.168.50.1' || localAddr === '::ffff:10.0.0.1';
-      const portalIp = isAP ? '192.168.50.1' : (req.headers.host?.split(':')[0] || 'localhost');
-      const orderUrl = isAP ? `http://${portalIp}/#/portal` : `http://${portalIp}/#/qr-order`;
-      // Return a small HTML page with redirect — phones need a 200 response to trigger captive portal popup
-      const html = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${orderUrl}"><title>ChowBox</title></head><body style="background:#030712;color:#f97316;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h1 style="font-size:28px;margin-bottom:16px;">ChowBox</h1><p style="color:#9ca3af;">Loading menu...</p><a href="${orderUrl}" style="display:inline-block;margin-top:20px;background:#f97316;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">Tap to Order</a></div><script>location.href="${orderUrl}"</script></body></html>`;
-      res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
-      res.end(html);
-      return;
+    // ── Captive portal — tell phones "internet works" so no popup appears ──
+    // Phones check these URLs after connecting to WiFi. Return expected responses
+    // so the OS thinks internet is working. DNS hijack (dnsmasq) ensures all
+    // domains resolve to this server, so users see the portal when they open any browser.
+    if (url.pathname === '/generate_204') { res.writeHead(204); res.end(); return; }
+    if (url.pathname === '/hotspot-detect.html') {
+      const html = '<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>';
+      res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': Buffer.byteLength(html) });
+      res.end(html); return;
+    }
+    if (['/ncsi.txt', '/connecttest.txt', '/success.txt', '/canonical.html', '/redirect'].includes(url.pathname)) {
+      res.writeHead(204); res.end(); return;
     }
 
-    // Operator Setup Page — served at /setup or when accessing via AP interface root
-    const localAddr2 = req.socket?.localAddress || '';
-    const isAPRoot = localAddr2 === '192.168.50.1' || localAddr2 === '10.0.0.1' || localAddr2 === '::ffff:192.168.50.1' || localAddr2 === '::ffff:10.0.0.1';
-    if (url.pathname === '/setup' || url.pathname === '/setup/' || (isAPRoot && url.pathname === '/')) {
+    // ── Portal page — served for AP clients on root or unknown hosts ──
+    // When DNS-hijacked traffic arrives (e.g. user opens google.com), serve the portal.
+    const localAddr = req.socket?.localAddress || '';
+    const isAP = ['192.168.50.1', '10.0.0.1', '::ffff:192.168.50.1', '::ffff:10.0.0.1'].includes(localAddr);
+    const reqHost = req.headers.host?.split(':')[0] || '';
+    const isLocalHost = reqHost === '192.168.50.1' || reqHost === '10.0.0.1' || reqHost === 'localhost' || reqHost === '127.0.0.1';
+    const hasFileExt = /\.\w{2,5}$/.test(url.pathname) && !url.pathname.endsWith('.html');
+
+    // If AP client is hitting a hijacked domain (not the Pi's own IP), serve portal
+    if (isAP && !isLocalHost && !hasFileExt && !url.pathname.startsWith('/api/')) {
+      const portalPath = join(__dirname, 'portal.html');
+      if (existsSync(portalPath)) {
+        const html = readFileSync(portalPath, 'utf-8');
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
+        res.end(html); return;
+      }
+    }
+
+    // Operator Setup Page — served at /setup
+    if (url.pathname === '/setup' || url.pathname === '/setup/') {
       const setupPath = join(__dirname, 'operator.html');
       if (existsSync(setupPath)) {
         const html = readFileSync(setupPath, 'utf-8');
         await sendResponse(req, res, 200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' }, html);
         return;
+      }
+    }
+
+    // AP root → portal page
+    if (isAP && url.pathname === '/') {
+      const portalPath = join(__dirname, 'portal.html');
+      if (existsSync(portalPath)) {
+        const html = readFileSync(portalPath, 'utf-8');
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
+        res.end(html); return;
       }
     }
 
