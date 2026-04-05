@@ -861,43 +861,24 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // ── Captive portal — serve portal.html directly in the popup ──
-    // Phones check these URLs after connecting. By NOT returning the expected
-    // response (204/Success), the phone knows it's a captive portal and shows
-    // "Sign in to network" automatically. We serve portal.html as the response.
-    const captiveUrls = ['/generate_204', '/hotspot-detect.html', '/ncsi.txt', '/connecttest.txt', '/success.txt', '/canonical.html', '/redirect'];
-    if (captiveUrls.includes(url.pathname)) {
-      const portalPath = join(__dirname, 'portal.html');
-      if (existsSync(portalPath)) {
-        const html = readFileSync(portalPath, 'utf-8');
-        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
-        res.end(html); return;
-      }
+    // ── Captive portal — return expected responses so NO popup appears ──
+    // Phone thinks internet works → no "Sign in to network" prompt
+    if (url.pathname === '/generate_204') { res.writeHead(204); res.end(); return; }
+    if (url.pathname === '/hotspot-detect.html') {
+      const h = '<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>';
+      res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': Buffer.byteLength(h) }); res.end(h); return;
+    }
+    if (['/ncsi.txt','/connecttest.txt','/success.txt','/canonical.html','/redirect'].includes(url.pathname)) {
+      res.writeHead(204); res.end(); return;
     }
 
-    // ── Portal page — served for AP clients on root or unknown hosts ──
-    // When DNS-hijacked traffic arrives (e.g. user opens google.com), serve the portal.
-    const localAddr = req.socket?.localAddress || '';
-    const isAP = ['192.168.50.1', '10.0.0.1', '::ffff:192.168.50.1', '::ffff:10.0.0.1'].includes(localAddr);
+    // ── DNS-hijacked traffic — redirect to Pi IP with portal ──
+    // When AP client opens Chrome and goes to any URL (google.com etc),
+    // DNS hijack resolves to Pi. Redirect them to the real Pi IP so React SPA loads.
     const reqHost = req.headers.host?.split(':')[0] || '';
-    const isLocalHost = reqHost === '192.168.50.1' || reqHost === '10.0.0.1' || reqHost === 'localhost' || reqHost === '127.0.0.1';
-    const hasFileExt = /\.\w{2,5}$/.test(url.pathname) && !url.pathname.endsWith('.html');
-
-    // If AP client is hitting a hijacked domain (not the Pi's own IP), serve portal
-    if (isAP && !isLocalHost && !hasFileExt && !url.pathname.startsWith('/api/')) {
-      const portalPath = join(__dirname, 'portal.html');
-      if (existsSync(portalPath)) {
-        const html = readFileSync(portalPath, 'utf-8');
-        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
-        res.end(html); return;
-      }
-    }
-
-    // ── Portal redirect routes — 302 to Pi IP with hash route ──
-    // These work in captive portal WebViews because HTTP redirects happen at protocol level
-    const goRoutes = { '/go/order': '/#/qr-order', '/go/staff': '/#/portal', '/go/admin': '/#/portal' };
-    if (goRoutes[url.pathname]) {
-      res.writeHead(302, { 'Location': 'http://192.168.50.1' + goRoutes[url.pathname], 'Cache-Control': 'no-cache' });
+    const isLocalHost = ['192.168.50.1','10.0.0.1','localhost','127.0.0.1'].includes(reqHost);
+    if (!isLocalHost && !url.pathname.startsWith('/api/')) {
+      res.writeHead(302, { 'Location': 'http://192.168.50.1/#/portal', 'Cache-Control': 'no-cache' });
       res.end(); return;
     }
 
@@ -908,16 +889,6 @@ const server = createServer(async (req, res) => {
         const html = readFileSync(setupPath, 'utf-8');
         await sendResponse(req, res, 200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' }, html);
         return;
-      }
-    }
-
-    // AP root → portal page
-    if (isAP && url.pathname === '/') {
-      const portalPath = join(__dirname, 'portal.html');
-      if (existsSync(portalPath)) {
-        const html = readFileSync(portalPath, 'utf-8');
-        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
-        res.end(html); return;
       }
     }
 
