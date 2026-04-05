@@ -873,21 +873,22 @@ const server = createServer(async (req, res) => {
       '/success.txt',            // Various
     ];
     if (captiveUrls.some(u => url.pathname === u)) {
-      // If accessed via AP interface (10.0.0.1) → show operator setup
-      // If accessed via other interface → show QR ordering
-      const captiveHost = req.headers.host?.split(':')[0] || '10.0.0.1';
-      const orderUrl = captiveHost === '10.0.0.1' ? `http://10.0.0.1/#/portal` : `http://${captiveHost}/#/qr-order`;
-      // Some phones need a non-redirect response to trigger the captive portal popup
-      // Return a small HTML page that also redirects via meta + JS
+      // Check which interface received this request (Host header is unreliable — Android sends connectivitycheck.gstatic.com)
+      const localAddr = req.socket?.localAddress || '';
+      const isAP = localAddr === '192.168.50.1' || localAddr === '10.0.0.1' || localAddr === '::ffff:192.168.50.1' || localAddr === '::ffff:10.0.0.1';
+      const portalIp = isAP ? '192.168.50.1' : (req.headers.host?.split(':')[0] || 'localhost');
+      const orderUrl = isAP ? `http://${portalIp}/#/portal` : `http://${portalIp}/#/qr-order`;
+      // Return a small HTML page with redirect — phones need a 200 response to trigger captive portal popup
       const html = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${orderUrl}"><title>ChowBox</title></head><body style="background:#030712;color:#f97316;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h1 style="font-size:28px;margin-bottom:16px;">ChowBox</h1><p style="color:#9ca3af;">Loading menu...</p><a href="${orderUrl}" style="display:inline-block;margin-top:20px;background:#f97316;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">Tap to Order</a></div><script>location.href="${orderUrl}"</script></body></html>`;
       res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
       res.end(html);
       return;
     }
 
-    // Operator Setup Page — served at /setup or when accessing via AP (10.0.0.1)
-    const host = req.headers.host?.split(':')[0] || '';
-    if (url.pathname === '/setup' || url.pathname === '/setup/' || (host === '10.0.0.1' && url.pathname === '/')) {
+    // Operator Setup Page — served at /setup or when accessing via AP interface root
+    const localAddr2 = req.socket?.localAddress || '';
+    const isAPRoot = localAddr2 === '192.168.50.1' || localAddr2 === '10.0.0.1' || localAddr2 === '::ffff:192.168.50.1' || localAddr2 === '::ffff:10.0.0.1';
+    if (url.pathname === '/setup' || url.pathname === '/setup/' || (isAPRoot && url.pathname === '/')) {
       const setupPath = join(__dirname, 'operator.html');
       if (existsSync(setupPath)) {
         const html = readFileSync(setupPath, 'utf-8');
