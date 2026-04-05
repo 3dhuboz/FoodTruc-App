@@ -125,7 +125,7 @@ const MenuManager: React.FC = () => {
 
      setIsGeneratingImage(true);
      try {
-       const prompt = `${editItem.name || 'BBQ Food'}. ${editItem.description || ''}. Authentic, delicious, professional food photography.`;
+       const prompt = `${editItem.name || 'BBQ Food'}${editItem.description ? ' — ' + editItem.description : ''}${editItem.category ? ' (' + editItem.category + ')' : ''}`;
        const imageUrl = await generateMarketingImage(prompt);
 
        if (imageUrl) {

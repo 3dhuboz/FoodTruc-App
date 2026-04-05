@@ -93,7 +93,7 @@ export const generateMarketingImage = async (prompt: string): Promise<string | n
       body: JSON.stringify({
         model: IMAGE_MODEL,
         modalities: ['image', 'text'],
-        messages: [{ role: 'user', content: `Generate a high-quality, appetising food truck photo: ${prompt}. Make it look professional and vibrant, suitable for a menu or marketing material.` }],
+        messages: [{ role: 'user', content: `Generate a photorealistic image of this exact food item: ${prompt}. Shot from above at a slight angle on a rustic wooden board or dark slate plate. Warm natural lighting, shallow depth of field, steam rising if hot. No text, no logos, no watermarks. Just the food, beautifully styled and ready to eat.` }],
       }),
       signal: AbortSignal.timeout(60000), // 60s timeout for image generation
     });
