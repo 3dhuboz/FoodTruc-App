@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Home, Utensils, CalendarDays, ShoppingCart, Settings, Cloud, WifiOff, BarChart3 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
@@ -27,6 +27,17 @@ const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('home');
   const [showAnalytics, setShowAnalytics] = useState(false);
+
+  // Load platform API key on mount so AI features work from any tab
+  useEffect(() => {
+    fetch('/api/v1/admin/settings')
+      .then(r => r.json())
+      .then(data => {
+        const key = data?.settings?.geminiApiKey;
+        if (key) import('../../services/gemini').then(m => m.setGeminiApiKey(key));
+      })
+      .catch(() => {});
+  }, []);
 
   // Auto-redirect to setup wizard if unconfigured
   const needsSetup = !settings?.businessName || menu.length === 0;
