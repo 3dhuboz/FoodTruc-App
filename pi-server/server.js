@@ -620,6 +620,8 @@ function queueSync(action, tableName, recordId, payload) {
 
 // ─── Cloud Sync ──────────────────────────────────────────────
 
+const syncHeaders = (extra = {}) => ({ 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_ID, ...extra });
+
 let isOnline = false;
 let lastSyncLog = 0;
 
@@ -653,9 +655,9 @@ async function flushSyncQueue() {
 
       if (item.table_name === 'orders') {
         if (item.action === 'DELETE') {
-          // Sync deletion to cloud
           await fetch(`${CLOUD_URL}/api/v1/orders/${item.record_id}`, {
             method: 'DELETE',
+            headers: syncHeaders(),
             signal: AbortSignal.timeout(5000),
           });
         } else {
@@ -666,7 +668,7 @@ async function flushSyncQueue() {
 
           const res = await fetch(endpoint, {
             method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: syncHeaders(),
             body: JSON.stringify(payload),
             signal: AbortSignal.timeout(5000),
           });
@@ -679,7 +681,7 @@ async function flushSyncQueue() {
       if (item.action === 'NOTIFY') {
         await fetch(`${CLOUD_URL}/api/v1${item.table_name}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: syncHeaders(),
           body: JSON.stringify(payload),
           signal: AbortSignal.timeout(5000),
         }).catch(() => {}); // Notifications are best-effort
@@ -715,7 +717,7 @@ async function pullFromCloud() {
   if (!isOnline) return;
   try {
     // Pull menu from cloud (source of truth for menu)
-    const menuRes = await fetch(`${CLOUD_URL}/api/v1/menu`);
+    const menuRes = await fetch(`${CLOUD_URL}/api/v1/menu`, { headers: { 'X-Tenant-ID': TENANT_ID } });
     if (menuRes.ok) {
       const items = await menuRes.json();
       const upsert = db.prepare(
@@ -734,7 +736,7 @@ async function pullFromCloud() {
     }
 
     // Pull settings from cloud
-    const settingsRes = await fetch(`${CLOUD_URL}/api/v1/settings`);
+    const settingsRes = await fetch(`${CLOUD_URL}/api/v1/settings`, { headers: { 'X-Tenant-ID': TENANT_ID } });
     if (settingsRes.ok) {
       const settings = await settingsRes.json();
       db.prepare("INSERT OR REPLACE INTO settings (key, data) VALUES ('general', ?)").run(JSON.stringify(settings));
