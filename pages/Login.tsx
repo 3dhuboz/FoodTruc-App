@@ -141,8 +141,8 @@ const Login: React.FC = () => {
                     <div className="relative">
                         <Mail className="absolute left-3 top-3.5 text-gray-500" size={18} />
                         <input 
-                            type="email" 
-                            placeholder="Email Address"
+                            type="text"
+                            placeholder="Email or Username"
                             value={email}
                             onChange={e => setEmail(e.target.value)}
                             className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 pl-10 text-white focus:border-bbq-red outline-none"
