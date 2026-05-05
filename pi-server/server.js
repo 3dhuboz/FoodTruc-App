@@ -63,6 +63,34 @@ function getDeviceId() {
 }
 const DEVICE_ID = getDeviceId();
 
+// Per-device token — issued by the cloud on first heartbeat, persisted
+// here, then sent on every subsequent cloud-bound request. See
+// functions/api/v1/heartbeat for the bootstrap protocol.
+const DEVICE_TOKEN_PATH = join(__dirname, '.chowbox-token');
+function readDeviceToken() {
+  try {
+    return existsSync(DEVICE_TOKEN_PATH) ? readFileSync(DEVICE_TOKEN_PATH, 'utf-8').trim() : '';
+  } catch { return ''; }
+}
+function writeDeviceToken(token) {
+  try { writeFileSync(DEVICE_TOKEN_PATH, token, { mode: 0o600 }); }
+  catch (e) { console.warn('[Pi] Failed to persist device token:', e?.message); }
+}
+let DEVICE_TOKEN = readDeviceToken();
+
+// Currently-deployed release tag. Written by the versioned-update command
+// handler after a successful `git checkout vX.Y.Z`. Also reported in every
+// heartbeat so the cloud can compare against target_version.
+const RELEASE_VERSION_PATH = join(__dirname, '.chowbox-release');
+function readReleaseVersion() {
+  try {
+    return existsSync(RELEASE_VERSION_PATH) ? readFileSync(RELEASE_VERSION_PATH, 'utf-8').trim() : '';
+  } catch { return ''; }
+}
+function writeReleaseVersion(v) {
+  try { writeFileSync(RELEASE_VERSION_PATH, v); } catch {}
+}
+
 // ─── Database ────────────────────────────────────────────────
 
 const db = new Database(DB_PATH);
@@ -640,7 +668,11 @@ function queueSync(action, tableName, recordId, payload) {
 
 // ─── Cloud Sync ──────────────────────────────────────────────
 
-const syncHeaders = (extra = {}) => ({ 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_ID, ...extra });
+const syncHeaders = (extra = {}) => {
+  const h = { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_ID, ...extra };
+  if (DEVICE_TOKEN) h['Authorization'] = `Bearer ${DEVICE_TOKEN}`;
+  return h;
+};
 
 let isOnline = false;
 let lastSyncLog = 0;
@@ -960,9 +992,16 @@ async function sendHeartbeat() {
     const hostname = (await import('os')).hostname();
     const localIPs = getLocalIPs();
 
+    // Auth: prefer the persisted per-device token. On first heartbeat (no
+    // token yet) fall back to the bootstrap shared secret if the operator
+    // configured one — the cloud will mint a per-device token in response.
+    const headers = { 'Content-Type': 'application/json' };
+    const bearer = DEVICE_TOKEN || process.env.HEARTBEAT_DEVICE_SECRET || '';
+    if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
+
     const hbRes = await fetch(`${CLOUD_URL}/api/v1/heartbeat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         deviceId: DEVICE_ID,
         tenantId: TENANT_ID,
@@ -975,13 +1014,21 @@ async function sendHeartbeat() {
         uptimeSeconds: Math.floor(process.uptime()),
         memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
         nodeVersion: process.version,
+        releaseVersion: readReleaseVersion(),
       }),
       signal: AbortSignal.timeout(5000),
     });
 
-    // Process remote commands from cloud super-admin
-    const hbData = await hbRes.json();
-    if (hbData.commands && Array.isArray(hbData.commands)) {
+    // Cloud responds with: { ok, commands, deviceToken? }. The deviceToken
+    // is only set once, on bootstrap.
+    const hbData = await hbRes.json().catch(() => ({}));
+    if (hbData?.deviceToken && !DEVICE_TOKEN) {
+      DEVICE_TOKEN = hbData.deviceToken;
+      writeDeviceToken(DEVICE_TOKEN);
+      console.log('[Pi] Persisted new device token');
+    }
+
+    if (hbData?.commands && Array.isArray(hbData.commands)) {
       for (const cmd of hbData.commands) {
         console.log(`[Command] Received: ${cmd}`);
         if (cmd === 'pause_qr_orders') {
@@ -1003,9 +1050,26 @@ async function sendHeartbeat() {
           console.log('[Command] Restarting server...');
           process.exit(0); // systemd will restart
         } else if (cmd === 'update') {
-          console.log('[Command] Updating from git...');
-          await execCommand('cd /opt/chowbox && git pull', 30000);
-          process.exit(0); // systemd will restart with new code
+          // Bare `update` would be `git pull origin main` — one bad merge
+          // bricks the entire fleet. Refuse and log; cloud-side validation
+          // also rejects this.
+          console.warn('[Command] Refusing bare `update` — push a versioned tag and queue `update:vX.Y.Z` instead.');
+        } else if (typeof cmd === 'string' && cmd.startsWith('update:')) {
+          const version = cmd.slice('update:'.length).trim();
+          if (!/^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(version)) {
+            console.warn(`[Command] Invalid update version "${version}" — expected vMAJOR.MINOR.PATCH`);
+            continue;
+          }
+          console.log(`[Command] Fetching tags and checking out ${version}…`);
+          try {
+            await execCommand('cd /opt/chowbox && git fetch --tags --force', 30000);
+            await execCommand(`cd /opt/chowbox && git checkout -f ${version}`, 30000);
+            writeReleaseVersion(version);
+            console.log(`[Command] Now on ${version}; restarting…`);
+            process.exit(0); // systemd will restart with the new code
+          } catch (err) {
+            console.error(`[Command] Update to ${version} failed:`, err?.message || err);
+          }
         }
       }
     }

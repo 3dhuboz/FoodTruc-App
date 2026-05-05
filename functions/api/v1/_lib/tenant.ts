@@ -2,12 +2,14 @@
  * Tenant resolution middleware for multi-tenant SaaS.
  * Resolves tenant from: subdomain → 'default' fallback.
  *
- * SECURITY: The X-Tenant-ID header is ONLY honoured for callers presenting a
- * valid ADMIN_API_KEY. Anonymous and customer-authenticated requests are
- * resolved strictly from the request hostname to prevent cross-tenant access.
+ * SECURITY: The X-Tenant-ID header is ONLY honoured for callers presenting
+ * either (a) a valid ADMIN_API_KEY, or (b) a valid per-device token whose
+ * tenant_id matches the requested header. Anonymous and customer-authenticated
+ * requests are resolved strictly from the request hostname to prevent
+ * cross-tenant access.
  */
 import { getDB } from './db';
-import { hasValidAdminKey } from './auth';
+import { hasValidAdminKey, verifyDeviceToken } from './auth';
 
 const BASE_DOMAIN = 'chownow.au';
 
@@ -67,11 +69,21 @@ function extractSubdomain(host: string): string | null {
 export async function getTenantFromRequest(request: Request, env: any): Promise<TenantContext> {
   const db = getDB(env);
 
-  // 1. Explicit header — admin-only escape hatch for dev/scripts/super-admin tools
   const headerTenantId = request.headers.get('X-Tenant-ID');
+
+  // 1a. Admin tooling escape hatch
   if (headerTenantId && hasValidAdminKey(request, env)) {
     const tenant = await db.prepare('SELECT * FROM tenants WHERE id = ? AND status = ?').bind(headerTenantId, 'active').first() as TenantRow | null;
     return { tenantId: headerTenantId, tenant };
+  }
+
+  // 1b. Pi-server (device-token) calls — only allowed to scope to their own tenant
+  if (headerTenantId) {
+    const device = await verifyDeviceToken(request, env);
+    if (device && device.tenantId === headerTenantId) {
+      const tenant = await db.prepare('SELECT * FROM tenants WHERE id = ? AND status = ?').bind(headerTenantId, 'active').first() as TenantRow | null;
+      return { tenantId: headerTenantId, tenant };
+    }
   }
 
   // 2. Subdomain — primary resolution path

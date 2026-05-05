@@ -33,11 +33,21 @@ export const onRequest = async (context: any) => {
   try {
     const db = getDB(env);
     const data = await request.json();
-    const { command } = data;
+    const { command } = data as { command?: string };
 
-    const validCommands = ['pause_qr_orders', 'resume_qr_orders', 'reload_menu', 'restart', 'update'];
-    if (!command || !validCommands.includes(command)) {
-      return json({ error: `Invalid command. Valid: ${validCommands.join(', ')}` }, 400);
+    // `update` (no version) does a `git pull origin main` on the Pi which
+    // is exactly the fleet-bricking risk we want to avoid. Force an explicit
+    // version pin: e.g. `update:v1.4.2`. The Pi resolves this to a signed
+    // git tag checkout. Other commands stay as-is.
+    const staticCommands = ['pause_qr_orders', 'resume_qr_orders', 'reload_menu', 'restart'];
+    const versionedUpdate = /^update:v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/;
+    const isValid = !!command && (staticCommands.includes(command) || versionedUpdate.test(command));
+    if (!isValid) {
+      return json({
+        error: 'Invalid command',
+        accepted: [...staticCommands, 'update:vMAJOR.MINOR.PATCH'],
+        note: 'Bare `update` is rejected — pin a tag.',
+      }, 400);
     }
 
     // Get existing pending commands

@@ -120,3 +120,49 @@ export function hasValidAdminKey(request: Request, env: any): boolean {
   const authHeader = request.headers.get('Authorization');
   return !!env.ADMIN_API_KEY && authHeader === `Bearer ${env.ADMIN_API_KEY}`;
 }
+
+/**
+ * SHA-256 hex digest. Used to fingerprint per-device tokens before storage.
+ */
+export async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export interface DeviceAuth {
+  deviceId: string;
+  tenantId: string;
+}
+
+/**
+ * Verify a per-ChowBox device token presented as `Authorization: Bearer …`.
+ * Returns { deviceId, tenantId } on success, null otherwise.
+ *
+ * This is the primary auth path for traffic FROM Pi servers TO the cloud:
+ * the Pi presents its persisted token, the cloud hashes it and looks up
+ * the matching `chowbox_devices` row to identify the device + tenant.
+ */
+export async function verifyDeviceToken(request: Request, env: any): Promise<DeviceAuth | null> {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+
+  // Skip if it's the admin API key — that's a separate auth path.
+  if (env.ADMIN_API_KEY && token === env.ADMIN_API_KEY) return null;
+  // Skip if it's the bootstrap shared secret — that path is handled by /heartbeat.
+  if (env.HEARTBEAT_DEVICE_SECRET && token === env.HEARTBEAT_DEVICE_SECRET) return null;
+
+  const hash = await sha256Hex(token);
+  // Lazy import to avoid circular dependency with _lib/db.
+  const { getDB } = await import('./db');
+  const db = getDB(env);
+  const row = await db
+    .prepare('SELECT id, tenant_id FROM chowbox_devices WHERE device_token_hash = ?')
+    .bind(hash)
+    .first() as { id: string; tenant_id: string } | null;
+  if (!row) return null;
+  return { deviceId: row.id, tenantId: row.tenant_id };
+}

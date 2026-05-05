@@ -155,6 +155,16 @@ const MIGRATIONS: { version: number; name: string; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_processed_events_processed_at ON processed_stripe_events(processed_at);
     `
   },
+  {
+    version: 10,
+    name: 'device_tokens_and_versions',
+    sql: `
+      ALTER TABLE chowbox_devices ADD COLUMN device_token_hash TEXT;
+      ALTER TABLE chowbox_devices ADD COLUMN release_version TEXT;
+      ALTER TABLE chowbox_devices ADD COLUMN target_version TEXT;
+      CREATE INDEX IF NOT EXISTS idx_chowbox_token_hash ON chowbox_devices(device_token_hash);
+    `
+  },
 ];
 
 export const onRequest = async (context: any) => {

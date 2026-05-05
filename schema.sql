@@ -206,8 +206,12 @@ CREATE TABLE IF NOT EXISTS chowbox_devices (
   node_version TEXT,
   last_heartbeat TEXT,
   pending_commands TEXT,
+  device_token_hash TEXT,
+  release_version TEXT,
+  target_version TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_chowbox_token_hash ON chowbox_devices(device_token_hash);
 
 -- ─── Indexes ─────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
