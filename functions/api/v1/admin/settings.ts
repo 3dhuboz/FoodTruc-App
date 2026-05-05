@@ -1,11 +1,22 @@
 /**
  * GET /api/v1/admin/settings — Returns platform settings + env var status
- * PUT /api/v1/admin/settings — Merges updates into platform settings
+ *   Secrets (geminiApiKey, …) are stripped from the GET response. PUT requires ADMIN_API_KEY.
+ * PUT /api/v1/admin/settings — Merges updates into platform settings (super-admin only)
  *
  * Platform settings are stored in the `settings` table under
  * tenant_id='default', key='platform'.
  */
 import { getDB } from '../_lib/db';
+import { requireAdminKey, hasValidAdminKey } from '../_lib/auth';
+
+const SECRET_FIELDS = ['geminiApiKey'] as const;
+function stripSecrets(settings: any) {
+  const out: any = { ...settings };
+  for (const f of SECRET_FIELDS) {
+    if (f in out) delete out[f];
+  }
+  return out;
+}
 
 const json = (d: any, s = 200) => new Response(JSON.stringify(d), {
   status: s,
@@ -47,15 +58,19 @@ export const onRequest = async (context: any) => {
   const db = getDB(env);
 
   // ─── GET: Return platform settings + status ─────────────────
+  // Open to per-tenant admins (no admin key required) but secrets are stripped
+  // unless the caller presents a valid ADMIN_API_KEY.
   if (request.method === 'GET') {
     try {
       const row = await db.prepare(
         "SELECT data FROM settings WHERE tenant_id = 'default' AND key = 'platform'"
       ).first() as any;
 
-      const settings = row?.data
+      const merged = row?.data
         ? { ...DEFAULT_PLATFORM_SETTINGS, ...JSON.parse(row.data) }
         : { ...DEFAULT_PLATFORM_SETTINGS };
+
+      const settings = hasValidAdminKey(request, env) ? merged : stripSecrets(merged);
 
       // Check which env vars are configured (never expose values)
       const status = {
@@ -65,6 +80,7 @@ export const onRequest = async (context: any) => {
         starterPriceConfigured: !!(env as any).STRIPE_STARTER_PRICE_ID,
         proPriceConfigured: !!(env as any).STRIPE_PRO_PRICE_ID,
         piPriceConfigured: !!(env as any).STRIPE_PI_PRICE_ID,
+        geminiConfigured: !!merged.geminiApiKey,
       };
 
       return json({ settings, status });
@@ -73,8 +89,10 @@ export const onRequest = async (context: any) => {
     }
   }
 
-  // ─── PUT: Merge updates into platform settings ──────────────
+  // ─── PUT: Merge updates into platform settings (super-admin only) ──
   if (request.method === 'PUT') {
+    const denied = requireAdminKey(request, env);
+    if (denied) return denied;
     try {
       const body = await request.json() as any;
       const updates = body.settings || body;

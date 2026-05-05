@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cpu, Wifi, WifiOff, Printer, ExternalLink, RefreshCw, Clock, ShoppingCart, CloudOff, Activity } from 'lucide-react';
+import { adminFetch } from '../../services/api';
 
 interface ChowBoxDevice {
   id: string;
@@ -45,7 +46,7 @@ const FleetPanel: React.FC = () => {
 
   const fetchDevices = async () => {
     try {
-      const res = await fetch('/api/v1/admin/fleet');
+      const res = await adminFetch('/api/v1/admin/fleet');
       const data = await res.json();
       setDevices(data.devices || []);
       setLastRefresh(new Date());

@@ -213,11 +213,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const login = async (role: UserRole, email?: string, password?: string) => {
     if (role === UserRole.ADMIN) {
-      if (email === 'dev' && password === '123') {
-        setUser({ id: 'dev1', name: 'Developer', email: 'dev@local', role: UserRole.DEV, isVerified: true });
-        return;
-      }
-      if (email === settings.adminUsername && password === settings.adminPassword) {
+      if (
+        settings.adminUsername &&
+        settings.adminPassword &&
+        email === settings.adminUsername &&
+        password === settings.adminPassword
+      ) {
         setUser({ id: 'admin1', name: 'Admin', email: email || '', role: UserRole.ADMIN, isVerified: true });
         return;
       }

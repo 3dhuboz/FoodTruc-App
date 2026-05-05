@@ -31,8 +31,9 @@ export const onRequest = async (context: any) => {
 
   try {
     const url = new URL(request.url);
-    const { tenantId: resolvedTenant } = await getTenantFromRequest(request, env);
-    const tenantId = url.searchParams.get('tenant_id') || resolvedTenant;
+    // Resolve tenant strictly from the request (subdomain) to prevent
+    // cross-tenant data exposure via ?tenant_id=… query string.
+    const { tenantId } = await getTenantFromRequest(request, env);
     const period = url.searchParams.get('period') || 'today';
 
     const db = getDB(env);

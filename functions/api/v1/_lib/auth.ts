@@ -1,7 +1,10 @@
 /**
  * Auth for Cloudflare Pages Functions.
  * Supports: Clerk JWT, admin API key, unauthenticated (QR/public orders).
- * When CLERK_PUBLISHABLE_KEY is not set, runs in setup mode (all admin).
+ *
+ * SECURITY: Fail closed. If Clerk is not configured, ADMIN access is denied
+ * (was previously auto-granted in "setup mode" — that backdoor is removed).
+ * Callers needing privileged access without Clerk must use ADMIN_API_KEY.
  */
 
 let cachedJwks: any = null;
@@ -39,15 +42,13 @@ export interface AuthResult {
 export async function verifyAuth(request: Request, env: any): Promise<AuthResult | null> {
   const authHeader = request.headers.get('Authorization');
 
-  // Admin API key backdoor
+  // Admin API key — explicit, opt-in admin access
   if (env.ADMIN_API_KEY && authHeader === `Bearer ${env.ADMIN_API_KEY}`) {
     return { userId: 'admin1', role: 'ADMIN', email: 'admin@local', tenantId: 'default' };
   }
 
-  // Setup mode — no Clerk configured
-  if (!env.CLERK_PUBLISHABLE_KEY) {
-    return { userId: 'setup', role: 'ADMIN', email: 'setup@local', tenantId: 'default' };
-  }
+  // Without Clerk configured, no further auth is possible. Fail closed.
+  if (!env.CLERK_PUBLISHABLE_KEY) return null;
 
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
@@ -90,4 +91,32 @@ export function requireAuth(auth: AuthResult | null, minRole?: string): AuthResu
     }
   }
   return auth;
+}
+
+/**
+ * Lightweight gate for endpoints that must be admin-only but don't yet
+ * have user-level Clerk auth wired up (admin/* routes, /seed, /migrate, etc.).
+ * Returns null on success, or a 401 Response on failure (caller should return it).
+ */
+export function requireAdminKey(request: Request, env: any): Response | null {
+  const authHeader = request.headers.get('Authorization');
+  if (!env.ADMIN_API_KEY || authHeader !== `Bearer ${env.ADMIN_API_KEY}`) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
+  }
+  return null;
+}
+
+/**
+ * True if the request bears a valid ADMIN_API_KEY. Useful as a side-channel check
+ * (e.g. allowing X-Tenant-ID override only for admin tooling).
+ */
+export function hasValidAdminKey(request: Request, env: any): boolean {
+  const authHeader = request.headers.get('Authorization');
+  return !!env.ADMIN_API_KEY && authHeader === `Bearer ${env.ADMIN_API_KEY}`;
 }

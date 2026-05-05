@@ -35,9 +35,12 @@ export const onRequest = async (context: any) => {
   if (!stripeKey) return json({ error: 'Stripe not configured' }, 500);
 
   try {
-    const body = await request.json() as any;
-    const { tenantId } = await getTenantFromRequest(request, env);
-    const requestedTenantId = body.tenantId || tenantId;
+    // Resolve tenant strictly from the subdomain — never trust a body-supplied
+    // tenantId, otherwise any caller could mint onboarding links for any tenant.
+    const { tenantId: requestedTenantId } = await getTenantFromRequest(request, env);
+    if (!requestedTenantId || requestedTenantId === 'default') {
+      return json({ error: 'Onboarding must be initiated from the tenant subdomain' }, 400);
+    }
 
     const db = getDB(env);
     const tenant = await db.prepare('SELECT * FROM tenants WHERE id = ?').bind(requestedTenantId).first() as any;

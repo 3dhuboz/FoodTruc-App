@@ -1,8 +1,10 @@
 /**
  * POST /api/v1/admin/fleet/:id — Send command to a ChowBox device
  * Super-admin endpoint. Commands are queued and delivered via next heartbeat.
+ * Requires ADMIN_API_KEY.
  */
 import { getDB } from '../../_lib/db';
+import { requireAdminKey } from '../../_lib/auth';
 
 const json = (d: any, s = 200) => new Response(JSON.stringify(d), {
   status: s,
@@ -24,6 +26,9 @@ export const onRequest = async (context: any) => {
   }
 
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+
+  const denied = requireAdminKey(request, env);
+  if (denied) return denied;
 
   try {
     const db = getDB(env);

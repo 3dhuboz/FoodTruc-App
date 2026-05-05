@@ -1,10 +1,14 @@
 /**
  * GET /api/v1/admin/orders?tenant_id=...&status=...&limit=50&offset=0
- * Returns orders for a specific tenant. Super-admin endpoint.
+ * Returns orders for an arbitrary tenant. Super-admin endpoint — requires ADMIN_API_KEY.
+ * Per-tenant order access goes through /api/v1/orders (subdomain-scoped).
  */
 import { getDB, rowToOrder } from '../_lib/db';
+import { requireAdminKey } from '../_lib/auth';
 
 export const onRequestGet: PagesFunction<{ DB: D1Database }> = async ({ request, env }) => {
+  const denied = requireAdminKey(request, env);
+  if (denied) return denied;
   const url = new URL(request.url);
   const tenantId = url.searchParams.get('tenant_id');
   if (!tenantId) {

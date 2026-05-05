@@ -2,11 +2,26 @@
  * POST /api/v1/heartbeat
  * Receives heartbeat from ChowBox devices.
  * Upserts device status into chowbox_devices table.
- * No auth — device identifies by deviceId + tenantId.
+ *
+ * Auth (backwards-compatible): if HEARTBEAT_DEVICE_SECRET is set in the
+ * environment, every heartbeat must include `Authorization: Bearer <secret>`.
+ * If the env var is unset (existing fleet), heartbeats remain open — set the
+ * secret + roll updated Pi config to fleet to enforce.
+ *
+ * Per-device tokens are tracked in Tier B as a follow-up.
  */
 import { getDB } from '../_lib/db';
 
-export const onRequestPost: PagesFunction<{ DB: D1Database }> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<{ DB: D1Database; HEARTBEAT_DEVICE_SECRET?: string }> = async ({ request, env }) => {
+  // Optional shared-secret gate. Active only when the env var is configured.
+  const expected = env.HEARTBEAT_DEVICE_SECRET;
+  if (expected) {
+    const auth = request.headers.get('Authorization');
+    if (auth !== `Bearer ${expected}`) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+  }
+
   try {
     const body = await request.json() as any;
     const { deviceId, tenantId, hostname, tunnelUrl, printerConnected, ordersToday, syncPending, uptimeSeconds, memoryMb, nodeVersion, ipAddress } = body;

@@ -1,19 +1,85 @@
 /**
  * Stripe Webhook — handles payment + subscription events.
  *
+ * SECURITY: Every request is verified against STRIPE_WEBHOOK_SECRET using
+ * HMAC-SHA256 over the raw body, with a 5-minute replay window. Events are
+ * deduped via the processed_stripe_events table for at-least-once retries.
+ *
  * Events handled:
  * - checkout.session.completed → marks QR orders as "Confirmed" (paid)
  * - customer.subscription.created → provisions new tenant
  * - customer.subscription.deleted → deactivates tenant
  * - invoice.payment_failed → marks tenant billing as past_due
+ * - account.updated → marks Connect onboarding complete
  *
  * Setup: In Stripe Dashboard → Webhooks → add endpoint:
  *   URL: https://chownow.au/api/v1/stripe/webhook
  *   Events: checkout.session.completed, customer.subscription.created,
  *           customer.subscription.deleted, invoice.payment_failed,
  *           account.updated
+ *   Then: wrangler pages secret put STRIPE_WEBHOOK_SECRET
  */
-import { getDB, generateId } from '../_lib/db';
+import { getDB } from '../_lib/db';
+
+/**
+ * Verify Stripe webhook signature using Web Crypto (constant-time compare).
+ * Stripe signs as: t=<timestamp>,v1=<hex-sha256>. The signing payload is
+ * `${timestamp}.${rawBody}`. Rejects signatures older than 5 minutes (replay).
+ */
+async function verifyStripeSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string,
+): Promise<boolean> {
+  if (!signatureHeader || !secret) return false;
+
+  const parts: Record<string, string> = {};
+  for (const segment of signatureHeader.split(',')) {
+    const eq = segment.indexOf('=');
+    if (eq > 0) parts[segment.slice(0, eq).trim()] = segment.slice(eq + 1).trim();
+  }
+  const timestamp = parts.t;
+  const sig = parts.v1;
+  if (!timestamp || !sig) return false;
+
+  const tsNum = parseInt(timestamp, 10);
+  if (!Number.isFinite(tsNum)) return false;
+  if (Math.abs(Date.now() / 1000 - tsNum) > 300) return false;
+
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const expected = await crypto.subtle.sign('HMAC', key, enc.encode(`${timestamp}.${rawBody}`));
+  const expectedHex = Array.from(new Uint8Array(expected))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  if (expectedHex.length !== sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expectedHex.length; i++) {
+    diff |= expectedHex.charCodeAt(i) ^ sig.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+const PASSWORD_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+
+function generateSecurePassword(length: number = 14): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  let out = '';
+  for (let i = 0; i < length; i++) out += PASSWORD_ALPHABET[bytes[i] % PASSWORD_ALPHABET.length];
+  return out;
+}
+
+function generateStaffPin(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  return Array.from(bytes).map(b => (b % 10).toString()).join('');
+}
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
@@ -22,11 +88,40 @@ export const onRequest = async (context: any) => {
     return new Response('Method not allowed', { status: 405 });
   }
 
+  // Read the raw body BEFORE parsing — required for signature verification
+  const rawBody = await request.text();
+  const signature = request.headers.get('stripe-signature');
+  const webhookSecret = (env as any).STRIPE_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    console.error('[Webhook] STRIPE_WEBHOOK_SECRET not configured — rejecting');
+    return new Response('Webhook misconfigured', { status: 500 });
+  }
+  const valid = await verifyStripeSignature(rawBody, signature, webhookSecret);
+  if (!valid) {
+    console.warn('[Webhook] Signature verification failed');
+    return new Response('Invalid signature', { status: 400 });
+  }
+
   try {
-    const body = await request.json();
-    const event = body;
+    const event = JSON.parse(rawBody);
     const db = getDB(env);
     const now = new Date().toISOString();
+
+    // Idempotency — skip if we've already processed this event id
+    if (event.id) {
+      const seen = await db
+        .prepare('SELECT stripe_event_id FROM processed_stripe_events WHERE stripe_event_id = ?')
+        .bind(event.id)
+        .first();
+      if (seen) {
+        console.log(`[Webhook] Duplicate event ${event.id} — already processed`);
+        return new Response(JSON.stringify({ received: true, duplicate: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
     // ─── Order Payment: checkout.session.completed ──────────────
     if (event.type === 'checkout.session.completed') {
@@ -35,29 +130,40 @@ export const onRequest = async (context: any) => {
 
       // Only handle order checkouts (not signup checkouts)
       if (orderId) {
-        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+        const order = await db
+          .prepare('SELECT * FROM orders WHERE id = ?')
+          .bind(orderId)
+          .first() as any;
         const tenantId = order?.tenant_id;
 
-        db.prepare(
-          'UPDATE orders SET status = ?, payment_intent_id = ?, updated_at = ? WHERE id = ? AND status = ? AND tenant_id = ?'
-        ).run('Confirmed', session.payment_intent || session.id, now, orderId, 'Awaiting Payment', tenantId);
+        if (tenantId) {
+          await db
+            .prepare(
+              'UPDATE orders SET status = ?, payment_intent_id = ?, updated_at = ? WHERE id = ? AND status = ? AND tenant_id = ?'
+            )
+            .bind('Confirmed', session.payment_intent || session.id, now, orderId, 'Awaiting Payment', tenantId)
+            .run();
 
-        console.log(`[Webhook] Order ${orderId} (tenant: ${tenantId}) → Confirmed`);
+          console.log(`[Webhook] Order ${orderId} (tenant: ${tenantId}) → Confirmed`);
 
-        // SMS notification (best effort)
-        if (order?.customer_phone) {
-          const settings = db.prepare("SELECT data FROM settings WHERE key = 'general' AND tenant_id = ?").get(tenantId) as any;
-          const parsed = settings?.data ? JSON.parse(settings.data) : {};
-          if (parsed.smsSettings?.enabled) {
-            fetch(`${new URL(request.url).origin}/api/v1/sms/order-notification`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                settings: parsed.smsSettings,
-                order: { id: orderId, customerName: order.customer_name, customerPhone: order.customer_phone, status: 'Confirmed' },
-                businessName: parsed.businessName || 'ChowNow',
-              }),
-            }).catch(() => {});
+          // SMS notification (best effort)
+          if (order?.customer_phone) {
+            const settings = await db
+              .prepare("SELECT data FROM settings WHERE key = 'general' AND tenant_id = ?")
+              .bind(tenantId)
+              .first() as any;
+            const parsed = settings?.data ? JSON.parse(settings.data) : {};
+            if (parsed.smsSettings?.enabled) {
+              fetch(`${new URL(request.url).origin}/api/v1/sms/order-notification`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  settings: parsed.smsSettings,
+                  order: { id: orderId, customerName: order.customer_name, customerPhone: order.customer_phone, status: 'Confirmed' },
+                  businessName: parsed.businessName || 'ChowNow',
+                }),
+              }).catch(() => {});
+            }
           }
         }
       }
@@ -85,13 +191,16 @@ export const onRequest = async (context: any) => {
             email || '', phone || '', 'active', '#f97316', now, now
           ).run();
 
-          // Seed default settings for the new tenant
+          // Generate per-tenant credentials — never seed shared defaults
+          const adminPassword = generateSecurePassword(14);
+          const staffPin = generateStaffPin();
+
           const defaultSettings = JSON.stringify({
             businessName,
             businessAddress: '',
             maintenanceMode: false,
             logoUrl: '',
-            rewards: { enabled: false, staffPin: '1234', maxStamps: 10, programName: `${businessName} Rewards`, rewardTitle: 'Free Item', rewardImage: '', possiblePrizes: [] },
+            rewards: { enabled: false, staffPin, maxStamps: 10, programName: `${businessName} Rewards`, rewardTitle: 'Free Item', rewardImage: '', possiblePrizes: [] },
             stripeConnected: false,
             squareConnected: false,
             smartPayConnected: false,
@@ -99,7 +208,8 @@ export const onRequest = async (context: any) => {
             facebookConnected: false,
             manualTickerImages: [],
             adminUsername: 'admin',
-            adminPassword: 'admin123',
+            adminPassword,
+            mustChangeCredentials: true,
           });
 
           await db.prepare(
@@ -108,8 +218,7 @@ export const onRequest = async (context: any) => {
 
           console.log(`[Webhook] Tenant provisioned: ${businessName} (${slug}.chownow.au)`);
 
-          // Notify admin to build & ship Pi
-          // Check platform settings for admin email (falls back to env var)
+          // Notify admin to build & ship Pi (and pass on the freshly generated credentials)
           const platformRow = await db.prepare("SELECT data FROM settings WHERE tenant_id = 'default' AND key = 'platform'").first() as any;
           const platformCfg = platformRow?.data ? JSON.parse(platformRow.data) : {};
           const adminEmail = platformCfg.adminNotificationEmail || (env as any).ADMIN_NOTIFICATION_EMAIL;
@@ -134,13 +243,19 @@ export const onRequest = async (context: any) => {
                     <p><strong>Phone:</strong> ${phone || 'Not provided'}</p>
                     <p><strong>Subscription ID:</strong> ${subscription.id}</p>
                     <hr>
+                    <h3>Initial Credentials (deliver to customer over a secure channel)</h3>
+                    <p><strong>Admin password:</strong> <code>${adminPassword}</code></p>
+                    <p><strong>Staff PIN:</strong> <code>${staffPin}</code></p>
+                    <p>The customer will be prompted to change these on first login.</p>
+                    <hr>
                     <p>⚡ <strong>Action Required:</strong> Build and ship a Pi for this customer.</p>
                   `,
                 }],
               }),
             }).catch((e: any) => console.error('[Webhook] Admin notification failed:', e));
           } else {
-            console.log(`[Webhook] Pi shipping needed for: ${businessName} (${slug}) — email: ${email}, phone: ${phone}`);
+            // Avoid logging the secrets to console — they only go to the admin email
+            console.log(`[Webhook] Pi shipping needed for: ${businessName} (${slug}). Credentials generated; configure ADMIN_NOTIFICATION_EMAIL + SENDGRID_API_KEY to receive them.`);
           }
 
           // Auto-create Stripe Express connected account for payment processing
@@ -247,6 +362,14 @@ export const onRequest = async (context: any) => {
           console.log(`[Webhook] Connect account ${accountId} (tenant: ${tenant.id}) fully onboarded`);
         }
       }
+    }
+
+    // Mark this event id as processed (best-effort — duplicates will short-circuit above)
+    if (event.id) {
+      await db
+        .prepare('INSERT OR IGNORE INTO processed_stripe_events (stripe_event_id, event_type, processed_at) VALUES (?, ?, ?)')
+        .bind(event.id, event.type || 'unknown', now)
+        .run();
     }
 
     return new Response(JSON.stringify({ received: true }), {

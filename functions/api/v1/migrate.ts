@@ -143,6 +143,18 @@ const MIGRATIONS: { version: number; name: string; sql: string }[] = [
       ALTER TABLE orders ADD COLUMN cancelled_at TEXT;
     `
   },
+  {
+    version: 9,
+    name: 'processed_stripe_events',
+    sql: `
+      CREATE TABLE IF NOT EXISTS processed_stripe_events (
+        stripe_event_id TEXT PRIMARY KEY,
+        event_type TEXT,
+        processed_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_processed_events_processed_at ON processed_stripe_events(processed_at);
+    `
+  },
 ];
 
 export const onRequest = async (context: any) => {
