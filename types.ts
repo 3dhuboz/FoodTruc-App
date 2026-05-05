@@ -177,13 +177,16 @@ export interface RewardsConfig {
 }
 
 export interface AppSettings {
-  maintenanceMode: boolean; 
-  
+  maintenanceMode: boolean;
+  qrOrdersPaused?: boolean;
+
   // -- Images --
   // Home
-  heroCateringImage?: string; 
-  heroCookImage?: string; 
+  heroCateringImage?: string;
+  heroCookImage?: string;
   homePromoterImage?: string;
+  homeScheduleCardImage?: string;
+  homeMenuCardImage?: string;
   // Menu
   menuHeroImage?: string;
   // DIY Catering
@@ -229,8 +232,12 @@ export interface AppSettings {
   businessName: string;
   businessAddress: string; 
   logoUrl: string;
-  adminUsername?: string; 
+  adminUsername?: string;
   adminPassword?: string;
+  /** Set on tenant provisioning; cleared after the first credential rotation. */
+  mustChangeCredentials?: boolean;
+  /** Platform-managed AI key. Stripped from non-admin GETs. */
+  geminiApiKey?: string;
   rewards: RewardsConfig;
   cateringPackages?: CateringPackage[];
   // Email Settings

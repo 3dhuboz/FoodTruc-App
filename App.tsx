@@ -20,7 +20,6 @@ const Events = React.lazy(() => import('./pages/Events'));
 const Rewards = React.lazy(() => import('./pages/Rewards'));
 const Promoters = React.lazy(() => import('./pages/Promoters'));
 const Tracking = React.lazy(() => import('./pages/Tracking'));
-const DataSetup = React.lazy(() => import('./pages/admin/DataSetup'));
 const SetupWizard = React.lazy(() => import('./pages/admin/SetupWizard'));
 const Maintenance = React.lazy(() => import('./pages/Maintenance'));
 const PitmasterAI = React.lazy(() => import('./pages/PitmasterAI'));

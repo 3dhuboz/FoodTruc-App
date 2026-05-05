@@ -299,7 +299,7 @@ export const INITIAL_SETTINGS: AppSettings = {
   diyCardCustomImage: "https://images.unsplash.com/photo-1532550907401-a500c9a57435?auto=format&fit=crop&w=800&q=80",
   cateringPackageImages: {
       essential: "https://images.unsplash.com/photo-1432139555190-58524dae6a55?auto=format&fit=crop&w=800&q=80",
-      assistant: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80",
+      pitmaster: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80",
       wholehog: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=800&q=80"
   },
   
@@ -363,9 +363,9 @@ export const INITIAL_SETTINGS: AppSettings = {
         image: "https://images.unsplash.com/photo-1432139555190-58524dae6a55?auto=format&fit=crop&w=800&q=80"
     },
     {
-        id: 'pkg_assistant',
-        name: 'The assistant',
-        description: 'Our Crowd Favorite. A balanced spread of our best smokers cuts and sides.',
+        id: 'pkg_pitmaster',
+        name: 'The Pitmaster',
+        description: 'Our crowd favourite. A balanced spread of our best smoker cuts and sides.',
         price: 48, // Per Head
         minPax: 10,
         meatLimit: 3,

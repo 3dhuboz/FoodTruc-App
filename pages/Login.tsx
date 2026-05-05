@@ -4,10 +4,10 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../components/Toast';
 import { UserRole } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { Facebook, Mail, User, Shield, Lock, ArrowLeft, Loader2 } from 'lucide-react';
+import { Facebook, Mail, User, Shield, Lock, ArrowLeft, Loader2, KeyRound } from 'lucide-react';
 
 const Login: React.FC = () => {
-  const { login, settings } = useApp();
+  const { login, logout, settings, updateSettings } = useApp();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'LOGIN' | 'SIGNUP' | 'ADMIN'>('LOGIN');
@@ -23,8 +23,19 @@ const Login: React.FC = () => {
   const [adminUser, setAdminUser] = useState('');
   const [adminPass, setAdminPass] = useState('');
 
-  const handleSocialLogin = (platform: 'Google' | 'Facebook') => {
-    toast('Social Login requires further configuration in Firebase Console.', 'info');
+  // Force-change-on-first-login state. New tenants are provisioned with
+  // mustChangeCredentials=true; we block /admin navigation until the admin
+  // sets a non-default password (and optionally a new staff PIN).
+  const [forceChangeOpen, setForceChangeOpen] = useState(false);
+  const [newAdminUser, setNewAdminUser] = useState('admin');
+  const [newAdminPass, setNewAdminPass] = useState('');
+  const [newAdminPassConfirm, setNewAdminPassConfirm] = useState('');
+  const [newStaffPin, setNewStaffPin] = useState('');
+  const [forceChangeError, setForceChangeError] = useState('');
+  const [forceChangeSaving, setForceChangeSaving] = useState(false);
+
+  const handleSocialLogin = (_platform: 'Google' | 'Facebook') => {
+    toast('Social Login requires further configuration.', 'info');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,7 +45,17 @@ const Login: React.FC = () => {
     try {
         if (mode === 'ADMIN') {
             await login(UserRole.ADMIN, adminUser, adminPass);
-            navigate('/admin');
+            // Block /admin entry if the tenant is still on default-seeded
+            // credentials. The flag is cleared once they save new ones.
+            const stillOnDefaults = settings.mustChangeCredentials
+              || settings.adminPassword === 'admin123'
+              || settings.rewards?.staffPin === '1234';
+            if (stillOnDefaults) {
+              setNewAdminUser(settings.adminUsername || 'admin');
+              setForceChangeOpen(true);
+            } else {
+              navigate('/admin');
+            }
         } else if (mode === 'LOGIN') {
             await login(UserRole.CUSTOMER, email, password, undefined, rememberMe);
             navigate('/');
@@ -48,6 +69,46 @@ const Login: React.FC = () => {
     } finally {
         setIsLoading(false);
     }
+  };
+
+  const handleForceChangeSave = async () => {
+    setForceChangeError('');
+    if (!newAdminUser.trim()) { setForceChangeError('Username is required.'); return; }
+    if (newAdminPass.length < 10) { setForceChangeError('Password must be at least 10 characters.'); return; }
+    if (newAdminPass === 'admin123') { setForceChangeError('Pick something other than the default.'); return; }
+    if (newAdminPass !== newAdminPassConfirm) { setForceChangeError('Passwords do not match.'); return; }
+    if (newStaffPin && (newStaffPin.length < 4 || newStaffPin === '1234' || !/^[0-9]+$/.test(newStaffPin))) {
+      setForceChangeError('Staff PIN must be 4+ digits and not 1234.'); return;
+    }
+
+    setForceChangeSaving(true);
+    try {
+      const patch: any = {
+        adminUsername: newAdminUser.trim(),
+        adminPassword: newAdminPass,
+        mustChangeCredentials: false,
+      };
+      if (newStaffPin) {
+        patch.rewards = { ...settings.rewards, staffPin: newStaffPin };
+      }
+      await updateSettings(patch);
+      toast('Credentials updated. Logging in with the new password next time.', 'success');
+      setForceChangeOpen(false);
+      navigate('/admin');
+    } catch (e: any) {
+      setForceChangeError(e?.message || 'Failed to save credentials.');
+    } finally {
+      setForceChangeSaving(false);
+    }
+  };
+
+  const cancelForceChange = () => {
+    // Bail out of the gate without saving — log the user back out so they
+    // can't reach /admin with default creds via another route.
+    logout();
+    setForceChangeOpen(false);
+    setAdminPass('');
+    toast('You must change your default password before accessing the admin panel.', 'warning');
   };
 
   return (
@@ -194,6 +255,93 @@ const Login: React.FC = () => {
                 </button>
             </div>
           </>
+      )}
+
+      {forceChangeOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="force-change-title"
+        >
+          <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <KeyRound className="text-orange-500" size={22} />
+              <h3 id="force-change-title" className="text-xl font-bold text-white">Set new credentials</h3>
+            </div>
+            <p className="text-sm text-gray-400">
+              This account is still on default credentials. Set a new admin
+              password before continuing. Optionally set a new staff PIN
+              while you're here.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Admin username</label>
+                <input
+                  type="text"
+                  value={newAdminUser}
+                  onChange={e => setNewAdminUser(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 rounded p-2 text-white focus:border-orange-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">New password (10+ chars)</label>
+                <input
+                  type="password"
+                  autoFocus
+                  value={newAdminPass}
+                  onChange={e => setNewAdminPass(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 rounded p-2 text-white focus:border-orange-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Confirm new password</label>
+                <input
+                  type="password"
+                  value={newAdminPassConfirm}
+                  onChange={e => setNewAdminPassConfirm(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 rounded p-2 text-white focus:border-orange-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Staff PIN (optional, 4+ digits, not 1234)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={newStaffPin}
+                  onChange={e => setNewStaffPin(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder={settings.rewards?.staffPin === '1234' ? 'Replace 1234' : 'Leave blank to keep current'}
+                  className="w-full bg-gray-950 border border-gray-700 rounded p-2 text-white focus:border-orange-500 outline-none"
+                />
+              </div>
+            </div>
+
+            {forceChangeError && (
+              <div className="text-sm text-red-400 bg-red-950/40 border border-red-900 rounded p-2">
+                {forceChangeError}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={cancelForceChange}
+                disabled={forceChangeSaving}
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-200 py-2 rounded font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleForceChangeSave}
+                disabled={forceChangeSaving}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded font-bold flex items-center justify-center gap-2"
+              >
+                {forceChangeSaving ? <Loader2 className="animate-spin" size={16} /> : 'Save & Continue'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
