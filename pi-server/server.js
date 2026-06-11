@@ -234,6 +234,92 @@ function ordersToCsv(orders) {
   return lines.join('\n');
 }
 
+function loadLocalSettings() {
+  const rows = db.prepare('SELECT * FROM settings').all();
+  const settings = {};
+  for (const row of rows) Object.assign(settings, parseJson(row.data, {}));
+  return settings;
+}
+
+async function maybePrintSmokeOrder(order, printRequested) {
+  if (!printRequested) return { attempted: false, skipped: 'print not requested' };
+  const hasDymo = isPrinterAvailable();
+  const hasBt = isBtPrinterAvailable();
+  if (!hasDymo && !hasBt) return { attempted: true, printed: false, skipped: 'no printer connected' };
+
+  const appSettings = loadLocalSettings();
+  const labelSettings = appSettings.labelSettings || {};
+  const logoUrl = labelSettings.logoUrl || appSettings.logoUrl;
+  const businessName = appSettings.businessName || 'ChowBox';
+  const siteUrl = labelSettings.socialUrl || appSettings.siteUrl || (CLOUD_URL ? `${CLOUD_URL}/#/menu` : null);
+
+  if (hasDymo) {
+    const printed = await printOrderLabel(order, logoUrl, businessName, siteUrl, labelSettings);
+    return { attempted: true, printed, printer: 'dymo' };
+  }
+
+  const printed = btPrintOrderReceipt(order, businessName, siteUrl, labelSettings);
+  return { attempted: true, printed, printer: 'bluetooth' };
+}
+
+async function runWalkupSmokeTest(options = {}) {
+  const cleanup = options.cleanup !== false;
+  const print = options.print === true;
+  const id = `smoke_${Date.now().toString(36)}`;
+  const now = new Date().toISOString();
+  const today = now.split('T')[0];
+  const item = {
+    item: { id: 'smoke_item', name: 'Smoke Test Item', price: 1, category: 'Service' },
+    quantity: 1,
+  };
+  const steps = [];
+
+  db.prepare(
+    `INSERT INTO orders (id, user_id, customer_name, customer_phone, items, total, status, cook_day, type, created_at, temperature, fulfillment_method, collection_pin, pickup_location, source, payment_state, payment_method, payment_provider, provider_reference, operator_confirmed_by, payment_risk_level, sync_state, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id, 'smoke_test', 'Smoke Test', null, JSON.stringify([item]), 1,
+    'Pending', today, 'TAKEAWAY', now, 'HOT', 'PICKUP', 'SMK', null,
+    'qr', 'unpaid', 'pay_at_window', null, null, null, 'none', 'local', now
+  );
+  steps.push({ name: 'qr_order_created', status: 'Pending', paymentState: 'unpaid' });
+
+  const confirmedAt = new Date().toISOString();
+  db.prepare(
+    `UPDATE orders SET status = ?, payment_state = ?, payment_method = ?, payment_provider = ?, provider_reference = ?, operator_confirmed_by = ?, confirmed_at = ?, updated_at = ? WHERE id = ?`
+  ).run(
+    'Confirmed', 'square_paid_operator_confirmed', 'square', 'square',
+    'SMOKE-SQUARE-REF', 'foh', confirmedAt, confirmedAt, id
+  );
+  steps.push({ name: 'square_eftpos_taken', status: 'Confirmed', paymentState: 'square_paid_operator_confirmed' });
+
+  const cookingAt = new Date().toISOString();
+  db.prepare('UPDATE orders SET status = ?, cooking_at = ?, updated_at = ? WHERE id = ?')
+    .run('Cooking', cookingAt, cookingAt, id);
+  steps.push({ name: 'kitchen_started', status: 'Cooking' });
+
+  const readyAt = new Date().toISOString();
+  db.prepare('UPDATE orders SET status = ?, ready_at = ?, updated_at = ? WHERE id = ?')
+    .run('Ready', readyAt, readyAt, id);
+  const readyOrder = rowToOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(id));
+  const printResult = await maybePrintSmokeOrder(readyOrder, print);
+  steps.push({ name: 'order_ready', status: 'Ready', print: printResult });
+
+  if (cleanup) {
+    db.prepare('DELETE FROM orders WHERE id = ?').run(id);
+    steps.push({ name: 'cleanup', deleted: true });
+  }
+
+  return {
+    ok: true,
+    id,
+    cleanup,
+    printRequested: print,
+    steps,
+    finalOrder: cleanup ? null : readyOrder,
+  };
+}
+
 function rowToEvent(r) {
   return {
     id: r.id, date: r.date, type: r.type, title: r.title,
@@ -552,6 +638,19 @@ async function handleApi(req, url) {
     }
 
     return json(payload);
+  }
+  if (path === '/admin/smoke/walkup' && method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const result = await runWalkupSmokeTest({
+        cleanup: body.cleanup !== false,
+        print: body.print === true,
+      });
+      return json(result);
+    } catch (err) {
+      console.error('[Smoke] Walk-Up smoke test failed:', err);
+      return json({ ok: false, error: err.message }, 500);
+    }
   }
   if (path === '/admin/sync-flush' && method === 'POST') {
     flushSyncQueue();

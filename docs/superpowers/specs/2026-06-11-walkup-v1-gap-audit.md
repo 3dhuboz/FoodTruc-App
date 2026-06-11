@@ -89,6 +89,17 @@ The Pi now exposes a day export endpoint for reconciliation:
 
 The export includes totals by status, payment state, payment method, and source, plus order rows with provider references. It does not include card data.
 
+The Pi operator dashboard now exposes the export actions directly:
+
+- "Download Today CSV"
+- "Open Today JSON"
+
+The Pi also exposes a local Walk-Up smoke test endpoint:
+
+- `POST /api/v1/admin/smoke/walkup`
+
+By default this creates a synthetic QR order, confirms Square/EFTPOS payment, moves it through `Confirmed -> Cooking -> Ready`, skips physical printing, then deletes the smoke order. Passing `{ "cleanup": false }` leaves the order in SQLite; passing `{ "print": true }` attempts the configured Dymo/Bluetooth printer path.
+
 This does not replace Square. It creates the data slot that lets ChowBox sit beside Square honestly.
 
 ## Next Implementation Slice
@@ -97,9 +108,9 @@ The next slice should make Walk-Up Stall mode feel like a coherent operator prod
 
 1. Add a compact service status strip to FOH.
 2. Show local/internet state, pending sync, printer state, and current payment mode.
-3. Add a smoke test path for "QR order -> FOH paid -> BOH cooking -> ready -> printed".
-4. Add a simple export/download button in the operator dashboard for the Pi day export endpoint.
-5. Add setup preset copy and defaults for "Walk-Up Stall".
+3. Add setup preset copy and defaults for "Walk-Up Stall".
+4. Add a real local customer pickup/status screen for the stall counter.
+5. Add cloud/admin reconciliation visibility for Square/EFTPOS operator-confirmed orders.
 
 The first UI goal is not beauty. It is that a trader can understand the current service state in under 10 seconds.
 
