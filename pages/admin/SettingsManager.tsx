@@ -209,35 +209,30 @@ const SettingsManager: React.FC = () => {
   }, []);
 
   const checkSystemHealth = async () => {
+      // Backend is Cloudflare D1, not Firestore. Probe the cheap /health
+      // endpoint to confirm the API is reachable and measure RTT.
       setHealthStatus(prev => ({ ...prev, database: 'checking' }));
-
       const start = Date.now();
       try {
-          if (!navigator.onLine) throw new Error("Client is offline");
-          const readUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/settings/general`;
-          const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
-          const res = await Promise.race([fetch(readUrl), timeout]) as Response;
+          if (!navigator.onLine) throw new Error('offline');
+          const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
+          const res = await Promise.race([fetch('/api/v1/health', { cache: 'no-store' }), timeout]) as Response;
           if (!res.ok) throw new Error(`Status ${res.status}`);
-          const end = Date.now();
-          setDbLatency(end - start);
+          setDbLatency(Date.now() - start);
           setHealthStatus(prev => ({ ...prev, database: 'online' }));
       } catch (e: any) {
           const isOffline = e.message?.includes('offline') || e.message === 'Timeout' || e.message?.includes('Failed to fetch');
-          if (isOffline) setHealthStatus(prev => ({ ...prev, database: 'offline' }));
-          else setHealthStatus(prev => ({ ...prev, database: 'error' }));
+          setHealthStatus(prev => ({ ...prev, database: isOffline ? 'offline' : 'error' }));
           setDbLatency(null);
       }
-      const isLocalAdmin = !!user;
-      
-      if (auth && auth.currentUser) setHealthStatus(prev => ({ ...prev, auth: 'online' }));
-      else if (isLocalAdmin) setHealthStatus(prev => ({ ...prev, auth: 'local' }));
-      else setHealthStatus(prev => ({ ...prev, auth: 'offline' }));
-      
-      setHealthStatus(prev => ({ ...prev, storage: 'online' }));
+      setHealthStatus(prev => ({ ...prev, auth: user ? 'local' : 'offline', storage: 'online' }));
       setLastChecked(new Date().toLocaleTimeString());
   };
 
   const runDeepDiagnostics = async () => {
+      // Backend is Cloudflare D1 (not Firestore). The diagnostic just verifies
+      // /api/v1/health responds and that a settings GET returns the current
+      // tenant's shape. Firestore-rules helper UI is no longer relevant.
       setIsRunningDiag(true);
       setShowDiagnostics(true);
       setShowRulesHelp(false);
@@ -245,86 +240,54 @@ const SettingsManager: React.FC = () => {
       const addLog = (step: string, status: 'success' | 'error' | 'warning', details?: string, fix?: string) => {
           setDiagLogs(prev => [...prev, { step, status, details, fix }]);
       };
-      if (!firebaseConfig) {
-          addLog("Configuration Object", "error", "firebaseConfig is undefined", "Check services/firebase.ts exports.");
-          setIsRunningDiag(false);
-          return;
-      }
-      addLog("Configuration Object", "success", "Loaded successfully");
-      const apiKey = firebaseConfig.apiKey;
-      if (!apiKey) addLog("API Key Presence", "error", "API Key is missing/empty", "Set VITE_FIREBASE_API_KEY in your hosting dashboard.");
-      else if (apiKey.includes("YOUR_API_KEY")) addLog("API Key Validity", "error", "Using Placeholder", "Set VITE_FIREBASE_API_KEY.");
-      else if (!apiKey.startsWith("AIza")) addLog("API Key Format", "warning", "Does not start with 'AIza'", "Check for typos.");
-      else addLog("API Key Format", "success", "Valid format (AIza...)");
-      if (!firebaseConfig.projectId || firebaseConfig.projectId.includes("street-meatz-bbq")) addLog("Project ID", "success", `Targeting: ${firebaseConfig.projectId}`);
-      else addLog("Project ID", "warning", `Value: ${firebaseConfig.projectId}`, "Ensure this matches your Firebase Console Project ID.");
-      
-      if (!db) {
-          addLog("Database Connection", "error", "Database not initialized", "Check API Key configuration");
-          setIsRunningDiag(false);
-          return;
+
+      addLog('Backend', 'success', 'Cloudflare D1 (no Firestore in this stack)');
+
+      try {
+          const start = Date.now();
+          const res = await fetch('/api/v1/health', { cache: 'no-store' });
+          const ping = Date.now() - start;
+          if (res.ok) addLog('Health probe', 'success', `OK in ${ping}ms`);
+          else addLog('Health probe', 'error', `Status ${res.status}`, 'Check Cloudflare Pages Functions deployment.');
+      } catch (e: any) {
+          addLog('Health probe', 'error', e.message || 'Network error', 'Cannot reach the API.');
       }
 
       try {
           const start = Date.now();
-          const readUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/settings/general`;
-          const readRes = await fetch(readUrl);
-          const readPing = Date.now() - start;
-          if (readRes.ok) {
-              addLog("Database Read (REST)", "success", `Read confirmed in ${readPing}ms`);
-          } else {
-              addLog("Database Read (REST)", "error", `Status ${readRes.status}`, "Check Firestore rules or project configuration.");
-          }
+          const res = await fetch('/api/v1/settings', { cache: 'no-store' });
+          const ping = Date.now() - start;
+          if (res.ok) addLog('Settings read', 'success', `OK in ${ping}ms`);
+          else addLog('Settings read', 'error', `Status ${res.status}`);
       } catch (e: any) {
-          addLog("Database Read (REST)", "error", e.message, "Cannot reach Firebase servers.");
+          addLog('Settings read', 'error', e.message || 'Network error');
       }
 
-      // WRITE TEST via REST API
-      try {
-          const writeStart = Date.now();
-          await restSetDoc('settings', '_write_test', { test: true, ts: Date.now() });
-          const writePing = Date.now() - writeStart;
-          addLog("Database Write (REST)", "success", `Write confirmed in ${writePing}ms — saves are working`);
-          // Clean up test doc
-          try { await restDeleteDoc('settings', '_write_test'); } catch (_) {}
-      } catch (e: any) {
-          let fix = "Check Firestore security rules.";
-          if (e.message?.includes('403')) { 
-              fix = "Security rules are blocking writes. See 'Recommended Rules' below."; 
-              setShowRulesHelp(true); 
-          }
-          addLog("Database Write (REST)", "error", e.message, fix);
-      }
       setIsRunningDiag(false);
   };
 
   const clearFirestoreCache = async () => {
-      toast('Clearing Firestore cache...');
+      // Older builds may have left Firestore IndexedDB databases around.
+      // Sweep them out so nothing in the browser keeps trying to talk to
+      // Firestore. The current backend is D1 — no rules-language needed.
+      toast('Clearing legacy cache…');
       try {
-          // Delete all Firestore IndexedDB databases
           const dbs = await indexedDB.databases();
-          const firestoreDbs = dbs.filter(d => d.name?.includes('firestore'));
+          const firestoreDbs = dbs.filter(d => d.name?.toLowerCase().includes('firestore'));
           for (const d of firestoreDbs) {
               if (d.name) indexedDB.deleteDatabase(d.name);
           }
-          toast('Cache cleared! Reloading...', 'success');
-          setTimeout(() => window.location.reload(), 1000);
+          toast('Cache cleared. Reloading…', 'success');
+          setTimeout(() => window.location.reload(), 800);
       } catch (e: any) {
-          // Fallback: try known database name patterns
-          try {
-              indexedDB.deleteDatabase(`firestore/[DEFAULT]/${firebaseConfig.projectId}/main`);
-              toast('Cache cleared! Reloading...', 'success');
-              setTimeout(() => window.location.reload(), 1000);
-          } catch (_) {
-              toast('Could not clear cache: ' + (e?.message || e), 'error');
-          }
+          toast('Could not clear cache: ' + (e?.message || e), 'error');
       }
   };
 
   const copyRulesToClipboard = () => {
-      const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`;
-      navigator.clipboard.writeText(rules);
-      toast('Rules copied to clipboard!');
+      // No-op kept for backwards-compat with the diagnostics UI; D1 has no
+      // user-facing rules language to copy.
+      toast('No rules to copy — backend is D1, not Firestore.', 'info');
   };
 
   // Init FB SDK

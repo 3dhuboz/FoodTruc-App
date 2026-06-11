@@ -1,11 +1,14 @@
 /**
  * GET /api/v1/admin/tenants
  * Returns all tenants with order counts and ChowBox status.
- * Super-admin endpoint for the platform operator.
+ * Super-admin endpoint for the platform operator. Requires ADMIN_API_KEY.
  */
 import { getDB } from '../_lib/db';
+import { requireAdminKey } from '../_lib/auth';
 
 export const onRequestGet: PagesFunction<{ DB: D1Database }> = async ({ request, env }) => {
+  const denied = requireAdminKey(request, env);
+  if (denied) return denied;
   const db = getDB(env);
 
   const tenants = await db.prepare(`

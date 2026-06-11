@@ -84,6 +84,50 @@ export interface CalendarEvent {
   tags?: string[]; 
 }
 
+export type OrderPaymentState =
+  | 'unpaid'
+  | 'cash_paid'
+  | 'external_eftpos_paid'
+  | 'square_paid_operator_confirmed'
+  | 'square_offline_pending'
+  | 'processor_confirmed'
+  | 'processor_declined_late'
+  | 'voided'
+  | 'refund_required';
+
+export type OrderPaymentMethod =
+  | 'pay_at_window'
+  | 'cash'
+  | 'external_eftpos'
+  | 'square'
+  | 'stripe'
+  | 'manual';
+
+export type OrderPaymentRiskLevel = 'none' | 'low' | 'medium' | 'high';
+export type OrderSource = 'walk_up' | 'qr' | 'foh' | 'service_day' | 'cloud' | 'unknown';
+
+export type ChowBoxOperatingMode = 'walk_up_stall' | 'service_day_hub' | 'cloud_storefront';
+export type PaymentCaptureMode =
+  | 'square_terminal_operator_confirmed'
+  | 'certified_eftpos_operator_confirmed'
+  | 'online_checkout'
+  | 'cash_only'
+  | 'manual';
+
+export interface WalkUpStallSettings {
+  enabled: boolean;
+  qrOrderingEnabled: boolean;
+  fohEnabled: boolean;
+  bohEnabled: boolean;
+  pickupScreenEnabled: boolean;
+  localPrinterEnabled: boolean;
+  requireCustomerName: boolean;
+  defaultPaymentMethod: OrderPaymentMethod;
+  defaultOrderSource: OrderSource;
+  statusScreenTitle: string;
+  orderCodeMode: 'collection_pin' | 'short_id';
+}
+
 export interface Order {
   id: string;
   userId: string;
@@ -117,6 +161,14 @@ export interface Order {
   discountApplied?: boolean; // If the 10% catering discount was used
   paymentIntentId?: string;
   squareCheckoutId?: string; // Square order ID from checkout link, used for webhook payment matching
+  source?: OrderSource;
+  paymentState?: OrderPaymentState;
+  paymentMethod?: OrderPaymentMethod;
+  paymentProvider?: 'square' | 'stripe' | 'cash' | 'external' | 'manual';
+  providerReference?: string;
+  operatorConfirmedBy?: string;
+  paymentRiskLevel?: OrderPaymentRiskLevel;
+  syncState?: 'local' | 'queued' | 'syncing' | 'synced' | 'conflict';
   // Status timestamps for analytics
   confirmedAt?: string;
   cookingAt?: string;
@@ -177,13 +229,19 @@ export interface RewardsConfig {
 }
 
 export interface AppSettings {
-  maintenanceMode: boolean; 
-  
+  maintenanceMode: boolean;
+  qrOrdersPaused?: boolean;
+  chowboxMode?: ChowBoxOperatingMode;
+  paymentCaptureMode?: PaymentCaptureMode;
+  walkUpStall?: WalkUpStallSettings;
+
   // -- Images --
   // Home
-  heroCateringImage?: string; 
-  heroCookImage?: string; 
+  heroCateringImage?: string;
+  heroCookImage?: string;
   homePromoterImage?: string;
+  homeScheduleCardImage?: string;
+  homeMenuCardImage?: string;
   // Menu
   menuHeroImage?: string;
   // DIY Catering
@@ -229,8 +287,12 @@ export interface AppSettings {
   businessName: string;
   businessAddress: string; 
   logoUrl: string;
-  adminUsername?: string; 
+  adminUsername?: string;
   adminPassword?: string;
+  /** Set on tenant provisioning; cleared after the first credential rotation. */
+  mustChangeCredentials?: boolean;
+  /** Platform-managed AI key. Stripped from non-admin GETs. */
+  geminiApiKey?: string;
   rewards: RewardsConfig;
   cateringPackages?: CateringPackage[];
   // Email Settings

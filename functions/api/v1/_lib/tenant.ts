@@ -1,8 +1,15 @@
 /**
  * Tenant resolution middleware for multi-tenant SaaS.
- * Resolves tenant from: X-Tenant-ID header → subdomain → auth JWT → 'default' fallback.
+ * Resolves tenant from: subdomain → 'default' fallback.
+ *
+ * SECURITY: The X-Tenant-ID header is ONLY honoured for callers presenting
+ * either (a) a valid ADMIN_API_KEY, or (b) a valid per-device token whose
+ * tenant_id matches the requested header. Anonymous and customer-authenticated
+ * requests are resolved strictly from the request hostname to prevent
+ * cross-tenant access.
  */
 import { getDB } from './db';
+import { hasValidAdminKey, verifyDeviceToken } from './auth';
 
 const BASE_DOMAIN = 'chownow.au';
 
@@ -54,19 +61,32 @@ function extractSubdomain(host: string): string | null {
 
 /**
  * Resolve tenant from the request context.
- * Priority: X-Tenant-ID header → subdomain → fallback 'default'
+ * Priority: subdomain → 'default' fallback. The X-Tenant-ID header is only
+ * honoured for authenticated admin tooling (ADMIN_API_KEY) — never for
+ * anonymous or customer requests, since it would let a caller on tenant A
+ * read/write tenant B's data.
  */
 export async function getTenantFromRequest(request: Request, env: any): Promise<TenantContext> {
   const db = getDB(env);
 
-  // 1. Explicit header (dev/scripts)
   const headerTenantId = request.headers.get('X-Tenant-ID');
-  if (headerTenantId) {
+
+  // 1a. Admin tooling escape hatch
+  if (headerTenantId && hasValidAdminKey(request, env)) {
     const tenant = await db.prepare('SELECT * FROM tenants WHERE id = ? AND status = ?').bind(headerTenantId, 'active').first() as TenantRow | null;
     return { tenantId: headerTenantId, tenant };
   }
 
-  // 2. Subdomain
+  // 1b. Pi-server (device-token) calls — only allowed to scope to their own tenant
+  if (headerTenantId) {
+    const device = await verifyDeviceToken(request, env);
+    if (device && device.tenantId === headerTenantId) {
+      const tenant = await db.prepare('SELECT * FROM tenants WHERE id = ? AND status = ?').bind(headerTenantId, 'active').first() as TenantRow | null;
+      return { tenantId: headerTenantId, tenant };
+    }
+  }
+
+  // 2. Subdomain — primary resolution path
   const host = request.headers.get('Host') || '';
   const subdomain = extractSubdomain(host);
   if (subdomain) {

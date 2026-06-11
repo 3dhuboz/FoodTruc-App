@@ -20,7 +20,6 @@ const Events = React.lazy(() => import('./pages/Events'));
 const Rewards = React.lazy(() => import('./pages/Rewards'));
 const Promoters = React.lazy(() => import('./pages/Promoters'));
 const Tracking = React.lazy(() => import('./pages/Tracking'));
-const DataSetup = React.lazy(() => import('./pages/admin/DataSetup'));
 const SetupWizard = React.lazy(() => import('./pages/admin/SetupWizard'));
 const Maintenance = React.lazy(() => import('./pages/Maintenance'));
 const PitmasterAI = React.lazy(() => import('./pages/PitmasterAI'));
@@ -173,6 +172,7 @@ const TenantGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Route path="/demo" element={<Demo />} />
             <Route path="/super-admin" element={<SuperAdmin />} />
             <Route path="/qr-order" element={<AppProvider><QROrder /></AppProvider>} />
+            <Route path="/order-status/:orderId" element={<AppProvider><OrderStatus /></AppProvider>} />
             <Route path="/boh" element={<AppProvider><BOH /></AppProvider>} />
             <Route path="/foh" element={<AppProvider><FOH /></AppProvider>} />
             <Route path="/portal" element={<AppProvider><CaptivePortal /></AppProvider>} />

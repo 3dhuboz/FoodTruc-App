@@ -16,14 +16,17 @@ ChowNow (chownow.au) is a multi-tenant SaaS food truck POS system. Food truck ow
 - Stripe for subscription billing + one-time ChowBox purchase
 
 ### ChowBox (Pi Server)
-- Raspberry Pi 5 + Seagate One Touch SSD
+- Raspberry Pi 5 + Seagate One Touch SSD (Debian Trixie, kernel 6.12+)
+- TP-Link Archer TX20U Plus USB WiFi adapter (RTL8832AU, WiFi 6, driver: lwfinger/rtl8852au via DKMS)
 - Node.js native HTTP server (no Express) + better-sqlite3
 - Serves built frontend + same API endpoints as cloud
+- Dual-WiFi: wlan1 (USB adapter) for internet uplink, ap0 (built-in) for customer hotspot
 - WiFi hotspot for offline events (captive portal)
 - Syncs to cloud D1 when internet available
-- Thermal printer support (ESC/POS over USB)
+- Thermal printer support (ESC/POS over USB — Dymo 4XL)
 - Heartbeats to cloud every 30s for fleet management
 - Cloudflare Tunnel for remote access
+- WiFi watchdog auto-reconnects wlan1 + restarts tunnel (cron every 2 min)
 
 ## Multi-Tenancy
 - **Platform tenant** (`id='default'`, slug='chownow'): Shows Landing page at chownow.au
@@ -94,28 +97,29 @@ Schema at `schema.sql`, migrations in `functions/api/v1/migrate.ts` (v1-v8):
 - `pi-server/printer.js` — ESC/POS thermal printer module
 - `pi-server/admin.html` — local diagnostic dashboard at `/admin`
 - `pi-server/setup-chowbox.sh` — one-line setup script (install Node, clone repo, build, systemd service, optional Cloudflare Tunnel)
+- `pi-server/setup-wifi-adapter.sh` — TP-Link AX1800 USB adapter setup (RTL8832AU driver, dual-WiFi, NAT routing, watchdog)
 - `pi-server/setup-db.js` — SQLite database initialization
 
 ## Cloudflare Tunnel
-- Tunnel created: `chowbox-default` (ID: `f1b534f3-d8bb-4f62-8b61-4232656fc37e`)
+- Tunnel name: `chowbox-default` (ID + token: see Cloudflare dashboard — never commit to git)
 - DNS: `box-default.chownow.au` → tunnel
-- Token: `eyJhIjoiNjcwMDQyM2I3NjY3MWEwNWQxOTY5MTZiNDM0MTA0NTgiLCJzIjoibE8yVGJMNEhMNklYUU5qb2dRSjJHRGhQOGJ2eU9hdnY1ZzlYSzBBU1NzOD0iLCJ0IjoiZjFiNTM0ZjMtZDhiYi00ZjYyLThiNjEtNDIzMjY1NmZjMzdlIn0=`
 - Setup: `sudo ./setup-chowbox.sh <tunnel-token>`
+- Tokens are sensitive credentials. Store in a password manager / Cloudflare dashboard. If a token has been committed to git history, rotate it immediately via `cloudflared tunnel token --rotate <name>`.
 
 ## Current State — Pi Setup
-- Seagate One Touch SSD flashed with Pi OS Lite 64-bit (Bookworm)
+- Seagate One Touch SSD flashed with Pi OS Lite 64-bit (Trixie/Debian 13)
 - Boot partition configured with: `custom.toml` (SSH + user + WiFi), `firstrun.sh`, `network-config`, `userconf.txt`, `ssh` file, `wpa_supplicant.conf`
 - `usb_max_current_enable=1` added to `config.txt` for SSD power
 - Pi 5 connected to Eero router via ethernet
-- WiFi: SSID `Hellyers`, password `/60tpprx7`
-- SSH credentials: user `pi`, password `chowbox`
+- WiFi credentials: stored in password manager — never commit
+- SSH credentials: per-device, set during provisioning — never commit. Default `pi/chowbox` MUST be changed before any Pi leaves the bench.
 - **NEXT STEP**: Boot the Pi, verify SSH works at the IP it gets, then run:
   ```bash
   curl -sL https://raw.githubusercontent.com/3dhuboz/FoodTruc-App/main/pi-server/setup-chowbox.sh | sudo bash
   ```
   Then set up Cloudflare Tunnel:
   ```bash
-  sudo /opt/chowbox/pi-server/setup-chowbox.sh eyJhIjoiNjcwMDQyM2I3NjY3MWEwNWQxOTY5MTZiNDM0MTA0NTgiLCJzIjoibE8yVGJMNEhMNklYUU5qb2dRSjJHRGhQOGJ2eU9hdnY1ZzlYSzBBU1NzOD0iLCJ0IjoiZjFiNTM0ZjMtZDhiYi00ZjYyLThiNjEtNDIzMjY1NmZjMzdlIn0=
+  sudo /opt/chowbox/pi-server/setup-chowbox.sh <TUNNEL_TOKEN_FROM_DASHBOARD>
   ```
 
 ## Pending Work

@@ -393,8 +393,8 @@ const Landing: React.FC = () => {
           </div>
           <div className="w-px h-10 bg-gray-800 hidden md:block" />
           <div>
-            <div className="text-3xl font-black text-orange-400">$0</div>
-            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Per-transaction fees</div>
+            <div className="text-3xl font-black text-orange-400">1.5%</div>
+            <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">Platform fee on online orders</div>
           </div>
           <div className="w-px h-10 bg-gray-800 hidden md:block" />
           <div>
@@ -613,38 +613,26 @@ const Landing: React.FC = () => {
         </div>
       </Section>
 
-      {/* ─── Testimonials ───────────────────────────────────────── */}
+      {/* ─── Founding customers ────────────────────────────────── */}
       <Section className="bg-gray-900/30 border-y border-gray-800">
-        <div className="max-w-4xl mx-auto px-6 py-24">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-black mb-4">Loved by truck owners</h2>
-          </div>
-          <div className="relative h-[220px]">
-            {testimonials.map((t, i) => (
-              <div key={i} className={`absolute inset-0 transition-all duration-500 ${i === activeTestimonial ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
-                  <Quote size={32} className="text-orange-400/30 mx-auto mb-4" />
-                  <p className="text-white text-lg md:text-xl font-medium mb-6 italic leading-relaxed">"{t.quote}"</p>
-                  <div className="flex items-center justify-center gap-4">
-                    <img src={t.img} alt={t.name} className="w-12 h-12 rounded-full object-cover border-2 border-orange-500/30" />
-                    <div className="text-left">
-                      <div className="text-white font-bold">{t.name}</div>
-                      <div className="text-gray-400 text-sm">{t.biz} — {t.loc}</div>
-                    </div>
-                    <div className="flex gap-0.5 ml-4">
-                      {Array.from({ length: t.stars }).map((_, s) => <Star key={s} size={14} className="text-orange-400 fill-orange-400" />)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          {/* Dots */}
-          <div className="flex justify-center gap-2 mt-6">
-            {testimonials.map((_, i) => (
-              <button key={i} onClick={() => setActiveTestimonial(i)} className={`w-2 h-2 rounded-full transition ${i === activeTestimonial ? 'bg-orange-400 w-6' : 'bg-gray-700'}`} />
-            ))}
-          </div>
+        <div className="max-w-3xl mx-auto px-6 py-24 text-center">
+          <Quote size={32} className="text-orange-400/30 mx-auto mb-4" />
+          <h2 className="text-3xl md:text-4xl font-black mb-4">Be a founding customer</h2>
+          <p className="text-gray-300 text-lg leading-relaxed mb-6">
+            ChowNow is brand new. We're looking for our first food trucks to run real orders through the
+            platform in exchange for honest feedback. Real customer testimonials will live here once we
+            have them — we'd rather show nothing than make them up.
+          </p>
+          <p className="text-gray-400 text-sm mb-8">
+            Founding customers get extended free trials and direct access to the team while we sand
+            down the rough edges. Email <a href="mailto:hello@chownow.au" className="text-orange-400 hover:underline">hello@chownow.au</a> to chat.
+          </p>
+          <a
+            href="#pricing"
+            className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold px-6 py-3 rounded-xl transition"
+          >
+            See pricing <ArrowRight size={18} />
+          </a>
         </div>
       </Section>
 
@@ -652,7 +640,7 @@ const Landing: React.FC = () => {
       <Section id="pricing" className="max-w-5xl mx-auto px-6 py-24">
         <div className="text-center mb-6">
           <h2 className="text-3xl md:text-5xl font-black mb-4">Simple, honest pricing</h2>
-          <p className="text-gray-400 text-lg max-w-xl mx-auto">No hidden fees. No per-transaction charges. ChowBox hardware included in every plan.</p>
+          <p className="text-gray-400 text-lg max-w-xl mx-auto">Transparent pricing. ChowBox hardware included in every plan. A 1.5% platform fee applies to online (QR) orders; in-person card payments pass through your own Stripe account at standard processing rates.</p>
         </div>
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 bg-green-500/10 text-green-400 px-4 py-2 rounded-full text-sm font-bold border border-green-500/20">

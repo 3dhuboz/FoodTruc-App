@@ -35,6 +35,10 @@ export const onRequest = async (context: any) => {
         trackingNumber: 'tracking_number', courier: 'courier',
         collectionPin: 'collection_pin', pickupLocation: 'pickup_location',
         paymentIntentId: 'payment_intent_id', squareCheckoutId: 'square_checkout_id',
+        source: 'source', paymentState: 'payment_state', paymentMethod: 'payment_method',
+        paymentProvider: 'payment_provider', providerReference: 'provider_reference',
+        operatorConfirmedBy: 'operator_confirmed_by', paymentRiskLevel: 'payment_risk_level',
+        syncState: 'sync_state',
       };
 
       for (const [key, col] of Object.entries(updatable)) {

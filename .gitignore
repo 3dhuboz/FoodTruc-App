@@ -27,3 +27,16 @@ dist-ssr
 *.sw?
 .vercel
 .env*.local
+
+# SQLite databases (Pi local + Wrangler local state)
+*.db
+*.db-shm
+*.db-wal
+pi-server/*.db
+pi-server/*.db-shm
+pi-server/*.db-wal
+
+# Secrets — never commit
+secrets/
+*.tunnel-token
+*.cloudflared.json

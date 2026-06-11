@@ -111,6 +111,13 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_intent_id TEXT,
   square_checkout_id TEXT,
   source TEXT DEFAULT 'walk_up',
+  payment_state TEXT DEFAULT 'unpaid',
+  payment_method TEXT,
+  payment_provider TEXT,
+  provider_reference TEXT,
+  operator_confirmed_by TEXT,
+  payment_risk_level TEXT DEFAULT 'none',
+  sync_state TEXT DEFAULT 'local',
   updated_at TEXT DEFAULT (datetime('now')),
   confirmed_at TEXT,
   cooking_at TEXT,
@@ -182,6 +189,14 @@ CREATE TABLE IF NOT EXISTS cook_days (
   is_open INTEGER DEFAULT 1
 );
 
+-- ─── Stripe Webhook Idempotency ──────────────────────────────
+CREATE TABLE IF NOT EXISTS processed_stripe_events (
+  stripe_event_id TEXT PRIMARY KEY,
+  event_type TEXT,
+  processed_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_processed_events_processed_at ON processed_stripe_events(processed_at);
+
 -- ─── ChowBox Devices (fleet tracking) ───────────────────────
 CREATE TABLE IF NOT EXISTS chowbox_devices (
   id TEXT PRIMARY KEY,
@@ -198,8 +213,12 @@ CREATE TABLE IF NOT EXISTS chowbox_devices (
   node_version TEXT,
   last_heartbeat TEXT,
   pending_commands TEXT,
+  device_token_hash TEXT,
+  release_version TEXT,
+  target_version TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_chowbox_token_hash ON chowbox_devices(device_token_hash);
 
 -- ─── Indexes ─────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);

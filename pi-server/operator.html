@@ -38,6 +38,7 @@
   .btn-orange { background: #f97316; color: white; } .btn-orange:hover { background: #ea580c; } .btn-orange:disabled { opacity: 0.5; }
   .btn-gray { background: #1f2937; color: #d1d5db; } .btn-gray:hover { background: #374151; }
   .btn-green { background: #059669; color: white; }
+  .btn-blue { background: #2563eb; color: white; }
   .btn-sm { padding: 10px 16px; font-size: 13px; width: auto; display: inline-block; margin-top: 0; }
 
   /* Form */
@@ -178,8 +179,16 @@
 
     <div class="card">
       <h2>Quick Actions</h2>
+      <button class="btn btn-blue" onclick="window.open('/#/foh', '_blank', 'noopener')">Open FOH Tablet</button>
+      <button class="btn btn-blue" onclick="window.open('/#/boh', '_blank', 'noopener')">Open BOH Kitchen</button>
+      <button class="btn btn-green" onclick="window.open('/pickup', '_blank', 'noopener')">Open Pickup Board</button>
+      <button class="btn btn-gray" onclick="window.open('/go/order', '_blank', 'noopener')">Open Customer QR Order</button>
+      <button class="btn btn-green" onclick="exportToday('csv')">Download Today CSV</button>
+      <button class="btn btn-gray" onclick="exportToday('json')">Open Today JSON</button>
+      <button class="btn btn-gray" onclick="runWalkupSmoke()">Run Walk-Up Smoke Test</button>
       <button class="btn btn-gray" onclick="location.href='/admin'">Full Admin Panel</button>
       <button class="btn btn-gray" onclick="showWizard()">Run Setup Again</button>
+      <div class="msg" id="export-msg"></div>
     </div>
 
     <div class="footer">Auto-updates every 2s</div>
@@ -248,6 +257,21 @@ async function saveWizard() {
         businessName: name || 'ChowBox',
         operatorPhone: phone || '',
         ntfyTopic: ntfyTopic || '',
+        chowboxMode: 'walk_up_stall',
+        paymentCaptureMode: 'square_terminal_operator_confirmed',
+        walkUpStall: {
+          enabled: true,
+          qrOrderingEnabled: true,
+          fohEnabled: true,
+          bohEnabled: true,
+          pickupScreenEnabled: true,
+          localPrinterEnabled: true,
+          requireCustomerName: true,
+          defaultPaymentMethod: 'pay_at_window',
+          defaultOrderSource: 'qr',
+          statusScreenTitle: 'Pickup Board',
+          orderCodeMode: 'collection_pin',
+        },
         setupComplete: true,
       }),
     });
@@ -306,6 +330,44 @@ function showWizard() {
   currentStep = 1;
   for (let i = 1; i <= totalSteps; i++) document.getElementById('step-' + i).style.display = i === 1 ? 'block' : 'none';
   updateDots();
+}
+
+function localDateString(date = new Date()) {
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offsetMs).toISOString().split('T')[0];
+}
+
+function exportToday(format) {
+  const date = localDateString();
+  const url = '/api/v1/admin/export/day?date=' + encodeURIComponent(date) + '&format=' + encodeURIComponent(format);
+  const msg = document.getElementById('export-msg');
+  if (msg) msg.innerHTML = '<span class="yellow">Preparing ' + esc(format.toUpperCase()) + ' export...</span>';
+  if (format === 'json') {
+    window.open(url, '_blank', 'noopener');
+  } else {
+    window.location.href = url;
+  }
+  setTimeout(() => {
+    if (msg) msg.innerHTML = '<span class="green">Export requested for ' + esc(date) + '</span>';
+  }, 500);
+}
+
+async function runWalkupSmoke() {
+  const msg = document.getElementById('export-msg');
+  if (msg) msg.innerHTML = '<span class="yellow">Running Walk-Up smoke test...</span>';
+  try {
+    const res = await fetch('/api/v1/admin/smoke/walkup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cleanup: true, print: false }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Smoke test failed');
+    const steps = Array.isArray(data.steps) ? data.steps.length : 0;
+    if (msg) msg.innerHTML = '<span class="green">Smoke test passed: ' + steps + ' steps</span>';
+  } catch (e) {
+    if (msg) msg.innerHTML = '<span class="red">Smoke test failed: ' + esc(e.message) + '</span>';
+  }
 }
 
 // ── Dashboard Logic ──

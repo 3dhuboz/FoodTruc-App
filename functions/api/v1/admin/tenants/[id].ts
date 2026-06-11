@@ -1,9 +1,10 @@
 /**
  * GET /api/v1/admin/tenants/:id — Single tenant with full metrics
  * PUT /api/v1/admin/tenants/:id — Update tenant fields
- * Super-admin endpoint for the platform operator.
+ * Super-admin endpoint. Requires ADMIN_API_KEY.
  */
 import { getDB } from '../../_lib/db';
+import { requireAdminKey } from '../../_lib/auth';
 
 const json = (d: any, s = 200) => new Response(JSON.stringify(d), {
   status: s,
@@ -23,6 +24,9 @@ export const onRequest = async (context: any) => {
       },
     });
   }
+
+  const denied = requireAdminKey(request, env);
+  if (denied) return denied;
 
   try {
     const db = getDB(env);

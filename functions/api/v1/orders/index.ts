@@ -50,8 +50,8 @@ export const onRequest = async (context: any) => {
       }
 
       await db.prepare(
-        `INSERT INTO orders (id, tenant_id, user_id, customer_name, customer_email, customer_phone, items, total, deposit_amount, status, cook_day, type, pickup_time, created_at, temperature, fulfillment_method, delivery_address, delivery_fee, collection_pin, pickup_location, discount_applied, payment_intent_id, square_checkout_id, source, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO orders (id, tenant_id, user_id, customer_name, customer_email, customer_phone, items, total, deposit_amount, status, cook_day, type, pickup_time, created_at, temperature, fulfillment_method, delivery_address, delivery_fee, collection_pin, pickup_location, discount_applied, payment_intent_id, square_checkout_id, source, payment_state, payment_method, payment_provider, provider_reference, operator_confirmed_by, payment_risk_level, sync_state, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         id, tenantId, order.userId || '', order.customerName, order.customerEmail || null,
         order.customerPhone || null, JSON.stringify(order.items), order.total,
@@ -61,7 +61,11 @@ export const onRequest = async (context: any) => {
         order.deliveryAddress || null, order.deliveryFee || null,
         pin, order.pickupLocation || null,
         order.discountApplied ? 1 : 0, order.paymentIntentId || null,
-        order.squareCheckoutId || null, order.source || 'walk_up', now
+        order.squareCheckoutId || null, order.source || 'walk_up',
+        order.paymentState || 'unpaid', order.paymentMethod || null,
+        order.paymentProvider || null, order.providerReference || null,
+        order.operatorConfirmedBy || null, order.paymentRiskLevel || 'none',
+        order.syncState || 'local', now
       ).run();
 
       const row = await db.prepare('SELECT * FROM orders WHERE id = ? AND tenant_id = ?').bind(id, tenantId).first();

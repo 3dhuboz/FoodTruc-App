@@ -5,8 +5,9 @@ import {
   Search, Filter, ArrowRight, CheckCircle, XCircle, AlertTriangle,
   X, Save, Eye, Edit2, Copy, ChevronLeft, ChevronRight,
   Pause, Play, RotateCcw, Download, Settings, Mail, DollarSign,
-  Palette, Power, Key, Loader2, EyeOff
+  Palette, Power, Key, Loader2, EyeOff, Lock
 } from 'lucide-react';
+import { adminFetch, getAdminKey, setAdminKey } from '../services/api';
 
 interface Tenant {
   id: string; name: string; slug: string; subdomain: string;
@@ -90,7 +91,7 @@ const TenantDrawer: React.FC<{
     try {
       const params = new URLSearchParams({ tenant_id: tenant.id, limit: '25', offset: String(offset) });
       if (status) params.set('status', status);
-      const res = await fetch(`/api/v1/admin/orders?${params}`);
+      const res = await adminFetch(`/api/v1/admin/orders?${params}`);
       const data = await res.json();
       setOrders(data.orders || []);
       setOrdersTotal(data.total || 0);
@@ -107,7 +108,7 @@ const TenantDrawer: React.FC<{
     setSaving(true);
     setSaveMsg('');
     try {
-      const res = await fetch(`/api/v1/admin/tenants/${tenant.id}`, {
+      const res = await adminFetch(`/api/v1/admin/tenants/${tenant.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -447,7 +448,7 @@ const SelectField: React.FC<{
 // ─── Fleet Command Helper ────────────────────────────────────
 async function sendDeviceCommand(deviceId: string, command: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/v1/admin/fleet/${deviceId}`, {
+    const res = await adminFetch(`/api/v1/admin/fleet/${deviceId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command }),
@@ -456,8 +457,63 @@ async function sendDeviceCommand(deviceId: string, command: string): Promise<boo
   } catch { return false; }
 }
 
+// ─── Admin Key Gate ──────────────────────────────────────────
+// Super Admin endpoints are gated server-side by ADMIN_API_KEY. The key lives
+// in localStorage and the operator pastes it once per browser. Without it,
+// every admin endpoint 401s, so the entire panel is hidden behind this gate.
+const AdminKeyGate: React.FC<{ onSet: () => void }> = ({ onSet }) => {
+  const [val, setVal] = useState('');
+  const [error, setError] = useState('');
+  const submit = async () => {
+    if (!val.trim()) { setError('Paste your admin key'); return; }
+    // Validate by hitting a known admin endpoint
+    setError('');
+    setAdminKey(val.trim());
+    const res = await adminFetch('/api/v1/admin/tenants');
+    if (res.status === 401) {
+      setAdminKey(null);
+      setError('Admin key rejected by server.');
+      return;
+    }
+    onSet();
+  };
+  return (
+    <div className="min-h-screen bg-stone-950 flex items-center justify-center p-6">
+      <div className="bg-stone-900 border border-stone-800 rounded-xl p-8 max-w-md w-full">
+        <div className="flex items-center gap-3 mb-4">
+          <Lock className="w-6 h-6 text-orange-500" />
+          <h1 className="text-xl font-bold text-white">Super Admin</h1>
+        </div>
+        <p className="text-stone-400 text-sm mb-4">
+          Paste your <code className="text-orange-400">ADMIN_API_KEY</code> to access the platform panel. The key is stored only in this browser's localStorage.
+        </p>
+        <input
+          type="password"
+          autoFocus
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+          placeholder="Admin key"
+          className="w-full bg-stone-950 border border-stone-700 rounded px-3 py-2 text-white placeholder-stone-500 focus:border-orange-500 focus:outline-none mb-3"
+        />
+        {error && <div className="text-red-400 text-sm mb-3">{error}</div>}
+        <button
+          onClick={submit}
+          className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded"
+        >
+          Unlock
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ─── Main Super Admin ────────────────────────────────────────
 const SuperAdmin: React.FC = () => {
+  // hasKey is declared first; the conditional render happens AFTER all other
+  // hooks below to comply with the Rules of Hooks (always call hooks in the
+  // same order on every render).
+  const [hasKey, setHasKey] = useState<boolean>(!!getAdminKey());
   const [tab, setTab] = useState<'tenants' | 'fleet' | 'overview' | 'settings'>('overview');
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [devices, setDevices] = useState<ChowBoxDevice[]>([]);
@@ -476,9 +532,9 @@ const SuperAdmin: React.FC = () => {
   const fetchData = async () => {
     try {
       const [tRes, dRes, sRes] = await Promise.all([
-        fetch('/api/v1/admin/tenants'),
-        fetch('/api/v1/admin/fleet'),
-        fetch('/api/v1/admin/settings'),
+        adminFetch('/api/v1/admin/tenants'),
+        adminFetch('/api/v1/admin/fleet'),
+        adminFetch('/api/v1/admin/settings'),
       ]);
       const tData = await tRes.json();
       const dData = await dRes.json();
@@ -498,7 +554,7 @@ const SuperAdmin: React.FC = () => {
     setSavingPlatform(true);
     setPlatformSaveMsg('');
     try {
-      const res = await fetch('/api/v1/admin/settings', {
+      const res = await adminFetch('/api/v1/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings: platformForm }),
@@ -528,6 +584,8 @@ const SuperAdmin: React.FC = () => {
   const onlineDevices = devices.filter(d => d.is_currently_online).length;
   const activeTenants = tenants.filter(t => t.status === 'active').length;
   const stripeLive = tenants.filter(t => t.stripe_onboarding_complete).length;
+
+  if (!hasKey) return <AdminKeyGate onSet={() => setHasKey(true)} />;
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">

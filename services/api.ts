@@ -108,3 +108,36 @@ export const sendEmail = (endpoint: string, payload: any) =>
 
 // Tenant (no auth required — used on bootstrap)
 export const fetchTenant = () => apiFetch<Tenant>('/tenant');
+
+// ─── Super-admin helpers ────────────────────────────────────────────
+// Backend admin endpoints (e.g. /api/v1/admin/tenants) now require
+// ADMIN_API_KEY. The key is stored in localStorage('chownow_admin_key') by
+// the platform operator and attached automatically here.
+
+const ADMIN_KEY_STORAGE = 'chownow_admin_key';
+
+export const getAdminKey = (): string | null => {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage.getItem(ADMIN_KEY_STORAGE) : null;
+  } catch { return null; }
+};
+
+export const setAdminKey = (key: string | null) => {
+  try {
+    if (!key) window.localStorage.removeItem(ADMIN_KEY_STORAGE);
+    else window.localStorage.setItem(ADMIN_KEY_STORAGE, key);
+  } catch {}
+};
+
+/**
+ * Fetch wrapper for /api/v1/admin/* endpoints. Attaches the admin key from
+ * localStorage as `Authorization: Bearer <key>`. The caller still receives
+ * the raw `Response` so existing call sites (which already use `res.json()`)
+ * keep working.
+ */
+export const adminFetch = (path: string, init: RequestInit = {}): Promise<Response> => {
+  const key = getAdminKey();
+  const headers: Record<string, string> = { ...(init.headers as Record<string, string> || {}) };
+  if (key) headers['Authorization'] = `Bearer ${key}`;
+  return fetch(path, { ...init, headers });
+};

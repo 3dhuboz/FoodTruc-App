@@ -34,9 +34,15 @@ export const onRequest = async (context: any) => {
 
   try {
     const url = new URL(request.url);
-    const { tenantId } = await getTenantFromRequest(request, env);
-    const requestedTenantId = url.searchParams.get('tenant_id') || tenantId;
+    // Resolve tenant strictly from the subdomain — never trust a query-string
+    // tenant_id, otherwise any caller could mint Express dashboard login links
+    // for any tenant.
+    const { tenantId: requestedTenantId } = await getTenantFromRequest(request, env);
     const wantDashboard = url.searchParams.get('dashboard') === 'true';
+
+    if (!requestedTenantId || requestedTenantId === 'default') {
+      return json({ error: 'Status must be requested from the tenant subdomain' }, 400);
+    }
 
     const db = getDB(env);
     const tenant = await db.prepare('SELECT * FROM tenants WHERE id = ?').bind(requestedTenantId).first() as any;

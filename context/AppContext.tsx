@@ -92,12 +92,38 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+/**
+ * Customer-only routes are read-mostly and short-lived (a customer scans a
+ * QR, places one order, leaves). They don't benefit from the 3s order
+ * polling or the deploy-version watcher; on a phone over 4G those waste
+ * battery and burn Cloudflare Function invocations for no UX gain.
+ *
+ * We resolve once at provider mount: customer routes get a single
+ * menu+settings fetch, then nothing more. Admin/POS/BOH routes get the
+ * full sync engine.
+ */
+const CUSTOMER_ROUTE_PREFIXES = ['#/qr-order', '#/order-status', '#/portal'];
+function isCustomerRouteOnMount(): boolean {
+  if (typeof window === 'undefined') return false;
+  const hash = window.location.hash || '';
+  return CUSTOMER_ROUTE_PREFIXES.some(p => hash.startsWith(p));
+}
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const BUILD_VERSION = typeof __BUILD_HASH__ !== 'undefined' ? __BUILD_HASH__ : 'dev';
   console.log(`[ChowNow] Build ${BUILD_VERSION} — Cloudflare D1 + Offline-First`);
 
-  // Start polling for new deploys (auto-refresh stale SW cache)
-  useEffect(() => { startVersionCheck(); }, []);
+  // Snapshot once at mount — re-evaluating per render would thrash effects
+  // on hash changes within the same provider lifetime.
+  const isCustomerRouteRef = useRef<boolean>(isCustomerRouteOnMount());
+
+  // Start polling for new deploys (auto-refresh stale SW cache).
+  // Skip for customer routes — a customer who scanned a QR doesn't need
+  // their menu page to nag about platform deploys.
+  useEffect(() => {
+    if (isCustomerRouteRef.current) return;
+    startVersionCheck();
+  }, []);
 
   const [isLoading, setIsLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -159,6 +185,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       setIsLoading(false);
 
+      if (isCustomerRouteRef.current) {
+        // Customer route — one-shot fetch of just menu + settings, no
+        // 3s/30s polling. The customer needs the menu, places one order,
+        // and leaves; OrderStatus.tsx does its own slim per-order poll.
+        try {
+          const [m, s] = await Promise.all([apiFetchMenu(), apiFetchSettings()]);
+          if (!mounted) return;
+          if (Array.isArray(m)) setMenu(m as any);
+          if (s) setSettings(prev => ({ ...prev, ...(s as any) }));
+        } catch (e) {
+          console.warn('[Bootstrap] customer-route fetch failed:', e);
+        }
+        return;
+      }
+
       // 2. Start sync engine (polls D1 API)
       startSync(3000, 30000);
 
@@ -205,6 +246,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => {
       mounted = false;
       unsub();
+      // stopSync is a no-op when sync was never started, safe either way.
       stopSync();
     };
   }, []);
@@ -213,11 +255,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const login = async (role: UserRole, email?: string, password?: string) => {
     if (role === UserRole.ADMIN) {
-      if (email === 'dev' && password === '123') {
-        setUser({ id: 'dev1', name: 'Developer', email: 'dev@local', role: UserRole.DEV, isVerified: true });
-        return;
-      }
-      if (email === settings.adminUsername && password === settings.adminPassword) {
+      if (
+        settings.adminUsername &&
+        settings.adminPassword &&
+        email === settings.adminUsername &&
+        password === settings.adminPassword
+      ) {
         setUser({ id: 'admin1', name: 'Admin', email: email || '', role: UserRole.ADMIN, isVerified: true });
         return;
       }

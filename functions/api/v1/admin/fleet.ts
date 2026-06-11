@@ -2,10 +2,14 @@
  * GET /api/v1/admin/fleet
  * Returns all ChowBox devices with status.
  * Marks devices as offline if last_heartbeat > 2 minutes ago.
+ * Super-admin endpoint. Requires ADMIN_API_KEY.
  */
 import { getDB } from '../_lib/db';
+import { requireAdminKey } from '../_lib/auth';
 
 export const onRequestGet: PagesFunction<{ DB: D1Database }> = async ({ request, env }) => {
+  const denied = requireAdminKey(request, env);
+  if (denied) return denied;
   const db = getDB(env);
 
   // Get all devices, join with tenant name

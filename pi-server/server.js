@@ -63,6 +63,34 @@ function getDeviceId() {
 }
 const DEVICE_ID = getDeviceId();
 
+// Per-device token — issued by the cloud on first heartbeat, persisted
+// here, then sent on every subsequent cloud-bound request. See
+// functions/api/v1/heartbeat for the bootstrap protocol.
+const DEVICE_TOKEN_PATH = join(__dirname, '.chowbox-token');
+function readDeviceToken() {
+  try {
+    return existsSync(DEVICE_TOKEN_PATH) ? readFileSync(DEVICE_TOKEN_PATH, 'utf-8').trim() : '';
+  } catch { return ''; }
+}
+function writeDeviceToken(token) {
+  try { writeFileSync(DEVICE_TOKEN_PATH, token, { mode: 0o600 }); }
+  catch (e) { console.warn('[Pi] Failed to persist device token:', e?.message); }
+}
+let DEVICE_TOKEN = readDeviceToken();
+
+// Currently-deployed release tag. Written by the versioned-update command
+// handler after a successful `git checkout vX.Y.Z`. Also reported in every
+// heartbeat so the cloud can compare against target_version.
+const RELEASE_VERSION_PATH = join(__dirname, '.chowbox-release');
+function readReleaseVersion() {
+  try {
+    return existsSync(RELEASE_VERSION_PATH) ? readFileSync(RELEASE_VERSION_PATH, 'utf-8').trim() : '';
+  } catch { return ''; }
+}
+function writeReleaseVersion(v) {
+  try { writeFileSync(RELEASE_VERSION_PATH, v); } catch {}
+}
+
 // ─── Database ────────────────────────────────────────────────
 
 const db = new Database(DB_PATH);
@@ -79,6 +107,13 @@ function autoMigrate() {
     'ALTER TABLE orders ADD COLUMN ready_at TEXT',
     'ALTER TABLE orders ADD COLUMN completed_at TEXT',
     'ALTER TABLE orders ADD COLUMN cancelled_at TEXT',
+    'ALTER TABLE orders ADD COLUMN payment_state TEXT DEFAULT "unpaid"',
+    'ALTER TABLE orders ADD COLUMN payment_method TEXT',
+    'ALTER TABLE orders ADD COLUMN payment_provider TEXT',
+    'ALTER TABLE orders ADD COLUMN provider_reference TEXT',
+    'ALTER TABLE orders ADD COLUMN operator_confirmed_by TEXT',
+    'ALTER TABLE orders ADD COLUMN payment_risk_level TEXT DEFAULT "none"',
+    'ALTER TABLE orders ADD COLUMN sync_state TEXT DEFAULT "local"',
     // Sync queue retry tracking
     'ALTER TABLE sync_queue ADD COLUMN retries INTEGER DEFAULT 0',
   ];
@@ -131,6 +166,194 @@ function rowToOrder(r) {
     collectionPin: r.collection_pin, pickupLocation: r.pickup_location,
     discountApplied: !!r.discount_applied, paymentIntentId: r.payment_intent_id,
     squareCheckoutId: r.square_checkout_id, source: r.source || 'walk_up',
+    paymentState: r.payment_state || 'unpaid',
+    paymentMethod: r.payment_method,
+    paymentProvider: r.payment_provider,
+    providerReference: r.provider_reference,
+    operatorConfirmedBy: r.operator_confirmed_by,
+    paymentRiskLevel: r.payment_risk_level || 'none',
+    syncState: r.sync_state || 'local',
+  };
+}
+
+function roundCurrency(value) {
+  return Math.round((value || 0) * 100) / 100;
+}
+
+function addMetric(bucket, key, amount) {
+  const safeKey = key || 'unknown';
+  if (!bucket[safeKey]) bucket[safeKey] = { count: 0, total: 0 };
+  bucket[safeKey].count += 1;
+  bucket[safeKey].total = roundCurrency(bucket[safeKey].total + (amount || 0));
+}
+
+function summarizeOrders(orders) {
+  const summary = {
+    orderCount: orders.length,
+    grossTotal: 0,
+    unpaidTotal: 0,
+    byStatus: {},
+    byPaymentState: {},
+    byPaymentMethod: {},
+    bySource: {},
+  };
+  for (const order of orders) {
+    const total = Number(order.total || 0);
+    summary.grossTotal = roundCurrency(summary.grossTotal + total);
+    if ((order.paymentState || 'unpaid') === 'unpaid') {
+      summary.unpaidTotal = roundCurrency(summary.unpaidTotal + total);
+    }
+    addMetric(summary.byStatus, order.status, total);
+    addMetric(summary.byPaymentState, order.paymentState || 'unpaid', total);
+    addMetric(summary.byPaymentMethod, order.paymentMethod || 'unknown', total);
+    addMetric(summary.bySource, order.source || 'unknown', total);
+  }
+  return summary;
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function ordersToCsv(orders) {
+  const headers = [
+    'id', 'createdAt', 'collectionPin', 'customerName', 'total', 'status',
+    'paymentState', 'paymentMethod', 'paymentProvider', 'providerReference',
+    'source', 'syncState', 'items',
+  ];
+  const lines = [headers.join(',')];
+  for (const order of orders) {
+    lines.push(headers.map(key => {
+      if (key === 'items') {
+        return csvCell(order.items.map(i => `${i.quantity}x ${i.item?.name || i.item?.id || 'item'}`).join('; '));
+      }
+      return csvCell(order[key]);
+    }).join(','));
+  }
+  return lines.join('\n');
+}
+
+function buildPickupBoard(date = new Date().toISOString().split('T')[0]) {
+  const rows = db.prepare(
+    `SELECT * FROM orders
+     WHERE (cook_day = ? OR created_at LIKE ?)
+       AND status IN ('Confirmed', 'Cooking', 'Ready')
+     ORDER BY
+       CASE status WHEN 'Ready' THEN 0 WHEN 'Cooking' THEN 1 ELSE 2 END,
+       ready_at DESC,
+       cooking_at DESC,
+       created_at ASC`
+  ).all(date, `${date}%`);
+  const orders = rows.map(rowToOrder);
+  const settings = loadLocalSettings();
+  const ready = orders.filter(o => o.status === 'Ready');
+  const cooking = orders.filter(o => o.status === 'Cooking');
+  const confirmed = orders.filter(o => o.status === 'Confirmed');
+
+  return {
+    generatedAt: new Date().toISOString(),
+    date,
+    businessName: settings.businessName || 'ChowBox',
+    title: settings.walkUpStall?.statusScreenTitle || 'Pickup Board',
+    refreshMs: 2500,
+    counts: {
+      ready: ready.length,
+      cooking: cooking.length,
+      confirmed: confirmed.length,
+      active: orders.length,
+    },
+    orders: {
+      ready,
+      cooking,
+      confirmed,
+    },
+  };
+}
+
+function loadLocalSettings() {
+  const rows = db.prepare('SELECT * FROM settings').all();
+  const settings = {};
+  for (const row of rows) Object.assign(settings, parseJson(row.data, {}));
+  return settings;
+}
+
+async function maybePrintSmokeOrder(order, printRequested) {
+  if (!printRequested) return { attempted: false, skipped: 'print not requested' };
+  const hasDymo = isPrinterAvailable();
+  const hasBt = isBtPrinterAvailable();
+  if (!hasDymo && !hasBt) return { attempted: true, printed: false, skipped: 'no printer connected' };
+
+  const appSettings = loadLocalSettings();
+  const labelSettings = appSettings.labelSettings || {};
+  const logoUrl = labelSettings.logoUrl || appSettings.logoUrl;
+  const businessName = appSettings.businessName || 'ChowBox';
+  const siteUrl = labelSettings.socialUrl || appSettings.siteUrl || (CLOUD_URL ? `${CLOUD_URL}/#/menu` : null);
+
+  if (hasDymo) {
+    const printed = await printOrderLabel(order, logoUrl, businessName, siteUrl, labelSettings);
+    return { attempted: true, printed, printer: 'dymo' };
+  }
+
+  const printed = btPrintOrderReceipt(order, businessName, siteUrl, labelSettings);
+  return { attempted: true, printed, printer: 'bluetooth' };
+}
+
+async function runWalkupSmokeTest(options = {}) {
+  const cleanup = options.cleanup !== false;
+  const print = options.print === true;
+  const id = `smoke_${Date.now().toString(36)}`;
+  const now = new Date().toISOString();
+  const today = now.split('T')[0];
+  const item = {
+    item: { id: 'smoke_item', name: 'Smoke Test Item', price: 1, category: 'Service' },
+    quantity: 1,
+  };
+  const steps = [];
+
+  db.prepare(
+    `INSERT INTO orders (id, user_id, customer_name, customer_phone, items, total, status, cook_day, type, created_at, temperature, fulfillment_method, collection_pin, pickup_location, source, payment_state, payment_method, payment_provider, provider_reference, operator_confirmed_by, payment_risk_level, sync_state, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id, 'smoke_test', 'Smoke Test', null, JSON.stringify([item]), 1,
+    'Pending', today, 'TAKEAWAY', now, 'HOT', 'PICKUP', 'SMK', null,
+    'qr', 'unpaid', 'pay_at_window', null, null, null, 'none', 'local', now
+  );
+  steps.push({ name: 'qr_order_created', status: 'Pending', paymentState: 'unpaid' });
+
+  const confirmedAt = new Date().toISOString();
+  db.prepare(
+    `UPDATE orders SET status = ?, payment_state = ?, payment_method = ?, payment_provider = ?, provider_reference = ?, operator_confirmed_by = ?, confirmed_at = ?, updated_at = ? WHERE id = ?`
+  ).run(
+    'Confirmed', 'square_paid_operator_confirmed', 'square', 'square',
+    'SMOKE-SQUARE-REF', 'foh', confirmedAt, confirmedAt, id
+  );
+  steps.push({ name: 'square_eftpos_taken', status: 'Confirmed', paymentState: 'square_paid_operator_confirmed' });
+
+  const cookingAt = new Date().toISOString();
+  db.prepare('UPDATE orders SET status = ?, cooking_at = ?, updated_at = ? WHERE id = ?')
+    .run('Cooking', cookingAt, cookingAt, id);
+  steps.push({ name: 'kitchen_started', status: 'Cooking' });
+
+  const readyAt = new Date().toISOString();
+  db.prepare('UPDATE orders SET status = ?, ready_at = ?, updated_at = ? WHERE id = ?')
+    .run('Ready', readyAt, readyAt, id);
+  const readyOrder = rowToOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(id));
+  const printResult = await maybePrintSmokeOrder(readyOrder, print);
+  steps.push({ name: 'order_ready', status: 'Ready', print: printResult });
+
+  if (cleanup) {
+    db.prepare('DELETE FROM orders WHERE id = ?').run(id);
+    steps.push({ name: 'cleanup', deleted: true });
+  }
+
+  return {
+    ok: true,
+    id,
+    cleanup,
+    printRequested: print,
+    steps,
+    finalOrder: cleanup ? null : readyOrder,
   };
 }
 
@@ -176,13 +399,18 @@ async function handleApi(req, url) {
     }
     return json(rows.map(rowToOrder));
   }
+  if (path === '/orders/pickup-board' && method === 'GET') {
+    const params = new URL(req.url, `http://${req.headers.host || 'localhost'}`).searchParams;
+    const date = params.get('date') || new Date().toISOString().split('T')[0];
+    return json(buildPickupBoard(date));
+  }
   if (path === '/orders' && method === 'POST') {
     const body = await readBody(req);
     const id = body.id || generateId();
     const now = new Date().toISOString();
     db.prepare(
-      `INSERT OR REPLACE INTO orders (id, user_id, customer_name, customer_email, customer_phone, items, total, deposit_amount, status, cook_day, type, pickup_time, created_at, temperature, fulfillment_method, delivery_address, delivery_fee, collection_pin, pickup_location, discount_applied, payment_intent_id, square_checkout_id, source, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR REPLACE INTO orders (id, user_id, customer_name, customer_email, customer_phone, items, total, deposit_amount, status, cook_day, type, pickup_time, created_at, temperature, fulfillment_method, delivery_address, delivery_fee, collection_pin, pickup_location, discount_applied, payment_intent_id, square_checkout_id, source, payment_state, payment_method, payment_provider, provider_reference, operator_confirmed_by, payment_risk_level, sync_state, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id, body.userId || '', body.customerName, body.customerEmail || null,
       body.customerPhone || null, JSON.stringify(body.items), body.total,
@@ -192,7 +420,11 @@ async function handleApi(req, url) {
       body.deliveryAddress || null, body.deliveryFee || null,
       body.collectionPin || null, body.pickupLocation || null,
       body.discountApplied ? 1 : 0, body.paymentIntentId || null,
-      body.squareCheckoutId || null, body.source || 'walk_up', now
+      body.squareCheckoutId || null, body.source || 'walk_up',
+      body.paymentState || 'unpaid', body.paymentMethod || null,
+      body.paymentProvider || null, body.providerReference || null,
+      body.operatorConfirmedBy || null, body.paymentRiskLevel || 'none',
+      body.syncState || 'local', now
     );
     // Queue for cloud sync
     queueSync('CREATE', 'orders', id, body);
@@ -220,6 +452,10 @@ async function handleApi(req, url) {
         deliveryFee: 'delivery_fee', collectionPin: 'collection_pin',
         paymentIntentId: 'payment_intent_id', squareCheckoutId: 'square_checkout_id',
         source: 'source', depositAmount: 'deposit_amount', cookDay: 'cook_day',
+        paymentState: 'payment_state', paymentMethod: 'payment_method',
+        paymentProvider: 'payment_provider', providerReference: 'provider_reference',
+        operatorConfirmedBy: 'operator_confirmed_by', paymentRiskLevel: 'payment_risk_level',
+        syncState: 'sync_state',
       };
       for (const [key, col] of Object.entries(map)) {
         if (body[key] !== undefined) {
@@ -414,6 +650,49 @@ async function handleApi(req, url) {
         stale: queueFailed?.count || 0,
       },
     });
+  }
+  if (path === '/admin/export/day' && method === 'GET') {
+    const params = new URL(req.url, `http://${req.headers.host || 'localhost'}`).searchParams;
+    const date = params.get('date') || new Date().toISOString().split('T')[0];
+    const format = params.get('format') || 'json';
+    const rows = db.prepare(
+      'SELECT * FROM orders WHERE cook_day = ? OR created_at LIKE ? ORDER BY created_at ASC'
+    ).all(date, `${date}%`);
+    const orders = rows.map(rowToOrder);
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      date,
+      summary: summarizeOrders(orders),
+      orders,
+    };
+
+    if (format === 'csv') {
+      const filename = `chowbox-${date}-orders.csv`;
+      return {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: ordersToCsv(orders),
+      };
+    }
+
+    return json(payload);
+  }
+  if (path === '/admin/smoke/walkup' && method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const result = await runWalkupSmokeTest({
+        cleanup: body.cleanup !== false,
+        print: body.print === true,
+      });
+      return json(result);
+    } catch (err) {
+      console.error('[Smoke] Walk-Up smoke test failed:', err);
+      return json({ ok: false, error: err.message }, 500);
+    }
   }
   if (path === '/admin/sync-flush' && method === 'POST') {
     flushSyncQueue();
@@ -640,7 +919,11 @@ function queueSync(action, tableName, recordId, payload) {
 
 // ─── Cloud Sync ──────────────────────────────────────────────
 
-const syncHeaders = (extra = {}) => ({ 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_ID, ...extra });
+const syncHeaders = (extra = {}) => {
+  const h = { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_ID, ...extra };
+  if (DEVICE_TOKEN) h['Authorization'] = `Bearer ${DEVICE_TOKEN}`;
+  return h;
+};
 
 let isOnline = false;
 let lastSyncLog = 0;
@@ -898,6 +1181,16 @@ const server = createServer(async (req, res) => {
     }
 
     // Direct API routes (no /api/v1 prefix) — print, health, admin endpoints
+    // Local pickup board for a counter display.
+    if (url.pathname === '/pickup' || url.pathname === '/pickup/') {
+      const pickupPath = join(__dirname, 'pickup.html');
+      if (existsSync(pickupPath)) {
+        const html = readFileSync(pickupPath, 'utf-8');
+        await sendResponse(req, res, 200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' }, html);
+        return;
+      }
+    }
+
     if (url.pathname.startsWith('/print/') || url.pathname === '/health' || url.pathname === '/seed') {
       const result = await handleApi(req, url);
       await sendResponse(req, res, result.status, result.headers, result.body);
@@ -960,9 +1253,16 @@ async function sendHeartbeat() {
     const hostname = (await import('os')).hostname();
     const localIPs = getLocalIPs();
 
+    // Auth: prefer the persisted per-device token. On first heartbeat (no
+    // token yet) fall back to the bootstrap shared secret if the operator
+    // configured one — the cloud will mint a per-device token in response.
+    const headers = { 'Content-Type': 'application/json' };
+    const bearer = DEVICE_TOKEN || process.env.HEARTBEAT_DEVICE_SECRET || '';
+    if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
+
     const hbRes = await fetch(`${CLOUD_URL}/api/v1/heartbeat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         deviceId: DEVICE_ID,
         tenantId: TENANT_ID,
@@ -975,13 +1275,21 @@ async function sendHeartbeat() {
         uptimeSeconds: Math.floor(process.uptime()),
         memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
         nodeVersion: process.version,
+        releaseVersion: readReleaseVersion(),
       }),
       signal: AbortSignal.timeout(5000),
     });
 
-    // Process remote commands from cloud super-admin
-    const hbData = await hbRes.json();
-    if (hbData.commands && Array.isArray(hbData.commands)) {
+    // Cloud responds with: { ok, commands, deviceToken? }. The deviceToken
+    // is only set once, on bootstrap.
+    const hbData = await hbRes.json().catch(() => ({}));
+    if (hbData?.deviceToken && !DEVICE_TOKEN) {
+      DEVICE_TOKEN = hbData.deviceToken;
+      writeDeviceToken(DEVICE_TOKEN);
+      console.log('[Pi] Persisted new device token');
+    }
+
+    if (hbData?.commands && Array.isArray(hbData.commands)) {
       for (const cmd of hbData.commands) {
         console.log(`[Command] Received: ${cmd}`);
         if (cmd === 'pause_qr_orders') {
@@ -1003,9 +1311,26 @@ async function sendHeartbeat() {
           console.log('[Command] Restarting server...');
           process.exit(0); // systemd will restart
         } else if (cmd === 'update') {
-          console.log('[Command] Updating from git...');
-          await execCommand('cd /opt/chowbox && git pull', 30000);
-          process.exit(0); // systemd will restart with new code
+          // Bare `update` would be `git pull origin main` — one bad merge
+          // bricks the entire fleet. Refuse and log; cloud-side validation
+          // also rejects this.
+          console.warn('[Command] Refusing bare `update` — push a versioned tag and queue `update:vX.Y.Z` instead.');
+        } else if (typeof cmd === 'string' && cmd.startsWith('update:')) {
+          const version = cmd.slice('update:'.length).trim();
+          if (!/^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(version)) {
+            console.warn(`[Command] Invalid update version "${version}" — expected vMAJOR.MINOR.PATCH`);
+            continue;
+          }
+          console.log(`[Command] Fetching tags and checking out ${version}…`);
+          try {
+            await execCommand('cd /opt/chowbox && git fetch --tags --force', 30000);
+            await execCommand(`cd /opt/chowbox && git checkout -f ${version}`, 30000);
+            writeReleaseVersion(version);
+            console.log(`[Command] Now on ${version}; restarting…`);
+            process.exit(0); // systemd will restart with the new code
+          } catch (err) {
+            console.error(`[Command] Update to ${version} failed:`, err?.message || err);
+          }
         }
       }
     }
