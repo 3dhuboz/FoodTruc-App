@@ -107,6 +107,13 @@ function autoMigrate() {
     'ALTER TABLE orders ADD COLUMN ready_at TEXT',
     'ALTER TABLE orders ADD COLUMN completed_at TEXT',
     'ALTER TABLE orders ADD COLUMN cancelled_at TEXT',
+    'ALTER TABLE orders ADD COLUMN payment_state TEXT DEFAULT "unpaid"',
+    'ALTER TABLE orders ADD COLUMN payment_method TEXT',
+    'ALTER TABLE orders ADD COLUMN payment_provider TEXT',
+    'ALTER TABLE orders ADD COLUMN provider_reference TEXT',
+    'ALTER TABLE orders ADD COLUMN operator_confirmed_by TEXT',
+    'ALTER TABLE orders ADD COLUMN payment_risk_level TEXT DEFAULT "none"',
+    'ALTER TABLE orders ADD COLUMN sync_state TEXT DEFAULT "local"',
     // Sync queue retry tracking
     'ALTER TABLE sync_queue ADD COLUMN retries INTEGER DEFAULT 0',
   ];
@@ -159,6 +166,13 @@ function rowToOrder(r) {
     collectionPin: r.collection_pin, pickupLocation: r.pickup_location,
     discountApplied: !!r.discount_applied, paymentIntentId: r.payment_intent_id,
     squareCheckoutId: r.square_checkout_id, source: r.source || 'walk_up',
+    paymentState: r.payment_state || 'unpaid',
+    paymentMethod: r.payment_method,
+    paymentProvider: r.payment_provider,
+    providerReference: r.provider_reference,
+    operatorConfirmedBy: r.operator_confirmed_by,
+    paymentRiskLevel: r.payment_risk_level || 'none',
+    syncState: r.sync_state || 'local',
   };
 }
 
@@ -209,8 +223,8 @@ async function handleApi(req, url) {
     const id = body.id || generateId();
     const now = new Date().toISOString();
     db.prepare(
-      `INSERT OR REPLACE INTO orders (id, user_id, customer_name, customer_email, customer_phone, items, total, deposit_amount, status, cook_day, type, pickup_time, created_at, temperature, fulfillment_method, delivery_address, delivery_fee, collection_pin, pickup_location, discount_applied, payment_intent_id, square_checkout_id, source, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR REPLACE INTO orders (id, user_id, customer_name, customer_email, customer_phone, items, total, deposit_amount, status, cook_day, type, pickup_time, created_at, temperature, fulfillment_method, delivery_address, delivery_fee, collection_pin, pickup_location, discount_applied, payment_intent_id, square_checkout_id, source, payment_state, payment_method, payment_provider, provider_reference, operator_confirmed_by, payment_risk_level, sync_state, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id, body.userId || '', body.customerName, body.customerEmail || null,
       body.customerPhone || null, JSON.stringify(body.items), body.total,
@@ -220,7 +234,11 @@ async function handleApi(req, url) {
       body.deliveryAddress || null, body.deliveryFee || null,
       body.collectionPin || null, body.pickupLocation || null,
       body.discountApplied ? 1 : 0, body.paymentIntentId || null,
-      body.squareCheckoutId || null, body.source || 'walk_up', now
+      body.squareCheckoutId || null, body.source || 'walk_up',
+      body.paymentState || 'unpaid', body.paymentMethod || null,
+      body.paymentProvider || null, body.providerReference || null,
+      body.operatorConfirmedBy || null, body.paymentRiskLevel || 'none',
+      body.syncState || 'local', now
     );
     // Queue for cloud sync
     queueSync('CREATE', 'orders', id, body);
@@ -248,6 +266,10 @@ async function handleApi(req, url) {
         deliveryFee: 'delivery_fee', collectionPin: 'collection_pin',
         paymentIntentId: 'payment_intent_id', squareCheckoutId: 'square_checkout_id',
         source: 'source', depositAmount: 'deposit_amount', cookDay: 'cook_day',
+        paymentState: 'payment_state', paymentMethod: 'payment_method',
+        paymentProvider: 'payment_provider', providerReference: 'provider_reference',
+        operatorConfirmedBy: 'operator_confirmed_by', paymentRiskLevel: 'payment_risk_level',
+        syncState: 'sync_state',
       };
       for (const [key, col] of Object.entries(map)) {
         if (body[key] !== undefined) {

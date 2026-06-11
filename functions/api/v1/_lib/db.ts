@@ -42,6 +42,13 @@ export function rowToOrder(r: any) {
     collectionPin: r.collection_pin, pickupLocation: r.pickup_location,
     discountApplied: !!r.discount_applied, paymentIntentId: r.payment_intent_id,
     squareCheckoutId: r.square_checkout_id, source: r.source || 'walk_up',
+    paymentState: r.payment_state || 'unpaid',
+    paymentMethod: r.payment_method,
+    paymentProvider: r.payment_provider,
+    providerReference: r.provider_reference,
+    operatorConfirmedBy: r.operator_confirmed_by,
+    paymentRiskLevel: r.payment_risk_level || 'none',
+    syncState: r.sync_state || 'local',
     confirmedAt: r.confirmed_at, cookingAt: r.cooking_at,
     readyAt: r.ready_at, completedAt: r.completed_at, cancelledAt: r.cancelled_at,
   };

@@ -262,7 +262,7 @@ const OrderQueue: React.FC<{
   const cooking = orders.filter(o => o.status === 'Cooking');
   const ready = orders.filter(o => o.status === 'Ready');
 
-  const isQrOrder = (o: Order) => o.userId === 'qr_customer' || (o as any).source === 'qr';
+  const isQrOrder = (o: Order) => o.userId === 'qr_customer' || o.source === 'qr';
 
   const renderOrder = (order: Order) => {
     const qr = isQrOrder(order);
@@ -379,7 +379,7 @@ const OrderQueue: React.FC<{
 
 // ─── Main FOH POS ────────────────────────────────────────────
 const FOH: React.FC = () => {
-  const { menu, orders, createOrder, updateOrderStatus, settings, updateSettings, isOnline, pendingSyncCount } = useApp();
+  const { menu, orders, createOrder, updateOrderStatus, updateOrder, settings, updateSettings, isOnline, pendingSyncCount } = useApp();
   const [unlocked, setUnlocked] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState('');
@@ -529,6 +529,11 @@ const FOH: React.FC = () => {
       type: 'TAKEAWAY', temperature: 'HOT', fulfillmentMethod: 'PICKUP',
       createdAt: new Date().toISOString(),
       pickupLocation: settings.businessAddress,
+      source: 'foh',
+      paymentState: 'unpaid',
+      paymentMethod: 'pay_at_window',
+      paymentRiskLevel: 'none',
+      syncState: 'local',
       ...(notes ? { pickupTime: notes } : {}),
     };
     createOrder(order);
@@ -536,8 +541,21 @@ const FOH: React.FC = () => {
     setPendingPaymentOrder(order);
   };
 
-  const handlePaymentComplete = (order: Order) => {
-    updateOrderStatus(order.id, 'Confirmed');
+  const confirmOperatorPayment = (
+    order: Order,
+    payment: Pick<Order, 'paymentState' | 'paymentMethod' | 'paymentProvider' | 'providerReference'>
+  ) => {
+    updateOrder({
+      ...order,
+      status: 'Confirmed',
+      paymentState: payment.paymentState,
+      paymentMethod: payment.paymentMethod,
+      paymentProvider: payment.paymentProvider,
+      providerReference: payment.providerReference,
+      operatorConfirmedBy: 'foh',
+      paymentRiskLevel: 'none',
+      syncState: order.syncState || 'local',
+    });
     setPendingPaymentOrder(null);
     setLastOrderNum(order.id.slice(-4).toUpperCase());
     // LOUD payment success — satisfying cash register "ka-ching" style
@@ -584,7 +602,12 @@ const FOH: React.FC = () => {
     try {
       const result = await collectPayment(order.total, order.id);
       if (result.success) {
-        handlePaymentComplete(order);
+        confirmOperatorPayment(order, {
+          paymentState: 'processor_confirmed',
+          paymentMethod: 'stripe',
+          paymentProvider: 'stripe',
+          providerReference: order.paymentIntentId,
+        });
       } else {
         alert(result.error || 'Payment failed');
       }
@@ -598,7 +621,11 @@ const FOH: React.FC = () => {
   };
 
   const handleMarkPaid = (order: Order) => {
-    updateOrderStatus(order.id, 'Confirmed');
+    confirmOperatorPayment(order, {
+      paymentState: 'external_eftpos_paid',
+      paymentMethod: 'external_eftpos',
+      paymentProvider: 'external',
+    });
   };
 
   const handleMarkComplete = (order: Order) => {
@@ -808,7 +835,13 @@ const FOH: React.FC = () => {
           order={pendingPaymentOrder}
           onQR={() => { setQrChargeOrder(pendingPaymentOrder); }}
           onNFC={() => { handleCharge(pendingPaymentOrder); }}
-          onCash={() => { handlePaymentComplete(pendingPaymentOrder); }}
+          onCash={() => {
+            confirmOperatorPayment(pendingPaymentOrder, {
+              paymentState: 'external_eftpos_paid',
+              paymentMethod: 'external_eftpos',
+              paymentProvider: 'external',
+            });
+          }}
           onClose={() => { /* Cancel order — leave as Pending in queue */ setPendingPaymentOrder(null); }}
           charging={charging === pendingPaymentOrder.id}
         />
@@ -818,7 +851,11 @@ const FOH: React.FC = () => {
         <PaymentQRModal
           order={qrChargeOrder}
           onPaid={() => {
-            handlePaymentComplete(qrChargeOrder);
+            confirmOperatorPayment(qrChargeOrder, {
+              paymentState: 'processor_confirmed',
+              paymentMethod: 'stripe',
+              paymentProvider: 'stripe',
+            });
             setQrChargeOrder(null);
           }}
           onCancel={() => setQrChargeOrder(null)}

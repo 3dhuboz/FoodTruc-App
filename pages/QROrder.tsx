@@ -275,6 +275,11 @@ const QROrder: React.FC = () => {
       cookDay: new Date().toISOString().split('T')[0],
       type: 'TAKEAWAY', temperature: 'HOT', fulfillmentMethod: 'PICKUP',
       createdAt: new Date().toISOString(), pickupLocation: settings.businessAddress,
+      source: 'qr',
+      paymentState: 'unpaid',
+      paymentMethod: 'pay_at_window',
+      paymentRiskLevel: 'none',
+      syncState: 'local',
     };
     try {
       await createOrder(order);
