@@ -176,6 +176,64 @@ function rowToOrder(r) {
   };
 }
 
+function roundCurrency(value) {
+  return Math.round((value || 0) * 100) / 100;
+}
+
+function addMetric(bucket, key, amount) {
+  const safeKey = key || 'unknown';
+  if (!bucket[safeKey]) bucket[safeKey] = { count: 0, total: 0 };
+  bucket[safeKey].count += 1;
+  bucket[safeKey].total = roundCurrency(bucket[safeKey].total + (amount || 0));
+}
+
+function summarizeOrders(orders) {
+  const summary = {
+    orderCount: orders.length,
+    grossTotal: 0,
+    unpaidTotal: 0,
+    byStatus: {},
+    byPaymentState: {},
+    byPaymentMethod: {},
+    bySource: {},
+  };
+  for (const order of orders) {
+    const total = Number(order.total || 0);
+    summary.grossTotal = roundCurrency(summary.grossTotal + total);
+    if ((order.paymentState || 'unpaid') === 'unpaid') {
+      summary.unpaidTotal = roundCurrency(summary.unpaidTotal + total);
+    }
+    addMetric(summary.byStatus, order.status, total);
+    addMetric(summary.byPaymentState, order.paymentState || 'unpaid', total);
+    addMetric(summary.byPaymentMethod, order.paymentMethod || 'unknown', total);
+    addMetric(summary.bySource, order.source || 'unknown', total);
+  }
+  return summary;
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function ordersToCsv(orders) {
+  const headers = [
+    'id', 'createdAt', 'collectionPin', 'customerName', 'total', 'status',
+    'paymentState', 'paymentMethod', 'paymentProvider', 'providerReference',
+    'source', 'syncState', 'items',
+  ];
+  const lines = [headers.join(',')];
+  for (const order of orders) {
+    lines.push(headers.map(key => {
+      if (key === 'items') {
+        return csvCell(order.items.map(i => `${i.quantity}x ${i.item?.name || i.item?.id || 'item'}`).join('; '));
+      }
+      return csvCell(order[key]);
+    }).join(','));
+  }
+  return lines.join('\n');
+}
+
 function rowToEvent(r) {
   return {
     id: r.id, date: r.date, type: r.type, title: r.title,
@@ -464,6 +522,36 @@ async function handleApi(req, url) {
         stale: queueFailed?.count || 0,
       },
     });
+  }
+  if (path === '/admin/export/day' && method === 'GET') {
+    const params = new URL(req.url, `http://${req.headers.host || 'localhost'}`).searchParams;
+    const date = params.get('date') || new Date().toISOString().split('T')[0];
+    const format = params.get('format') || 'json';
+    const rows = db.prepare(
+      'SELECT * FROM orders WHERE cook_day = ? OR created_at LIKE ? ORDER BY created_at ASC'
+    ).all(date, `${date}%`);
+    const orders = rows.map(rowToOrder);
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      date,
+      summary: summarizeOrders(orders),
+      orders,
+    };
+
+    if (format === 'csv') {
+      const filename = `chowbox-${date}-orders.csv`;
+      return {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: ordersToCsv(orders),
+      };
+    }
+
+    return json(payload);
   }
   if (path === '/admin/sync-flush' && method === 'POST') {
     flushSyncQueue();

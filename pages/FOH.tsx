@@ -4,7 +4,7 @@ import { MenuItem, Order, CartItem } from '../types';
 import {
   Plus, Minus, Trash2, ShoppingCart, ChefHat, X, CheckCircle, Search, Lock,
   Bell, Wifi, WifiOff, CloudOff, ClipboardList, Flame, Clock, Package, Users,
-  CreditCard, Loader2, PauseCircle, PlayCircle, QrCode, Smartphone, Printer
+  CreditCard, Loader2, PauseCircle, PlayCircle, QrCode, Smartphone, Printer, Banknote
 } from 'lucide-react';
 import { isNativePaymentAvailable, initTerminal, connectTapToPay, collectPayment } from '../services/stripeTerminal';
 
@@ -63,14 +63,18 @@ const CheckoutModal: React.FC<{
 // ─── Payment Method Modal ───────────────────────────────────
 const PaymentModal: React.FC<{
   order: Order;
-  onQR: () => void;
+  onlineAvailable: boolean;
+  onOnlineCheckout: () => void;
   onNFC: () => void;
-  onCash: () => void;
+  onSquareTaken: (reference?: string) => void;
+  onCashTaken: (reference?: string) => void;
   onClose: () => void;
   charging: boolean;
-}> = ({ order, onQR, onNFC, onCash, onClose, charging }) => {
+}> = ({ order, onlineAvailable, onOnlineCheckout, onNFC, onSquareTaken, onCashTaken, onClose, charging }) => {
   const hasNfc = isNativePaymentAvailable();
+  const [reference, setReference] = useState('');
   const pin = order.collectionPin || order.id?.slice(-4).toUpperCase();
+  const cleanReference = () => reference.trim() || undefined;
   return (
     <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50 p-4">
       <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm space-y-5">
@@ -85,13 +89,13 @@ const PaymentModal: React.FC<{
         </div>
 
         <div className="space-y-2.5">
-          {/* Primary: QR Code payment (works on any device) */}
-          <button onClick={onQR}
-            className="w-full bg-blue-500 hover:bg-blue-400 text-white font-bold py-4 rounded-xl transition active:scale-95 flex items-center justify-center gap-2.5 text-base">
-            <QrCode size={20} /> Customer Scans to Pay
-          </button>
+          {onlineAvailable && (
+            <button onClick={onOnlineCheckout}
+              className="w-full bg-blue-500 hover:bg-blue-400 text-white font-bold py-4 rounded-xl transition active:scale-95 flex items-center justify-center gap-2.5 text-base">
+              <QrCode size={20} /> Online Checkout
+            </button>
+          )}
 
-          {/* NFC Tap to Pay (only in Capacitor native app) */}
           {hasNfc && (
             <button onClick={onNFC} disabled={charging}
               className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl transition active:scale-95 flex items-center justify-center gap-2.5">
@@ -99,10 +103,21 @@ const PaymentModal: React.FC<{
             </button>
           )}
 
-          {/* Cash / External EFTPOS */}
-          <button onClick={onCash}
+          <input
+            value={reference}
+            onChange={e => setReference(e.target.value)}
+            placeholder="Receipt / reference optional"
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white placeholder-gray-500 outline-none focus:border-orange-500 text-sm"
+          />
+
+          <button onClick={() => onSquareTaken(cleanReference())}
+            className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3.5 rounded-xl transition active:scale-95 flex items-center justify-center gap-2.5">
+            <CreditCard size={18} /> Square / EFTPOS Taken
+          </button>
+
+          <button onClick={() => onCashTaken(cleanReference())}
             className="w-full bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold py-3.5 rounded-xl transition active:scale-95 flex items-center justify-center gap-2.5">
-            <span className="text-lg">💵</span> Cash / External EFTPOS
+            <Banknote size={18} /> Cash Taken
           </button>
         </div>
 
@@ -238,15 +253,18 @@ const PaymentQRModal: React.FC<{
 // ─── Order Queue Panel (right side) ──────────────────────────
 const OrderQueue: React.FC<{
   orders: Order[];
+  onlineCheckoutAvailable: boolean;
   onMarkReady: (order: Order) => void;
   onMarkComplete: (order: Order) => void;
-  onMarkPaid: (order: Order) => void;
+  onSquareTaken: (order: Order, reference?: string) => void;
+  onCashTaken: (order: Order, reference?: string) => void;
   onCharge: (order: Order) => void;
   onChargeQR: (order: Order) => void;
   charging: string | null;
-}> = ({ orders, onMarkReady, onMarkComplete, onMarkPaid, onCharge, onChargeQR, charging }) => {
+}> = ({ orders, onlineCheckoutAvailable, onMarkReady, onMarkComplete, onSquareTaken, onCashTaken, onCharge, onChargeQR, charging }) => {
   const hasNfcPayment = isNativePaymentAvailable();
   const [elapsed, setElapsed] = useState<Record<string, string>>({});
+  const askReference = () => window.prompt('Receipt / reference optional')?.trim() || undefined;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -298,19 +316,25 @@ const OrderQueue: React.FC<{
         <div className="text-orange-400 text-xs font-bold mb-2">${order.total.toFixed(2)}</div>
         {order.status === 'Pending' && (
           <div className="space-y-1.5">
-            <button onClick={() => onChargeQR(order)}
-              className="w-full bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold py-2.5 rounded-lg transition active:scale-95 flex items-center justify-center gap-1.5">
-              <QrCode size={12} /> Charge ${order.total.toFixed(2)}
-            </button>
+            {onlineCheckoutAvailable && (
+              <button onClick={() => onChargeQR(order)}
+                className="w-full bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold py-2.5 rounded-lg transition active:scale-95 flex items-center justify-center gap-1.5">
+                <QrCode size={12} /> Online Checkout
+              </button>
+            )}
             {hasNfcPayment && (
               <button onClick={() => onCharge(order)} disabled={charging === order.id}
                 className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-60 text-white text-xs font-bold py-2 rounded-lg transition active:scale-95 flex items-center justify-center gap-1.5">
                 {charging === order.id ? <><Loader2 size={12} className="animate-spin" /> Tap card...</> : <><CreditCard size={12} /> NFC Tap</>}
               </button>
             )}
-            <button onClick={() => onMarkPaid(order)}
-              className="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-bold py-2 rounded-lg transition active:scale-95">
-              Cash / EFTPOS
+            <button onClick={() => onSquareTaken(order, askReference())}
+              className="w-full bg-green-600 hover:bg-green-500 text-white text-xs font-bold py-2 rounded-lg transition active:scale-95 flex items-center justify-center gap-1.5">
+              <CreditCard size={12} /> Square / EFTPOS Taken
+            </button>
+            <button onClick={() => onCashTaken(order, askReference())}
+              className="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-bold py-2 rounded-lg transition active:scale-95 flex items-center justify-center gap-1.5">
+              <Banknote size={12} /> Cash Taken
             </button>
           </div>
         )}
@@ -391,6 +415,7 @@ const FOH: React.FC = () => {
   const [readyElapsed, setReadyElapsed] = useState<Record<string, number>>({});
   const [resending, setResending] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<'cart' | 'orders'>('cart');
+  const [serviceOnline, setServiceOnline] = useState(isOnline);
   const [printerState, setPrinterState] = useState<'unknown' | 'ready' | 'offline'>('unknown');
   const [printerLabel, setPrinterLabel] = useState('Check');
   const prevReadyIds = useRef<Set<string>>(new Set());
@@ -410,26 +435,40 @@ const FOH: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    const checkPrinter = async () => {
+    const checkService = async () => {
       try {
-        const res = await fetch('/api/v1/print/status');
-        if (!res.ok) throw new Error('print status unavailable');
-        const data = await res.json() as { printer?: boolean; available?: boolean; printerType?: string };
+        const [printRes, statusRes] = await Promise.all([
+          fetch('/api/v1/print/status').catch(() => null),
+          fetch('/api/v1/admin/status').catch(() => null),
+        ]);
         if (cancelled) return;
-        const ready = Boolean(data.printer || data.available);
-        setPrinterState(ready ? 'ready' : 'offline');
-        setPrinterLabel(ready ? (data.printerType || 'Ready') : 'Offline');
+        if (printRes?.ok) {
+          const data = await printRes.json() as { printer?: boolean; available?: boolean; printerType?: string };
+          const ready = Boolean(data.printer || data.available);
+          setPrinterState(ready ? 'ready' : 'offline');
+          setPrinterLabel(ready ? (data.printerType || 'Ready') : 'Offline');
+        } else {
+          setPrinterState('unknown');
+          setPrinterLabel('Check');
+        }
+        if (statusRes?.ok) {
+          const status = await statusRes.json() as { system?: { online?: boolean } };
+          setServiceOnline(Boolean(status.system?.online));
+        } else {
+          setServiceOnline(isOnline);
+        }
       } catch {
         if (!cancelled) {
           setPrinterState('unknown');
           setPrinterLabel('Check');
+          setServiceOnline(isOnline);
         }
       }
     };
-    checkPrinter();
-    const timer = setInterval(checkPrinter, 10000);
+    checkService();
+    const timer = setInterval(checkService, 10000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, []);
+  }, [isOnline]);
 
   const pendingPaymentOrders = activeOrders.filter(o => o.status === 'Pending');
   const pendingPaymentTotal = pendingPaymentOrders.reduce((sum, order) => sum + order.total, 0);
@@ -649,11 +688,21 @@ const FOH: React.FC = () => {
     setQrChargeOrder(order);
   };
 
-  const handleMarkPaid = (order: Order) => {
+  const handleSquareTaken = (order: Order, reference?: string) => {
     confirmOperatorPayment(order, {
-      paymentState: 'external_eftpos_paid',
-      paymentMethod: 'external_eftpos',
-      paymentProvider: 'external',
+      paymentState: 'square_paid_operator_confirmed',
+      paymentMethod: 'square',
+      paymentProvider: 'square',
+      providerReference: reference,
+    });
+  };
+
+  const handleCashTaken = (order: Order, reference?: string) => {
+    confirmOperatorPayment(order, {
+      paymentState: 'cash_paid',
+      paymentMethod: 'cash',
+      paymentProvider: 'cash',
+      providerReference: reference,
     });
   };
 
@@ -705,7 +754,7 @@ const FOH: React.FC = () => {
       )}
 
       {/* Offline Banner */}
-      {!isOnline && (
+      {!serviceOnline && (
         <div className="bg-yellow-600 text-black px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-2">
           <WifiOff size={14} /> OFFLINE MODE — Orders queued locally
           {pendingSyncCount > 0 && <span className="bg-black/20 px-2 py-0.5 rounded-full text-xs">{pendingSyncCount} pending</span>}
@@ -717,8 +766,8 @@ const FOH: React.FC = () => {
         <div className="flex items-center gap-2">
           <ChefHat size={20} className="text-orange-400" />
           <span className="text-white font-black">{settings.businessName || 'POS'}</span>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${isOnline ? 'bg-green-900 text-green-400' : 'bg-yellow-900 text-yellow-400'}`}>
-            {isOnline ? 'LIVE' : 'OFFLINE'}
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${serviceOnline ? 'bg-green-900 text-green-400' : 'bg-yellow-900 text-yellow-400'}`}>
+            {serviceOnline ? 'LIVE' : 'LOCAL'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -753,10 +802,10 @@ const FOH: React.FC = () => {
       <div className="bg-gray-950 border-b border-gray-800 px-3 py-2 grid grid-cols-2 md:grid-cols-5 gap-2 shrink-0">
         <div className="bg-gray-900/70 border border-gray-800 rounded-lg px-3 py-2 min-w-0">
           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
-            {isOnline ? <Wifi size={11} /> : <WifiOff size={11} />} Service
+            {serviceOnline ? <Wifi size={11} /> : <WifiOff size={11} />} Service
           </div>
-          <div className={`text-sm font-black truncate ${isOnline ? 'text-green-400' : 'text-yellow-400'}`}>
-            {isOnline ? 'Live' : 'Local'}
+          <div className={`text-sm font-black truncate ${serviceOnline ? 'text-green-400' : 'text-yellow-400'}`}>
+            {serviceOnline ? 'Live' : 'Local'}
           </div>
         </div>
         <div className="bg-gray-900/70 border border-gray-800 rounded-lg px-3 py-2 min-w-0">
@@ -896,7 +945,17 @@ const FOH: React.FC = () => {
 
           {/* Orders Panel */}
           {activePanel === 'orders' && (
-            <OrderQueue orders={activeOrders} onMarkReady={() => {}} onMarkComplete={handleMarkComplete} onMarkPaid={handleMarkPaid} onCharge={handleCharge} onChargeQR={handleChargeQR} charging={charging} />
+            <OrderQueue
+              orders={activeOrders}
+              onlineCheckoutAvailable={serviceOnline}
+              onMarkReady={() => {}}
+              onMarkComplete={handleMarkComplete}
+              onSquareTaken={handleSquareTaken}
+              onCashTaken={handleCashTaken}
+              onCharge={handleCharge}
+              onChargeQR={handleChargeQR}
+              charging={charging}
+            />
           )}
         </div>
       </div>
@@ -906,15 +965,11 @@ const FOH: React.FC = () => {
       {pendingPaymentOrder && !qrChargeOrder && (
         <PaymentModal
           order={pendingPaymentOrder}
-          onQR={() => { setQrChargeOrder(pendingPaymentOrder); }}
+          onlineAvailable={serviceOnline}
+          onOnlineCheckout={() => { setQrChargeOrder(pendingPaymentOrder); }}
           onNFC={() => { handleCharge(pendingPaymentOrder); }}
-          onCash={() => {
-            confirmOperatorPayment(pendingPaymentOrder, {
-              paymentState: 'external_eftpos_paid',
-              paymentMethod: 'external_eftpos',
-              paymentProvider: 'external',
-            });
-          }}
+          onSquareTaken={reference => { handleSquareTaken(pendingPaymentOrder, reference); }}
+          onCashTaken={reference => { handleCashTaken(pendingPaymentOrder, reference); }}
           onClose={() => { /* Cancel order — leave as Pending in queue */ setPendingPaymentOrder(null); }}
           charging={charging === pendingPaymentOrder.id}
         />

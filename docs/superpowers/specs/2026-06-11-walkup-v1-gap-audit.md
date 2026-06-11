@@ -78,8 +78,16 @@ New FOH orders now start as:
 FOH payment confirmation now preserves the existing kitchen behavior while recording payment context:
 
 - Stripe/NFC or hosted checkout success: `processor_confirmed`
-- Cash/external EFTPOS button: `external_eftpos_paid`
+- Square/EFTPOS operator-confirmed button: `square_paid_operator_confirmed`
+- Cash button: `cash_paid`
 - Operator confirmation is stamped as `operatorConfirmedBy = 'foh'`
+
+The Pi now exposes a day export endpoint for reconciliation:
+
+- JSON: `/api/v1/admin/export/day?date=YYYY-MM-DD`
+- CSV: `/api/v1/admin/export/day?date=YYYY-MM-DD&format=csv`
+
+The export includes totals by status, payment state, payment method, and source, plus order rows with provider references. It does not include card data.
 
 This does not replace Square. It creates the data slot that lets ChowBox sit beside Square honestly.
 
@@ -89,13 +97,9 @@ The next slice should make Walk-Up Stall mode feel like a coherent operator prod
 
 1. Add a compact service status strip to FOH.
 2. Show local/internet state, pending sync, printer state, and current payment mode.
-3. Rename FOH payment actions so they match the companion product:
-   - "Square / EFTPOS Taken"
-   - "Cash Taken"
-   - "Online Checkout" only when internet is available.
-4. Add optional provider/reference capture after payment confirmation.
-5. Add an end-of-day export endpoint on the Pi for local orders/payment markers.
-6. Add a smoke test path for "QR order -> FOH paid -> BOH cooking -> ready -> printed".
+3. Add a smoke test path for "QR order -> FOH paid -> BOH cooking -> ready -> printed".
+4. Add a simple export/download button in the operator dashboard for the Pi day export endpoint.
+5. Add setup preset copy and defaults for "Walk-Up Stall".
 
 The first UI goal is not beauty. It is that a trader can understand the current service state in under 10 seconds.
 
@@ -105,8 +109,8 @@ The first UI goal is not beauty. It is that a trader can understand the current 
 - Run the Pi server against a fresh SQLite DB and an upgraded DB.
 - Confirm D1 migration applies cleanly.
 - Verify QR order creation stores `source = 'qr'`.
-- Verify FOH external payment stores `payment_state = 'external_eftpos_paid'`.
+- Verify FOH Square/EFTPOS payment stores `payment_state = 'square_paid_operator_confirmed'`.
+- Verify FOH cash payment stores `payment_state = 'cash_paid'`.
 - Verify BOH still only sees `Confirmed` and `Cooking`.
 - Verify order sync preserves payment fields in both directions.
 - Verify printer endpoints still respond with Dymo/Bluetooth fallback.
-
