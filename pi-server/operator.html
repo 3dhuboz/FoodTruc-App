@@ -38,6 +38,7 @@
   .btn-orange { background: #f97316; color: white; } .btn-orange:hover { background: #ea580c; } .btn-orange:disabled { opacity: 0.5; }
   .btn-gray { background: #1f2937; color: #d1d5db; } .btn-gray:hover { background: #374151; }
   .btn-green { background: #059669; color: white; }
+  .btn-blue { background: #2563eb; color: white; }
   .btn-sm { padding: 10px 16px; font-size: 13px; width: auto; display: inline-block; margin-top: 0; }
 
   /* Form */
@@ -178,6 +179,10 @@
 
     <div class="card">
       <h2>Quick Actions</h2>
+      <button class="btn btn-blue" onclick="window.open('/#/foh', '_blank', 'noopener')">Open FOH Tablet</button>
+      <button class="btn btn-blue" onclick="window.open('/#/boh', '_blank', 'noopener')">Open BOH Kitchen</button>
+      <button class="btn btn-green" onclick="window.open('/pickup', '_blank', 'noopener')">Open Pickup Board</button>
+      <button class="btn btn-gray" onclick="window.open('/go/order', '_blank', 'noopener')">Open Customer QR Order</button>
       <button class="btn btn-green" onclick="exportToday('csv')">Download Today CSV</button>
       <button class="btn btn-gray" onclick="exportToday('json')">Open Today JSON</button>
       <button class="btn btn-gray" onclick="runWalkupSmoke()">Run Walk-Up Smoke Test</button>
@@ -252,6 +257,21 @@ async function saveWizard() {
         businessName: name || 'ChowBox',
         operatorPhone: phone || '',
         ntfyTopic: ntfyTopic || '',
+        chowboxMode: 'walk_up_stall',
+        paymentCaptureMode: 'square_terminal_operator_confirmed',
+        walkUpStall: {
+          enabled: true,
+          qrOrderingEnabled: true,
+          fohEnabled: true,
+          bohEnabled: true,
+          pickupScreenEnabled: true,
+          localPrinterEnabled: true,
+          requireCustomerName: true,
+          defaultPaymentMethod: 'pay_at_window',
+          defaultOrderSource: 'qr',
+          statusScreenTitle: 'Pickup Board',
+          orderCodeMode: 'collection_pin',
+        },
         setupComplete: true,
       }),
     });

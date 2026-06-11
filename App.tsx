@@ -172,6 +172,7 @@ const TenantGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Route path="/demo" element={<Demo />} />
             <Route path="/super-admin" element={<SuperAdmin />} />
             <Route path="/qr-order" element={<AppProvider><QROrder /></AppProvider>} />
+            <Route path="/order-status/:orderId" element={<AppProvider><OrderStatus /></AppProvider>} />
             <Route path="/boh" element={<AppProvider><BOH /></AppProvider>} />
             <Route path="/foh" element={<AppProvider><FOH /></AppProvider>} />
             <Route path="/portal" element={<AppProvider><CaptivePortal /></AppProvider>} />

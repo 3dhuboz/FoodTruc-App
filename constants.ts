@@ -41,6 +41,21 @@ export const INITIAL_EVENTS: CalendarEvent[] = [
 
 export const INITIAL_SETTINGS: AppSettings = {
   maintenanceMode: false,
+  chowboxMode: 'walk_up_stall',
+  paymentCaptureMode: 'square_terminal_operator_confirmed',
+  walkUpStall: {
+    enabled: true,
+    qrOrderingEnabled: true,
+    fohEnabled: true,
+    bohEnabled: true,
+    pickupScreenEnabled: true,
+    localPrinterEnabled: true,
+    requireCustomerName: true,
+    defaultPaymentMethod: 'pay_at_window',
+    defaultOrderSource: 'qr',
+    statusScreenTitle: 'Pickup Board',
+    orderCodeMode: 'collection_pin',
+  },
   heroCateringImage: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80",
   heroCookImage: "https://images.unsplash.com/photo-1432139555190-58524dae6a55?auto=format&fit=crop&w=1200&q=80",
   homePromoterImage: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1950&q=80",

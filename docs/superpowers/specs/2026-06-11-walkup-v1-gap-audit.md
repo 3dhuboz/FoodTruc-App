@@ -32,20 +32,19 @@ This audit started the first foundation slice by adding explicit payment-state f
 
 ### Partially Aligned
 
-- FOH can mark paid, but the old path only changed `status` to `Confirmed`.
+- FOH can now mark Square/EFTPOS or cash as operator-confirmed with an optional provider reference.
 - QR orders were identifiable by `userId = 'qr_customer'`; they now also set `source = 'qr'`.
-- Pi and cloud schemas had `source`, `payment_intent_id`, and `square_checkout_id`, but no provider-neutral payment-state columns.
-- Operator dashboard shows basic sync/printer/internet health, but not pending payment risk or BOH/FOH device counts.
+- Pi and cloud schemas now include provider-neutral payment-state columns alongside existing `payment_intent_id` and `square_checkout_id` fields.
+- Operator dashboard shows basic sync/printer/internet health plus export, smoke-test, FOH/BOH, QR order, and pickup-board actions; it still does not show BOH/FOH device counts.
 - Print works locally, but the v1 pilot needs a boring first-class 80mm printer path and setup verification.
 
 ### Not Yet Aligned
 
 - No Square POS API or Square Mobile Payments SDK offline integration.
-- No Square receipt/reference capture field in the FOH payment modal UI yet.
-- No end-of-day reconciliation/export screen.
-- No setup preset that says "Walk-Up Stall" and hides irrelevant SaaS/catering complexity.
+- No cloud/admin reconciliation view for Square/EFTPOS operator-confirmed orders.
+- No printable end-of-day reconciliation screen beyond the Pi CSV/JSON export.
+- No service-day open/closed control that governs QR ordering and the pickup board together.
 - No local customer Wi-Fi onboarding proof on real phones.
-- No local pickup/status screen designed specifically for the stall counter.
 - No cloud admin view that separates `Pending`, `Confirmed`, payment state, sync state, and late decline exceptions.
 
 ## Foundation Change Landed
@@ -102,15 +101,36 @@ By default this creates a synthetic QR order, confirms Square/EFTPOS payment, mo
 
 This does not replace Square. It creates the data slot that lets ChowBox sit beside Square honestly.
 
+## Local Pickup Board
+
+The Pi now has a standalone local pickup board:
+
+- `GET /pickup`
+- `GET /api/v1/orders/pickup-board`
+
+The board shows Ready, Cooking, and Up Next order codes for today's service using only the Pi SQLite database. It is intended for a cheap customer-facing screen at the counter and does not need internet, Clerk, Square APIs, or the cloud app to render.
+
+The operator dashboard and captive portal now link directly to the pickup board. The platform/default React route set also exposes `/order-status/:orderId`, so QR customers can reach their per-order status page even on the platform/default tenant path.
+
+## Walk-Up Stall Preset
+
+Walk-Up Stall is now an explicit settings mode:
+
+- `chowboxMode: "walk_up_stall"`
+- `paymentCaptureMode: "square_terminal_operator_confirmed"`
+- `walkUpStall` flags for QR ordering, FOH, BOH, pickup screen, local printing, customer-name requirement, and collection-pin order codes
+
+The cloud setup wizard now recommends this preset in the payment step and keeps Stripe/online checkout as optional. The Pi operator setup also saves these defaults on first-run setup.
+
 ## Next Implementation Slice
 
 The next slice should make Walk-Up Stall mode feel like a coherent operator product:
 
-1. Add a compact service status strip to FOH.
-2. Show local/internet state, pending sync, printer state, and current payment mode.
-3. Add setup preset copy and defaults for "Walk-Up Stall".
-4. Add a real local customer pickup/status screen for the stall counter.
-5. Add cloud/admin reconciliation visibility for Square/EFTPOS operator-confirmed orders.
+1. Add cloud/admin reconciliation visibility for Square/EFTPOS operator-confirmed orders.
+2. Add a "service day open/closed" control that affects QR ordering and the pickup board.
+3. Add a printable/exportable end-of-day handover report from the Pi dashboard.
+4. Add a local setup checklist for hardware: Square Terminal, FOH tablet, BOH tablet, pickup screen, and printer.
+5. Add more explicit status for queued SMS/email notifications while offline.
 
 The first UI goal is not beauty. It is that a trader can understand the current service state in under 10 seconds.
 

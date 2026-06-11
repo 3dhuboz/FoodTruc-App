@@ -106,6 +106,28 @@ export type OrderPaymentMethod =
 export type OrderPaymentRiskLevel = 'none' | 'low' | 'medium' | 'high';
 export type OrderSource = 'walk_up' | 'qr' | 'foh' | 'service_day' | 'cloud' | 'unknown';
 
+export type ChowBoxOperatingMode = 'walk_up_stall' | 'service_day_hub' | 'cloud_storefront';
+export type PaymentCaptureMode =
+  | 'square_terminal_operator_confirmed'
+  | 'certified_eftpos_operator_confirmed'
+  | 'online_checkout'
+  | 'cash_only'
+  | 'manual';
+
+export interface WalkUpStallSettings {
+  enabled: boolean;
+  qrOrderingEnabled: boolean;
+  fohEnabled: boolean;
+  bohEnabled: boolean;
+  pickupScreenEnabled: boolean;
+  localPrinterEnabled: boolean;
+  requireCustomerName: boolean;
+  defaultPaymentMethod: OrderPaymentMethod;
+  defaultOrderSource: OrderSource;
+  statusScreenTitle: string;
+  orderCodeMode: 'collection_pin' | 'short_id';
+}
+
 export interface Order {
   id: string;
   userId: string;
@@ -209,6 +231,9 @@ export interface RewardsConfig {
 export interface AppSettings {
   maintenanceMode: boolean;
   qrOrdersPaused?: boolean;
+  chowboxMode?: ChowBoxOperatingMode;
+  paymentCaptureMode?: PaymentCaptureMode;
+  walkUpStall?: WalkUpStallSettings;
 
   // -- Images --
   // Home

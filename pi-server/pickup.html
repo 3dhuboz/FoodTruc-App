@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChowBox Pickup Board</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #05070b;
+    color: #f8fafc;
+  }
+  .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    padding: 28px 36px;
+    border-bottom: 1px solid #1f2937;
+    background: #0b111e;
+  }
+  .brand { min-width: 0; }
+  .brand h1 { margin: 0; font-size: clamp(28px, 4vw, 54px); line-height: 1; letter-spacing: 0; }
+  .brand p { margin: 8px 0 0; color: #94a3b8; font-size: clamp(14px, 1.5vw, 20px); }
+  .clock { text-align: right; color: #e2e8f0; font-weight: 800; font-size: clamp(20px, 3vw, 44px); white-space: nowrap; }
+  main { display: grid; grid-template-columns: 1.45fr 0.9fr 0.9fr; gap: 20px; padding: 24px; }
+  section {
+    min-width: 0;
+    border: 1px solid #1f2937;
+    background: #0b111e;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px;
+    border-bottom: 1px solid #1f2937;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    font-weight: 900;
+  }
+  .section-head.ready { background: #065f46; }
+  .section-head.cooking { background: #9a3412; }
+  .section-head.confirmed { background: #1d4ed8; }
+  .count { font-size: 0.8em; opacity: 0.85; }
+  .list { padding: 18px; display: grid; gap: 14px; align-content: start; min-height: 220px; }
+  .empty { color: #64748b; text-align: center; padding: 48px 12px; font-size: clamp(16px, 2vw, 24px); }
+  .ticket {
+    border: 1px solid #263244;
+    border-radius: 8px;
+    background: #111827;
+    padding: 16px;
+  }
+  .ticket.ready { background: #ecfdf5; color: #052e16; border-color: #10b981; }
+  .ticket.cooking { border-color: #f97316; }
+  .ticket.confirmed { border-color: #3b82f6; }
+  .code {
+    font-weight: 950;
+    letter-spacing: 0;
+    line-height: 0.95;
+    font-size: clamp(42px, 7vw, 112px);
+  }
+  .small .code { font-size: clamp(28px, 3.5vw, 52px); }
+  .name { margin-top: 10px; font-size: clamp(15px, 1.8vw, 24px); font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { margin-top: 6px; color: #94a3b8; font-size: clamp(12px, 1.2vw, 16px); }
+  .ready .meta { color: #047857; }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 24px;
+    color: #64748b;
+    border-top: 1px solid #1f2937;
+    background: #070b12;
+    font-size: 14px;
+  }
+  .status { color: #10b981; font-weight: 800; }
+  .status.error { color: #f87171; }
+  @media (max-width: 900px) {
+    header { padding: 20px; align-items: flex-start; flex-direction: column; }
+    .clock { text-align: left; }
+    main { grid-template-columns: 1fr; padding: 14px; }
+    footer { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="brand">
+      <h1 id="business-name">ChowBox</h1>
+      <p id="board-title">Pickup Board</p>
+    </div>
+    <div class="clock" id="clock">--:--</div>
+  </header>
+
+  <main>
+    <section>
+      <div class="section-head ready">
+        <span>Ready Now</span>
+        <span class="count" id="ready-count">0</span>
+      </div>
+      <div class="list" id="ready-list"></div>
+    </section>
+
+    <section>
+      <div class="section-head cooking">
+        <span>Cooking</span>
+        <span class="count" id="cooking-count">0</span>
+      </div>
+      <div class="list" id="cooking-list"></div>
+    </section>
+
+    <section>
+      <div class="section-head confirmed">
+        <span>Up Next</span>
+        <span class="count" id="confirmed-count">0</span>
+      </div>
+      <div class="list" id="confirmed-list"></div>
+    </section>
+  </main>
+
+  <footer>
+    <div id="status" class="status">Connecting to local ChowBox</div>
+    <div>Show your order code at the counter.</div>
+  </footer>
+</div>
+
+<script>
+function esc(value) {
+  const div = document.createElement('div');
+  div.textContent = value == null ? '' : String(value);
+  return div.innerHTML;
+}
+
+function orderCode(order) {
+  if (order.collectionPin) return order.collectionPin;
+  return '#' + String(order.id || '').slice(-4).toUpperCase();
+}
+
+function orderLines(order) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  return items.map(line => {
+    const qty = line.quantity || 1;
+    const name = line.item?.name || line.item?.id || 'item';
+    return qty + 'x ' + name;
+  }).join(', ');
+}
+
+function renderList(id, orders, className) {
+  const el = document.getElementById(id);
+  if (!orders.length) {
+    el.innerHTML = '<div class="empty">No orders</div>';
+    return;
+  }
+  el.innerHTML = orders.map(order => (
+    '<div class="ticket ' + className + '">' +
+      '<div class="code">' + esc(orderCode(order)) + '</div>' +
+      '<div class="name">' + esc(order.customerName || 'Customer') + '</div>' +
+      '<div class="meta">' + esc(orderLines(order)) + '</div>' +
+    '</div>'
+  )).join('');
+}
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+async function refreshBoard() {
+  const status = document.getElementById('status');
+  try {
+    const res = await fetch('/api/v1/orders/pickup-board', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    document.getElementById('business-name').textContent = data.businessName || 'ChowBox';
+    document.getElementById('board-title').textContent = data.title || 'Pickup Board';
+    document.getElementById('ready-count').textContent = data.counts?.ready || 0;
+    document.getElementById('cooking-count').textContent = data.counts?.cooking || 0;
+    document.getElementById('confirmed-count').textContent = data.counts?.confirmed || 0;
+    renderList('ready-list', data.orders?.ready || [], 'ready');
+    renderList('cooking-list', data.orders?.cooking || [], 'cooking small');
+    renderList('confirmed-list', data.orders?.confirmed || [], 'confirmed small');
+    status.textContent = 'Live from local ChowBox';
+    status.className = 'status';
+  } catch (err) {
+    status.textContent = 'Local board unavailable: ' + err.message;
+    status.className = 'status error';
+  }
+}
+
+updateClock();
+refreshBoard();
+setInterval(updateClock, 1000);
+setInterval(refreshBoard, 2500);
+</script>
+</body>
+</html>

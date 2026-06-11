@@ -234,6 +234,43 @@ function ordersToCsv(orders) {
   return lines.join('\n');
 }
 
+function buildPickupBoard(date = new Date().toISOString().split('T')[0]) {
+  const rows = db.prepare(
+    `SELECT * FROM orders
+     WHERE (cook_day = ? OR created_at LIKE ?)
+       AND status IN ('Confirmed', 'Cooking', 'Ready')
+     ORDER BY
+       CASE status WHEN 'Ready' THEN 0 WHEN 'Cooking' THEN 1 ELSE 2 END,
+       ready_at DESC,
+       cooking_at DESC,
+       created_at ASC`
+  ).all(date, `${date}%`);
+  const orders = rows.map(rowToOrder);
+  const settings = loadLocalSettings();
+  const ready = orders.filter(o => o.status === 'Ready');
+  const cooking = orders.filter(o => o.status === 'Cooking');
+  const confirmed = orders.filter(o => o.status === 'Confirmed');
+
+  return {
+    generatedAt: new Date().toISOString(),
+    date,
+    businessName: settings.businessName || 'ChowBox',
+    title: settings.walkUpStall?.statusScreenTitle || 'Pickup Board',
+    refreshMs: 2500,
+    counts: {
+      ready: ready.length,
+      cooking: cooking.length,
+      confirmed: confirmed.length,
+      active: orders.length,
+    },
+    orders: {
+      ready,
+      cooking,
+      confirmed,
+    },
+  };
+}
+
 function loadLocalSettings() {
   const rows = db.prepare('SELECT * FROM settings').all();
   const settings = {};
@@ -361,6 +398,11 @@ async function handleApi(req, url) {
       rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 500').all();
     }
     return json(rows.map(rowToOrder));
+  }
+  if (path === '/orders/pickup-board' && method === 'GET') {
+    const params = new URL(req.url, `http://${req.headers.host || 'localhost'}`).searchParams;
+    const date = params.get('date') || new Date().toISOString().split('T')[0];
+    return json(buildPickupBoard(date));
   }
   if (path === '/orders' && method === 'POST') {
     const body = await readBody(req);
@@ -1139,6 +1181,16 @@ const server = createServer(async (req, res) => {
     }
 
     // Direct API routes (no /api/v1 prefix) — print, health, admin endpoints
+    // Local pickup board for a counter display.
+    if (url.pathname === '/pickup' || url.pathname === '/pickup/') {
+      const pickupPath = join(__dirname, 'pickup.html');
+      if (existsSync(pickupPath)) {
+        const html = readFileSync(pickupPath, 'utf-8');
+        await sendResponse(req, res, 200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' }, html);
+        return;
+      }
+    }
+
     if (url.pathname.startsWith('/print/') || url.pathname === '/health' || url.pathname === '/seed') {
       const result = await handleApi(req, url);
       await sendResponse(req, res, result.status, result.headers, result.body);

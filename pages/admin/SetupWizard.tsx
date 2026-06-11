@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChefHat, Store, UtensilsCrossed, CreditCard, CalendarDays,
   Rocket, ArrowRight, ArrowLeft, Check, Plus, Trash2, Wand2,
-  Loader2, QrCode, Download, ExternalLink,
+  Loader2, QrCode, Download, ExternalLink, Monitor,
 } from 'lucide-react';
 import { generateMarketingImage } from '../../services/gemini';
 import { MenuItem } from '../../types';
@@ -86,6 +86,10 @@ const SetupWizard: React.FC = () => {
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(settings.stripeConnected || false);
   const [stripePolling, setStripePolling] = useState(false);
+  const [walkupPresetSaved, setWalkupPresetSaved] = useState(
+    settings.chowboxMode === 'walk_up_stall' ||
+    settings.paymentCaptureMode === 'square_terminal_operator_confirmed'
+  );
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Step 4 — Your Schedule
@@ -199,6 +203,28 @@ const SetupWizard: React.FC = () => {
     }
   };
 
+  const saveWalkupPreset = async () => {
+    await updateSettings({
+      chowboxMode: 'walk_up_stall',
+      paymentCaptureMode: 'square_terminal_operator_confirmed',
+      walkUpStall: {
+        enabled: true,
+        qrOrderingEnabled: true,
+        fohEnabled: true,
+        bohEnabled: true,
+        pickupScreenEnabled: true,
+        localPrinterEnabled: true,
+        requireCustomerName: true,
+        defaultPaymentMethod: 'pay_at_window',
+        defaultOrderSource: 'qr',
+        statusScreenTitle: 'Pickup Board',
+        orderCodeMode: 'collection_pin',
+      },
+    });
+    setWalkupPresetSaved(true);
+    markComplete(2);
+  };
+
   const startStripePolling = () => {
     setStripePolling(true);
     pollIntervalRef.current = setInterval(async () => {
@@ -242,7 +268,10 @@ const SetupWizard: React.FC = () => {
   const handleNext = async () => {
     if (step === 0) await saveStep1();
     if (step === 1) await saveStep2();
-    if (step === 2) markComplete(2);
+    if (step === 2) {
+      if (!walkupPresetSaved) await saveWalkupPreset();
+      else markComplete(2);
+    }
     if (step === 3 && selectedDate) markComplete(3);
     if (step < 4) setStep(step + 1);
     if (step === 4) {
@@ -449,13 +478,48 @@ const SetupWizard: React.FC = () => {
     <div className="space-y-6">
       <div className="text-center mb-8">
         <CreditCard className="w-12 h-12 text-orange-500 mx-auto mb-3" />
-        <h2 className="text-2xl font-bold text-white">Connect Stripe to receive payments</h2>
+        <h2 className="text-2xl font-bold text-white">Choose how you take payment</h2>
         <p className="text-gray-400 mt-2 max-w-md mx-auto">
-          Customers pay via Stripe Checkout. Money goes straight to your bank. ChowNow takes a small 1.5% platform fee.
+          Walk-Up Stall is built to sit beside your certified payment device. Take payment on Square or EFTPOS, then confirm it in ChowBox so the kitchen, pickup board, and export stay in sync.
         </p>
       </div>
 
-      <div className="flex flex-col items-center gap-6">
+      <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-11 h-11 rounded-xl bg-green-500/20 flex items-center justify-center shrink-0">
+            <Monitor className="w-5 h-5 text-green-400" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-white font-bold">Walk-Up Stall preset</h3>
+              <span className="text-[10px] uppercase tracking-wide bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">Recommended</span>
+            </div>
+            <p className="text-gray-400 text-sm mt-1">
+              QR orders start as pay-at-window, FOH confirms Square/EFTPOS or cash, BOH sees paid orders, and the pickup screen shows ready order codes.
+            </p>
+            <button
+              type="button"
+              onClick={saveWalkupPreset}
+              className={`mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition ${
+                walkupPresetSaved
+                  ? 'bg-green-500 text-white'
+                  : 'bg-green-600 hover:bg-green-500 text-white'
+              }`}
+            >
+              <Check className="w-4 h-4" />
+              {walkupPresetSaved ? 'Walk-Up Stall enabled' : 'Use Walk-Up Stall'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center gap-6 border border-gray-800 rounded-2xl p-5 bg-gray-900/40">
+        <div className="text-center">
+          <h3 className="text-white font-bold">Optional online checkout</h3>
+          <p className="text-gray-500 text-sm mt-1 max-w-md">
+            Use this later if you also want web checkout. It is not required for local Square Terminal trading.
+          </p>
+        </div>
         {stripeConnected ? (
           <div className="flex flex-col items-center gap-3 p-6 rounded-xl bg-green-500/10 border border-green-500/30">
             <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
