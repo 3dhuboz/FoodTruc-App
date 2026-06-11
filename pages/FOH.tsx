@@ -4,7 +4,7 @@ import { MenuItem, Order, CartItem } from '../types';
 import {
   Plus, Minus, Trash2, ShoppingCart, ChefHat, X, CheckCircle, Search, Lock,
   Bell, Wifi, WifiOff, CloudOff, ClipboardList, Flame, Clock, Package, Users,
-  CreditCard, Loader2, PauseCircle, PlayCircle, QrCode, Smartphone
+  CreditCard, Loader2, PauseCircle, PlayCircle, QrCode, Smartphone, Printer
 } from 'lucide-react';
 import { isNativePaymentAvailable, initTerminal, connectTapToPay, collectPayment } from '../services/stripeTerminal';
 
@@ -391,6 +391,8 @@ const FOH: React.FC = () => {
   const [readyElapsed, setReadyElapsed] = useState<Record<string, number>>({});
   const [resending, setResending] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<'cart' | 'orders'>('cart');
+  const [printerState, setPrinterState] = useState<'unknown' | 'ready' | 'offline'>('unknown');
+  const [printerLabel, setPrinterLabel] = useState('Check');
   const prevReadyIds = useRef<Set<string>>(new Set());
   const audioCtx = useRef<AudioContext | null>(null);
 
@@ -405,6 +407,33 @@ const FOH: React.FC = () => {
     ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [orders, today]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const checkPrinter = async () => {
+      try {
+        const res = await fetch('/api/v1/print/status');
+        if (!res.ok) throw new Error('print status unavailable');
+        const data = await res.json() as { printer?: boolean; available?: boolean; printerType?: string };
+        if (cancelled) return;
+        const ready = Boolean(data.printer || data.available);
+        setPrinterState(ready ? 'ready' : 'offline');
+        setPrinterLabel(ready ? (data.printerType || 'Ready') : 'Offline');
+      } catch {
+        if (!cancelled) {
+          setPrinterState('unknown');
+          setPrinterLabel('Check');
+        }
+      }
+    };
+    checkPrinter();
+    const timer = setInterval(checkPrinter, 10000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, []);
+
+  const pendingPaymentOrders = activeOrders.filter(o => o.status === 'Pending');
+  const pendingPaymentTotal = pendingPaymentOrders.reduce((sum, order) => sum + order.total, 0);
+  const kitchenCount = activeOrders.filter(o => o.status === 'Confirmed' || o.status === 'Cooking').length;
 
   // Detect ready orders — alert FOH
   useEffect(() => {
@@ -718,6 +747,50 @@ const FOH: React.FC = () => {
               className="bg-gray-800 rounded-lg pl-7 pr-3 py-1.5 text-white text-xs outline-none focus:ring-1 focus:ring-orange-500 w-32" />
           </div>
           <button onClick={() => setUnlocked(false)} className="text-gray-600 hover:text-gray-400"><Lock size={16} /></button>
+        </div>
+      </div>
+
+      <div className="bg-gray-950 border-b border-gray-800 px-3 py-2 grid grid-cols-2 md:grid-cols-5 gap-2 shrink-0">
+        <div className="bg-gray-900/70 border border-gray-800 rounded-lg px-3 py-2 min-w-0">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
+            {isOnline ? <Wifi size={11} /> : <WifiOff size={11} />} Service
+          </div>
+          <div className={`text-sm font-black truncate ${isOnline ? 'text-green-400' : 'text-yellow-400'}`}>
+            {isOnline ? 'Live' : 'Local'}
+          </div>
+        </div>
+        <div className="bg-gray-900/70 border border-gray-800 rounded-lg px-3 py-2 min-w-0">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
+            <CreditCard size={11} /> Unpaid
+          </div>
+          <div className="text-sm font-black text-orange-400 truncate">
+            {pendingPaymentOrders.length} / ${pendingPaymentTotal.toFixed(2)}
+          </div>
+        </div>
+        <div className="bg-gray-900/70 border border-gray-800 rounded-lg px-3 py-2 min-w-0">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
+            <Flame size={11} /> Kitchen
+          </div>
+          <div className="text-sm font-black text-white truncate">{kitchenCount} active</div>
+        </div>
+        <div className="bg-gray-900/70 border border-gray-800 rounded-lg px-3 py-2 min-w-0">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
+            <Printer size={11} /> Printer
+          </div>
+          <div className={`text-sm font-black truncate ${
+            printerState === 'ready' ? 'text-green-400' :
+            printerState === 'offline' ? 'text-red-400' : 'text-gray-400'
+          }`}>
+            {printerLabel}
+          </div>
+        </div>
+        <div className="bg-gray-900/70 border border-gray-800 rounded-lg px-3 py-2 min-w-0 col-span-2 md:col-span-1">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase">
+            <CloudOff size={11} /> Sync
+          </div>
+          <div className={`text-sm font-black truncate ${pendingSyncCount > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+            {pendingSyncCount > 0 ? `${pendingSyncCount} queued` : 'Clear'}
+          </div>
         </div>
       </div>
 
